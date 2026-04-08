@@ -12,8 +12,11 @@
     "build": "npm run build:renderer && npm run build:electron",
     "build:renderer": "vite build",
     "build:electron": "tsc -p electron/tsconfig.json",
+    "build:icon": "node scripts/build-icon.mjs",
     "preview": "vite preview",
-    "start": "electron ."
+    "start": "electron .",
+    "pack:win": "npm run build && npm run build:icon && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --dir",
+    "dist:win": "npm run build && npm run build:icon && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win nsis"
   },
   "dependencies": {
     "react": "^19.1.0",
@@ -26,10 +29,47 @@
     "@vitejs/plugin-react": "^5.0.0",
     "concurrently": "^9.2.0",
     "cross-env": "^10.0.0",
+    "electron-builder": "^24.13.3",
     "electron": "^36.2.0",
     "nodemon": "^3.1.10",
+    "png-to-ico": "^2.1.8",
+    "sharp": "^0.34.3",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
     "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.localgamegallery.app",
+    "productName": "Local Game Gallery",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "icon": "icon/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Local Game Gallery",
+      "installerIcon": "icon/icon.ico",
+      "uninstallerIcon": "icon/icon.ico",
+      "installerHeaderIcon": "icon/icon.ico"
+    }
   }
 }
