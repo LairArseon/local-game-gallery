@@ -68,6 +68,11 @@ function App() {
   const [draggedScreenshotPath, setDraggedScreenshotPath] = useState<string | null>(null);
   const [dragOverScreenshotPath, setDragOverScreenshotPath] = useState<string | null>(null);
   const [screenshotContextMenu, setScreenshotContextMenu] = useState<{ x: number; y: number; imagePath: string } | null>(null);
+  const [activeTagAutocomplete, setActiveTagAutocomplete] = useState<{
+    scope: 'filter' | 'metadata';
+    index: number;
+    highlighted: number;
+  } | null>(null);
   const cardsContainerRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -389,6 +394,132 @@ function App() {
 
   function normalizeTagRules(rules: string[]) {
     return rules.map((entry) => entry.trim()).filter(Boolean);
+  }
+
+  const knownTags = useMemo(() => {
+    const uniqueTags = new Map<string, string>();
+
+    for (const game of scanResult.games) {
+      for (const tag of game.metadata.tags) {
+        const normalized = tag.trim();
+        if (!normalized) {
+          continue;
+        }
+
+        const key = normalized.toLowerCase();
+        if (!uniqueTags.has(key)) {
+          uniqueTags.set(key, normalized);
+        }
+      }
+    }
+
+    if (metadataDraft) {
+      for (const tag of metadataDraft.tags) {
+        const normalized = tag.trim();
+        if (!normalized) {
+          continue;
+        }
+
+        const key = normalized.toLowerCase();
+        if (!uniqueTags.has(key)) {
+          uniqueTags.set(key, normalized);
+        }
+      }
+    }
+
+    return [...uniqueTags.values()].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
+  }, [scanResult.games, metadataDraft]);
+
+  const activeTagSuggestions = useMemo(() => {
+    if (!activeTagAutocomplete) {
+      return [] as string[];
+    }
+
+    const sourceValue = activeTagAutocomplete.scope === 'filter'
+      ? draftTagRules[activeTagAutocomplete.index] ?? ''
+      : metadataDraft?.tags[activeTagAutocomplete.index] ?? '';
+
+    const withoutPrefix = sourceValue.trim().startsWith('-') ? sourceValue.trim().slice(1).trim() : sourceValue.trim();
+    const query = withoutPrefix.toLowerCase();
+    if (!query) {
+      return [] as string[];
+    }
+
+    return knownTags
+      .filter((tag) => tag.toLowerCase().includes(query))
+      .slice(0, 8);
+  }, [activeTagAutocomplete, draftTagRules, metadataDraft, knownTags]);
+
+  function applyTagSuggestion(scope: 'filter' | 'metadata', index: number, suggestion: string) {
+    if (scope === 'filter') {
+      setDraftTagRules((current) => {
+        const existing = current[index] ?? '';
+        const prefix = existing.trim().startsWith('-') ? '-' : '';
+        return current.map((entry, ruleIndex) => (ruleIndex === index ? `${prefix}${suggestion}` : entry));
+      });
+    } else if (metadataDraft) {
+      setMetadataDraft({
+        ...metadataDraft,
+        tags: metadataDraft.tags.map((entry, tagIndex) => (tagIndex === index ? suggestion : entry)),
+      });
+    }
+
+    setActiveTagAutocomplete(null);
+  }
+
+  function handleTagAutocompleteKeyDown(
+    event: React.KeyboardEvent<HTMLInputElement>,
+    scope: 'filter' | 'metadata',
+    index: number,
+  ) {
+    const isActive = activeTagAutocomplete?.scope === scope && activeTagAutocomplete.index === index;
+    if (!isActive || !activeTagSuggestions.length) {
+      return;
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveTagAutocomplete((current) => {
+        if (!current || current.scope !== scope || current.index !== index) {
+          return current;
+        }
+
+        return {
+          ...current,
+          highlighted: (current.highlighted + 1) % activeTagSuggestions.length,
+        };
+      });
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveTagAutocomplete((current) => {
+        if (!current || current.scope !== scope || current.index !== index) {
+          return current;
+        }
+
+        return {
+          ...current,
+          highlighted: (current.highlighted - 1 + activeTagSuggestions.length) % activeTagSuggestions.length,
+        };
+      });
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault();
+      const selected = activeTagSuggestions[activeTagAutocomplete.highlighted] ?? activeTagSuggestions[0];
+      if (selected) {
+        applyTagSuggestion(scope, index, selected);
+      }
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setActiveTagAutocomplete(null);
+    }
   }
 
   function resetStagedFilters() {
@@ -787,6 +918,8 @@ function App() {
     };
 
     if (viewMode === 'compact') {
+      const compactDescription = game.metadata.description.trim();
+      const compactTags = game.metadata.tags.map((tag) => tag.trim()).filter(Boolean);
       return (
         <article
           className={`game-card game-card--compact ${selectedGamePath === game.path ? 'game-card--selected' : ''}`}
@@ -798,10 +931,11 @@ function App() {
             <h3>{game.name}</h3>
             <p>{game.versionCount} versions</p>
           </div>
-          <div className="game-card__row game-card__row--muted">
-            <p>{game.hasNfo ? 'nfo ready' : 'nfo missing'}</p>
-            <p>{game.metadata.status ? `status: ${game.metadata.status}` : 'status: not set'}</p>
-            <p>{game.usesPlaceholderArt ? 'placeholder art' : `${game.imageCount} images`}</p>
+          <div className="game-card__compact-meta">
+            <p><strong>Status:</strong> {game.metadata.status || 'Not set'}</p>
+            <p><strong>Score:</strong> {game.metadata.score || 'Not set'}</p>
+            <p className="game-card__compact-description"><strong>Description:</strong> {compactDescription || 'No description yet.'}</p>
+            <p><strong>Tags:</strong> {compactTags.length ? compactTags.join(', ') : 'None'}</p>
           </div>
           {commonActions}
         </article>
@@ -823,6 +957,7 @@ function App() {
             <p>Latest version: {game.metadata.latestVersion || 'Unknown'}</p>
             <p>Status: {game.metadata.status || 'Not set'}</p>
             <p>Score: {game.metadata.score || 'Not set'}</p>
+            <p>Tags: {game.metadata.tags.length ? game.metadata.tags.join(', ') : 'None'}</p>
             {commonActions}
           </div>
         </article>
@@ -840,9 +975,9 @@ function App() {
           {art}
           <div className="game-card__body">
             <h3>{game.name}</h3>
-            <p>Latest version: {game.metadata.latestVersion || 'Unknown'}</p>
             <p>Status: {game.metadata.status || 'Not set'}</p>
             <p>Score: {game.metadata.score || 'Not set'}</p>
+            <p>Tags: {game.metadata.tags.length ? game.metadata.tags.join(', ') : 'None'}</p>
             <p>{game.metadata.description || 'No description yet.'}</p>
             {game.metadata.notes.filter(Boolean).slice(0, 2).map((note) => (
               <p key={note}>Note: {note}</p>
@@ -945,14 +1080,47 @@ function App() {
                 <p className="topbar-filters__hint">Use tags as include rules. Prefix with - to exclude a tag.</p>
                 {draftTagRules.map((rule, index) => (
                   <div className="topbar-filters__rule" key={`filter-rule-${index}`}>
-                    <input
-                      type="text"
-                      value={rule}
-                      placeholder="example: roguelike or -horror"
-                      onChange={(event) =>
-                        setDraftTagRules((current) => current.map((entry, ruleIndex) => (ruleIndex === index ? event.target.value : entry)))
-                      }
-                    />
+                    <div className="tag-autocomplete">
+                      <input
+                        type="text"
+                        value={rule}
+                        placeholder="example: roguelike or -horror"
+                        onFocus={() => setActiveTagAutocomplete({ scope: 'filter', index, highlighted: 0 })}
+                        onBlur={() => {
+                          window.setTimeout(() => {
+                            setActiveTagAutocomplete((current) => {
+                              if (!current || current.scope !== 'filter' || current.index !== index) {
+                                return current;
+                              }
+
+                              return null;
+                            });
+                          }, 100);
+                        }}
+                        onKeyDown={(event) => handleTagAutocompleteKeyDown(event, 'filter', index)}
+                        onChange={(event) => {
+                          setDraftTagRules((current) => current.map((entry, ruleIndex) => (ruleIndex === index ? event.target.value : entry)));
+                          setActiveTagAutocomplete({ scope: 'filter', index, highlighted: 0 });
+                        }}
+                      />
+                      {activeTagAutocomplete?.scope === 'filter' && activeTagAutocomplete.index === index && activeTagSuggestions.length ? (
+                        <div className="tag-autocomplete__menu">
+                          {activeTagSuggestions.map((suggestion, suggestionIndex) => (
+                            <button
+                              key={`${suggestion}-${suggestionIndex}`}
+                              className={`tag-autocomplete__item ${activeTagAutocomplete.highlighted === suggestionIndex ? 'tag-autocomplete__item--active' : ''}`}
+                              type="button"
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                applyTagSuggestion('filter', index, suggestion);
+                              }}
+                            >
+                              {suggestion}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
                     <button
                       className="button button--icon"
                       type="button"
@@ -1332,93 +1500,132 @@ function App() {
 
       {metadataModalGamePath && metadataDraft ? (
         <div className="modal-backdrop" onClick={() => setMetadataModalGamePath(null)}>
-          <section className="modal-panel" onClick={(event) => event.stopPropagation()}>
+          <section className="modal-panel modal-panel--metadata" onClick={(event) => event.stopPropagation()}>
             <header className="modal-panel__header">
               <h2>Edit Metadata</h2>
               <button className="button" type="button" onClick={() => setMetadataModalGamePath(null)}>Close</button>
             </header>
-            <div className="modal-panel__body">
-              <label className="field">
-                <span>Latest version</span>
-                <input type="text" value={metadataDraft.latestVersion} onChange={(event) => setMetadataDraft({ ...metadataDraft, latestVersion: event.target.value })} />
-              </label>
-              <label className="field">
-                <span>Score</span>
-                <input type="text" value={metadataDraft.score} onChange={(event) => setMetadataDraft({ ...metadataDraft, score: event.target.value })} />
-              </label>
-              <label className="field">
-                <span>Status</span>
-                <select value={metadataDraft.status} onChange={(event) => setMetadataDraft({ ...metadataDraft, status: event.target.value })}>
-                  <option value="">Not set</option>
-                  {config.statusChoices.map((statusOption) => (
-                    <option key={statusOption} value={statusOption}>
-                      {statusOption}
-                    </option>
+            <div className="modal-panel__body modal-panel__body--metadata">
+              <div className="modal-panel__column">
+                <label className="field">
+                  <span>Latest version</span>
+                  <input type="text" value={metadataDraft.latestVersion} onChange={(event) => setMetadataDraft({ ...metadataDraft, latestVersion: event.target.value })} />
+                </label>
+                <label className="field">
+                  <span>Score</span>
+                  <input type="text" value={metadataDraft.score} onChange={(event) => setMetadataDraft({ ...metadataDraft, score: event.target.value })} />
+                </label>
+                <label className="field">
+                  <span>Status</span>
+                  <select value={metadataDraft.status} onChange={(event) => setMetadataDraft({ ...metadataDraft, status: event.target.value })}>
+                    <option value="">Not set</option>
+                    {config.statusChoices.map((statusOption) => (
+                      <option key={statusOption} value={statusOption}>
+                        {statusOption}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Description</span>
+                  <textarea rows={4} value={metadataDraft.description} onChange={(event) => setMetadataDraft({ ...metadataDraft, description: event.target.value })} />
+                </label>
+                <div className="modal-group">
+                  <div className="modal-group__header">
+                    <strong>Notes</strong>
+                    <button className="button button--icon" type="button" onClick={() => setMetadataDraft({ ...metadataDraft, notes: [...metadataDraft.notes, ''] })}>Add note</button>
+                  </div>
+                  {metadataDraft.notes.map((note, index) => (
+                    <div className="tag-row" key={`note-${index}`}>
+                      <textarea rows={2} value={note} onChange={(event) => setMetadataDraft({ ...metadataDraft, notes: metadataDraft.notes.map((entry, noteIndex) => noteIndex === index ? event.target.value : entry) })} />
+                      <button className="button button--icon" type="button" onClick={() => setMetadataDraft({ ...metadataDraft, notes: metadataDraft.notes.filter((_, noteIndex) => noteIndex !== index) || [''] })}>Remove</button>
+                    </div>
                   ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Description</span>
-                <textarea rows={4} value={metadataDraft.description} onChange={(event) => setMetadataDraft({ ...metadataDraft, description: event.target.value })} />
-              </label>
-              <div className="modal-group">
-                <div className="modal-group__header">
-                  <strong>Notes</strong>
-                  <button className="button button--icon" type="button" onClick={() => setMetadataDraft({ ...metadataDraft, notes: [...metadataDraft.notes, ''] })}>Add note</button>
                 </div>
-                {metadataDraft.notes.map((note, index) => (
-                  <div className="tag-row" key={`note-${index}`}>
-                    <textarea rows={2} value={note} onChange={(event) => setMetadataDraft({ ...metadataDraft, notes: metadataDraft.notes.map((entry, noteIndex) => noteIndex === index ? event.target.value : entry) })} />
-                    <button className="button button--icon" type="button" onClick={() => setMetadataDraft({ ...metadataDraft, notes: metadataDraft.notes.filter((_, noteIndex) => noteIndex !== index) || [''] })}>Remove</button>
-                  </div>
-                ))}
               </div>
-              <div className="modal-group">
-                <div className="modal-group__header">
-                  <strong>Additional tags</strong>
-                  <button className="button button--icon" type="button" onClick={() => setMetadataDraft({ ...metadataDraft, customTags: [...metadataDraft.customTags, { key: '', value: '' }] })}>Add tag</button>
-                </div>
-                {metadataDraft.customTags.map((tag, index) => (
-                  <div className="tag-row tag-row--split" key={`tag-${index}`}>
-                    <input type="text" placeholder="Tag" value={tag.key} onChange={(event) => setMetadataDraft({ ...metadataDraft, customTags: metadataDraft.customTags.map((entry, tagIndex) => tagIndex === index ? { ...entry, key: event.target.value } : entry) })} />
-                    <input type="text" placeholder="Value" value={tag.value} onChange={(event) => setMetadataDraft({ ...metadataDraft, customTags: metadataDraft.customTags.map((entry, tagIndex) => tagIndex === index ? { ...entry, value: event.target.value } : entry) })} />
-                    <button className="button button--icon" type="button" onClick={() => setMetadataDraft({ ...metadataDraft, customTags: metadataDraft.customTags.filter((_, tagIndex) => tagIndex !== index) })}>Remove</button>
+
+              <div className="modal-panel__column modal-panel__column--tags">
+                <div className="modal-group modal-group--tight">
+                  <div className="modal-group__header">
+                    <strong>Tags</strong>
+                    <button className="button button--icon" type="button" onClick={() => setMetadataDraft({ ...metadataDraft, tags: [...metadataDraft.tags, ''] })}>Add tag</button>
                   </div>
-                ))}
-              </div>
-              <div className="modal-group">
-                <div className="modal-group__header">
-                  <strong>Tags</strong>
-                  <button className="button button--icon" type="button" onClick={() => setMetadataDraft({ ...metadataDraft, tags: [...metadataDraft.tags, ''] })}>Add tag</button>
+                  {metadataDraft.tags.map((tag, index) => (
+                    <div className="tag-row tag-row--split" key={`core-tag-${index}`}>
+                      <div className="tag-autocomplete">
+                        <input
+                          type="text"
+                          placeholder="Tag"
+                          value={tag}
+                          onFocus={() => setActiveTagAutocomplete({ scope: 'metadata', index, highlighted: 0 })}
+                          onBlur={() => {
+                            window.setTimeout(() => {
+                              setActiveTagAutocomplete((current) => {
+                                if (!current || current.scope !== 'metadata' || current.index !== index) {
+                                  return current;
+                                }
+
+                                return null;
+                              });
+                            }, 100);
+                          }}
+                          onKeyDown={(event) => handleTagAutocompleteKeyDown(event, 'metadata', index)}
+                          onChange={(event) => {
+                            setMetadataDraft({
+                              ...metadataDraft,
+                              tags: metadataDraft.tags.map((entry, tagIndex) => (tagIndex === index ? event.target.value : entry)),
+                            });
+                            setActiveTagAutocomplete({ scope: 'metadata', index, highlighted: 0 });
+                          }}
+                        />
+                        {activeTagAutocomplete?.scope === 'metadata' && activeTagAutocomplete.index === index && activeTagSuggestions.length ? (
+                          <div className="tag-autocomplete__menu">
+                            {activeTagSuggestions.map((suggestion, suggestionIndex) => (
+                              <button
+                                key={`${suggestion}-${suggestionIndex}`}
+                                className={`tag-autocomplete__item ${activeTagAutocomplete.highlighted === suggestionIndex ? 'tag-autocomplete__item--active' : ''}`}
+                                type="button"
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  applyTagSuggestion('metadata', index, suggestion);
+                                }}
+                              >
+                                {suggestion}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div />
+                      <button
+                        className="button button--icon"
+                        type="button"
+                        onClick={() =>
+                          setMetadataDraft({
+                            ...metadataDraft,
+                            tags: metadataDraft.tags.filter((_, tagIndex) => tagIndex !== index),
+                          })
+                        }
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
                 </div>
-                {metadataDraft.tags.map((tag, index) => (
-                  <div className="tag-row tag-row--split" key={`core-tag-${index}`}>
-                    <input
-                      type="text"
-                      placeholder="Tag"
-                      value={tag}
-                      onChange={(event) =>
-                        setMetadataDraft({
-                          ...metadataDraft,
-                          tags: metadataDraft.tags.map((entry, tagIndex) => (tagIndex === index ? event.target.value : entry)),
-                        })
-                      }
-                    />
-                    <div />
-                    <button
-                      className="button button--icon"
-                      type="button"
-                      onClick={() =>
-                        setMetadataDraft({
-                          ...metadataDraft,
-                          tags: metadataDraft.tags.filter((_, tagIndex) => tagIndex !== index),
-                        })
-                      }
-                    >
-                      Remove
-                    </button>
+
+                <div className="modal-group modal-group--tight">
+                  <div className="modal-group__header">
+                    <strong>Additional tags</strong>
+                    <button className="button button--icon" type="button" onClick={() => setMetadataDraft({ ...metadataDraft, customTags: [...metadataDraft.customTags, { key: '', value: '' }] })}>Add tag</button>
                   </div>
-                ))}
+                  {metadataDraft.customTags.map((tag, index) => (
+                    <div className="tag-row tag-row--split" key={`tag-${index}`}>
+                      <input type="text" placeholder="Tag" value={tag.key} onChange={(event) => setMetadataDraft({ ...metadataDraft, customTags: metadataDraft.customTags.map((entry, tagIndex) => tagIndex === index ? { ...entry, key: event.target.value } : entry) })} />
+                      <input type="text" placeholder="Value" value={tag.value} onChange={(event) => setMetadataDraft({ ...metadataDraft, customTags: metadataDraft.customTags.map((entry, tagIndex) => tagIndex === index ? { ...entry, value: event.target.value } : entry) })} />
+                      <button className="button button--icon" type="button" onClick={() => setMetadataDraft({ ...metadataDraft, customTags: metadataDraft.customTags.filter((_, tagIndex) => tagIndex !== index) })}>Remove</button>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
             <footer className="modal-panel__footer">
