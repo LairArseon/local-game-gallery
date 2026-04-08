@@ -12,6 +12,8 @@ const defaultConfig: GalleryConfig = {
   preferredViewMode: 'poster',
   posterColumns: 5,
   cardColumns: 4,
+  statusChoices: ['Backlog', 'Playing', 'Completed', 'On Hold', 'Dropped'],
+  filterPresets: [],
 };
 
 function getConfigPath() {
@@ -34,6 +36,16 @@ export async function saveConfig(config: GalleryConfig) {
     ...defaultConfig,
     ...config,
     excludePatterns: [...new Set(config.excludePatterns.map((pattern) => pattern.trim()).filter(Boolean))],
+    statusChoices: [...new Set((config.statusChoices ?? []).map((value) => value.trim()).filter(Boolean))],
+    filterPresets: (config.filterPresets ?? [])
+      .map((preset) => ({
+        ...preset,
+        name: preset.name.trim(),
+        tagRules: preset.tagRules.map((rule) => rule.trim()).filter(Boolean),
+        minScore: String(preset.minScore ?? '').trim(),
+        status: String(preset.status ?? '').trim(),
+      }))
+      .filter((preset) => preset.name),
   };
   const configPath = getConfigPath();
 

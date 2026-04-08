@@ -1,5 +1,15 @@
 export type GalleryViewMode = 'poster' | 'card' | 'compact' | 'expanded';
 
+export type FilterOrderByMode = 'alpha-asc' | 'alpha-desc' | 'score-asc' | 'score-desc';
+
+export type FilterPreset = {
+  name: string;
+  tagRules: string[];
+  minScore: string;
+  status: string;
+  orderBy: FilterOrderByMode;
+};
+
 export type GalleryConfig = {
   gamesRoot: string;
   excludePatterns: string[];
@@ -9,12 +19,19 @@ export type GalleryConfig = {
   preferredViewMode: GalleryViewMode;
   posterColumns: number;
   cardColumns: number;
+  statusChoices: string[];
+  filterPresets: FilterPreset[];
 };
 
 export type VersionSummary = {
   name: string;
   path: string;
   hasNfo: boolean;
+};
+
+export type PlayableVersion = {
+  name: string;
+  path: string;
 };
 
 export type GameMetadataTag = {
@@ -25,9 +42,11 @@ export type GameMetadataTag = {
 export type GameMetadata = {
   latestVersion: string;
   score: string;
+  status: string;
   description: string;
   notes: string[];
   tags: string[];
+  launchExecutable: string;
   customTags: GameMetadataTag[];
 };
 
@@ -86,6 +105,27 @@ export type ImportDroppedGameMediaPayload = ImportGameMediaPayload & {
   filePaths: string[];
 };
 
+export type PlayGamePayload = {
+  gamePath: string;
+  gameName: string;
+  versions: PlayableVersion[];
+};
+
+export type PlayGameResult = {
+  launched: boolean;
+  executablePath: string | null;
+  message: string;
+};
+
+export type ReorderScreenshotsPayload = {
+  fromPath: string;
+  toPath: string;
+};
+
+export type RemoveScreenshotPayload = {
+  screenshotPath: string;
+};
+
 export type GalleryApi = {
   getConfig: () => Promise<GalleryConfig>;
   saveConfig: (config: GalleryConfig) => Promise<GalleryConfig>;
@@ -96,6 +136,9 @@ export type GalleryApi = {
   saveGameMetadata: (payload: SaveGameMetadataPayload) => Promise<void>;
   importGameMediaFromDialog: (payload: ImportGameMediaPayload) => Promise<void>;
   importDroppedGameMedia: (payload: ImportDroppedGameMediaPayload) => Promise<void>;
+  playGame: (payload: PlayGamePayload) => Promise<PlayGameResult>;
+  reorderScreenshots: (payload: ReorderScreenshotsPayload) => Promise<void>;
+  removeScreenshot: (payload: RemoveScreenshotPayload) => Promise<void>;
 };
 
 declare global {

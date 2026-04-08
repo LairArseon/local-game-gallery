@@ -1,10 +1,14 @@
-import { contextBridge, ipcRenderer } from 'electron';
+﻿import { contextBridge, ipcRenderer } from 'electron';
 import type {
   GameContextMenuPayload,
+  GameContextMenuAction,
   GalleryApi,
   GalleryConfig,
   ImportDroppedGameMediaPayload,
   ImportGameMediaPayload,
+  RemoveScreenshotPayload,
+  PlayGamePayload,
+  ReorderScreenshotsPayload,
   SaveGameMetadataPayload,
 } from '../src/types';
 
@@ -17,8 +21,11 @@ const api: GalleryApi = {
   saveGameMetadata: (payload: SaveGameMetadataPayload) => ipcRenderer.invoke('gallery:save-game-metadata', payload),
   importGameMediaFromDialog: (payload: ImportGameMediaPayload) => ipcRenderer.invoke('gallery:import-game-media-dialog', payload),
   importDroppedGameMedia: (payload: ImportDroppedGameMediaPayload) => ipcRenderer.invoke('gallery:import-dropped-game-media', payload),
+  playGame: (payload: PlayGamePayload) => ipcRenderer.invoke('gallery:play-game', payload),
+  reorderScreenshots: (payload: ReorderScreenshotsPayload) => ipcRenderer.invoke('gallery:reorder-screenshots', payload),
+  removeScreenshot: (payload: RemoveScreenshotPayload) => ipcRenderer.invoke('gallery:remove-screenshot', payload),
   onGameContextMenuAction: (callback) => {
-    const listener = (_event: Electron.IpcRendererEvent, payload: { action: 'open' | 'play'; gamePath: string }) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: GameContextMenuAction) => {
       callback(payload);
     };
 

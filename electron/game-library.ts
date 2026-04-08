@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   GameMediaAssets,
@@ -15,9 +15,11 @@ export function createDefaultMetadata(latestVersion = ''): GameMetadata {
   return {
     latestVersion,
     score: '',
+    status: '',
     description: '',
     notes: [''],
     tags: [],
+    launchExecutable: '',
     customTags: [],
   };
 }
@@ -91,6 +93,11 @@ export async function readGameMetadata(gamePath: string, gameName: string, versi
         continue;
       }
 
+      if (key === 'status') {
+        metadata.status = value.trim();
+        continue;
+      }
+
       if (key === 'description' || key === 'summary') {
         metadata.description = value;
         continue;
@@ -106,6 +113,11 @@ export async function readGameMetadata(gamePath: string, gameName: string, versi
         if (tag) {
           metadata.tags.push(tag);
         }
+        continue;
+      }
+
+      if (key === 'launch_executable' || key === 'launch_path') {
+        metadata.launchExecutable = value.trim();
         continue;
       }
 
@@ -146,6 +158,7 @@ export async function saveGameMetadata(payload: SaveGameMetadataPayload) {
     `[title] ${payload.title}`,
     `[latest_version] ${payload.metadata.latestVersion}`,
     `[score] ${payload.metadata.score}`,
+    `[status] ${payload.metadata.status}`,
     `[description] ${payload.metadata.description}`,
   ];
 
@@ -155,6 +168,10 @@ export async function saveGameMetadata(payload: SaveGameMetadataPayload) {
 
   for (const tag of payload.metadata.tags.map((entry) => entry.trim()).filter(Boolean)) {
     lines.push(`[tag] ${tag}`);
+  }
+
+  if (payload.metadata.launchExecutable.trim()) {
+    lines.push(`[launch_executable] ${payload.metadata.launchExecutable.trim()}`);
   }
 
   for (const tag of payload.metadata.customTags) {
@@ -247,4 +264,41 @@ export async function importDroppedGameMedia(configPicturesFolderName: string, p
   }
 
   await copyFile(source, path.join(picturesPath, `${payload.target}${extension}`));
+}
+
+export async function reorderScreenshots(fromPath: string, toPath: string) {
+  const dir = path.dirname(fromPath);
+  const tempPath = path.join(dir, `_swap_tmp_${Date.now()}${path.extname(fromPath)}`);
+  await rename(fromPath, tempPath);
+  await rename(toPath, fromPath);
+  await rename(tempPath, toPath);
+}
+
+async function reindexScreenshotsInFolder(picturesPath: string) {
+  const screenshots = (await scanGameMedia(picturesPath)).screenshots;
+  const tempEntries: { tempPath: string; ext: string }[] = [];
+
+  for (let index = 0; index < screenshots.length; index += 1) {
+    const screenshotPath = screenshots[index];
+    const ext = path.extname(screenshotPath);
+    const tempPath = path.join(picturesPath, `_reindex_tmp_${Date.now()}_${index}${ext}`);
+    await rename(screenshotPath, tempPath);
+    tempEntries.push({ tempPath, ext });
+  }
+
+  for (let index = 0; index < tempEntries.length; index += 1) {
+    const entry = tempEntries[index];
+    await rename(entry.tempPath, path.join(picturesPath, `Screen${index + 1}${entry.ext}`));
+  }
+}
+
+export async function removeScreenshot(screenshotPath: string) {
+  const stem = path.parse(screenshotPath).name;
+  if (!/^screen\d+$/i.test(stem)) {
+    throw new Error('Only gallery screenshots can be removed.');
+  }
+
+  const picturesPath = path.dirname(screenshotPath);
+  await unlink(screenshotPath);
+  await reindexScreenshotsInFolder(picturesPath);
 }

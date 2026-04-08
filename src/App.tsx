@@ -1,5 +1,5 @@
-import { FormEvent, Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import type { GalleryConfig, GalleryViewMode, GameMetadata, GameSummary, ScanResult } from './types';
+﻿import { FormEvent, Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import type { FilterOrderByMode, FilterPreset, GalleryConfig, GalleryViewMode, GameMetadata, GameSummary, ScanResult } from './types';
 
 const emptyScan: ScanResult = {
   rootPath: '',
@@ -23,6 +23,13 @@ const gridMinCardWidthPx: Record<GalleryViewMode, number> = {
   expanded: 1,
 };
 
+const orderByModeLabels: Record<FilterOrderByMode, string> = {
+  'alpha-asc': 'Alphabetically up',
+  'alpha-desc': 'Alphabetically down',
+  'score-asc': 'Score up',
+  'score-desc': 'Score down',
+};
+
 function App() {
   const [config, setConfig] = useState<GalleryConfig | null>(null);
   const [scanResult, setScanResult] = useState<ScanResult>(emptyScan);
@@ -35,20 +42,64 @@ function App() {
   const [detailGamePath, setDetailGamePath] = useState<string | null>(null);
   const [gridColumns, setGridColumns] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
+  const [draftTagRules, setDraftTagRules] = useState<string[]>([]);
+  const [draftMinScore, setDraftMinScore] = useState('');
+  const [draftStatus, setDraftStatus] = useState('');
+  const [draftOrderBy, setDraftOrderBy] = useState<FilterOrderByMode>('alpha-asc');
+  const [isPresetNamingOpen, setIsPresetNamingOpen] = useState(false);
+  const [draftPresetName, setDraftPresetName] = useState('');
+  const [isPresetSaving, setIsPresetSaving] = useState(false);
+  const [appliedTagRules, setAppliedTagRules] = useState<string[]>([]);
+  const [appliedMinScore, setAppliedMinScore] = useState<number | null>(null);
+  const [appliedStatus, setAppliedStatus] = useState('');
+  const [appliedOrderBy, setAppliedOrderBy] = useState<FilterOrderByMode>('alpha-asc');
   const [metadataModalGamePath, setMetadataModalGamePath] = useState<string | null>(null);
   const [mediaModalGamePath, setMediaModalGamePath] = useState<string | null>(null);
+  const [screenshotModalPath, setScreenshotModalPath] = useState<string | null>(null);
+  const [focusCarouselIndexByGamePath, setFocusCarouselIndexByGamePath] = useState<Record<string, number>>({});
   const [metadataDraft, setMetadataDraft] = useState<GameMetadata | null>(null);
   const [isMetadataSaving, setIsMetadataSaving] = useState(false);
   const [isMediaSaving, setIsMediaSaving] = useState(false);
+  const [mediaRenderVersion, setMediaRenderVersion] = useState(0);
   const [featuredImportTarget, setFeaturedImportTarget] = useState<'poster' | 'card' | 'background' | null>(null);
   const [pendingFeaturedDropPaths, setPendingFeaturedDropPaths] = useState<string[]>([]);
   const [dragSection, setDragSection] = useState<'featured' | 'gallery' | null>(null);
+  const [draggedScreenshotPath, setDraggedScreenshotPath] = useState<string | null>(null);
+  const [dragOverScreenshotPath, setDragOverScreenshotPath] = useState<string | null>(null);
+  const [screenshotContextMenu, setScreenshotContextMenu] = useState<{ x: number; y: number; imagePath: string } | null>(null);
   const cardsContainerRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     void initialize();
   }, []);
+
+  useEffect(() => {
+    if (!screenshotContextMenu) {
+      return;
+    }
+
+    const closeMenu = () => {
+      setScreenshotContextMenu(null);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setScreenshotContextMenu(null);
+      }
+    };
+
+    window.addEventListener('click', closeMenu);
+    window.addEventListener('contextmenu', closeMenu);
+    window.addEventListener('keydown', handleEscape);
+
+    return () => {
+      window.removeEventListener('click', closeMenu);
+      window.removeEventListener('contextmenu', closeMenu);
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [screenshotContextMenu]);
 
   async function initialize() {
     try {
@@ -144,7 +195,26 @@ function App() {
 
   function handlePlayClick(game: GameSummary, event: React.MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
-    setStatus(`Play action placeholder for ${game.name}.`);
+    void playGame(game);
+  }
+
+  async function playGame(game: GameSummary) {
+    try {
+      const result = await window.gallery.playGame({
+        gamePath: game.path,
+        gameName: game.name,
+        versions: game.versions.map((version) => ({
+          name: version.name,
+          path: version.path,
+        })),
+      });
+      setStatus(result.message);
+      if (result.launched) {
+        await refreshScan();
+      }
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to launch game.');
+    }
   }
 
   function handleOpenDetail(game: GameSummary, event: React.MouseEvent<HTMLButtonElement>) {
@@ -172,9 +242,11 @@ function App() {
     setMetadataDraft({
       latestVersion: game.metadata.latestVersion,
       score: game.metadata.score,
+      status: game.metadata.status,
       description: game.metadata.description,
       notes: [...game.metadata.notes],
       tags: [...game.metadata.tags],
+      launchExecutable: game.metadata.launchExecutable,
       customTags: game.metadata.customTags.map((tag) => ({ ...tag })),
     });
     setMetadataModalGamePath(gamePath);
@@ -183,6 +255,9 @@ function App() {
   function openPicturesModal(gamePath: string) {
     setFeaturedImportTarget(null);
     setPendingFeaturedDropPaths([]);
+    setDraggedScreenshotPath(null);
+    setDragOverScreenshotPath(null);
+    setScreenshotContextMenu(null);
     setMediaModalGamePath(gamePath);
   }
 
@@ -190,6 +265,16 @@ function App() {
     return Array.from(event.dataTransfer.files)
       .map((file) => (file as File & { path?: string }).path)
       .filter((value): value is string => Boolean(value));
+  }
+
+  function extractDraggedScreenshotPath(event: React.DragEvent<HTMLElement>) {
+    const pathFromTransfer = event.dataTransfer.getData('application/x-local-gallery-screenshot').trim();
+    if (pathFromTransfer) {
+      return pathFromTransfer;
+    }
+
+    const fallbackText = event.dataTransfer.getData('text/plain').trim();
+    return fallbackText || null;
   }
 
   async function saveMetadataChanges() {
@@ -240,6 +325,7 @@ function App() {
       }
 
       await refreshScan();
+      setMediaRenderVersion((current) => current + 1);
       setFeaturedImportTarget(null);
       setPendingFeaturedDropPaths([]);
       setStatus('Pictures updated.');
@@ -250,32 +336,216 @@ function App() {
     }
   }
 
+  async function reorderScreenshots(fromPath: string, toPath: string) {
+    if (!mediaModalGamePath) {
+      return;
+    }
+
+    setIsMediaSaving(true);
+    try {
+      await window.gallery.reorderScreenshots({ fromPath, toPath });
+      await refreshScan();
+      setMediaRenderVersion((current) => current + 1);
+      setStatus('Screenshots reordered.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to reorder screenshots.');
+    } finally {
+      setIsMediaSaving(false);
+    }
+  }
+
+  async function removeScreenshot(imagePath: string) {
+    if (!mediaModalGamePath) {
+      return;
+    }
+
+    setScreenshotContextMenu(null);
+
+    setIsMediaSaving(true);
+    try {
+      await window.gallery.removeScreenshot({ screenshotPath: imagePath });
+      await refreshScan();
+      setMediaRenderVersion((current) => current + 1);
+      setStatus('Screenshot removed.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to remove screenshot.');
+    } finally {
+      setIsMediaSaving(false);
+    }
+  }
+
   function filePathToSrc(filePath: string | null) {
     if (!filePath) {
       return null;
     }
 
-    return encodeURI(`file:///${filePath.replace(/\\/g, '/')}`);
+    const base = encodeURI(`file:///${filePath.replace(/\\/g, '/')}`);
+    return `${base}?v=${mediaRenderVersion}`;
   }
 
   function toggleGameSelection(path: string) {
     setSelectedGamePath((current) => (current === path ? null : path));
   }
 
-  const filteredGames = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) {
-      return scanResult.games;
+  function normalizeTagRules(rules: string[]) {
+    return rules.map((entry) => entry.trim()).filter(Boolean);
+  }
+
+  function resetStagedFilters() {
+    setDraftTagRules([]);
+    setDraftMinScore('');
+    setDraftStatus('');
+    setDraftOrderBy('alpha-asc');
+  }
+
+  function beginSavePreset() {
+    setDraftPresetName('');
+    setIsPresetNamingOpen(true);
+  }
+
+  async function saveCurrentFilterPreset() {
+    if (!config || isPresetSaving) {
+      return;
     }
 
-    return scanResult.games.filter((game) => {
-      if (game.name.toLowerCase().includes(query)) {
-        return true;
+    const name = draftPresetName.trim();
+    if (!name) {
+      setStatus('Preset name is required.');
+      return;
+    }
+
+    const preset: FilterPreset = {
+      name,
+      tagRules: normalizeTagRules(draftTagRules),
+      minScore: draftMinScore.trim(),
+      status: draftStatus,
+      orderBy: draftOrderBy,
+    };
+
+    const nextPresets = [
+      ...config.filterPresets.filter((entry) => entry.name.toLowerCase() !== name.toLowerCase()),
+      preset,
+    ];
+
+    setIsPresetSaving(true);
+    try {
+      const savedConfig = await window.gallery.saveConfig({
+        ...config,
+        filterPresets: nextPresets,
+      });
+      setConfig(savedConfig);
+      setDraftPresetName('');
+      setIsPresetNamingOpen(false);
+      setStatus(`Filter preset saved as ${name}.`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to save filter preset.');
+    } finally {
+      setIsPresetSaving(false);
+    }
+  }
+
+  function loadFilterPresetToDraft(preset: FilterPreset) {
+    setDraftTagRules([...preset.tagRules]);
+    setDraftMinScore(preset.minScore);
+    setDraftStatus(preset.status ?? '');
+    setDraftOrderBy(preset.orderBy);
+  }
+
+  async function deleteFilterPreset(name: string) {
+    if (!config) {
+      return;
+    }
+
+    try {
+      const savedConfig = await window.gallery.saveConfig({
+        ...config,
+        filterPresets: config.filterPresets.filter((entry) => entry.name !== name),
+      });
+      setConfig(savedConfig);
+      setStatus(`Removed preset ${name}.`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to delete filter preset.');
+    }
+  }
+
+  function applyFiltersAndOrdering() {
+    const normalizedRules = normalizeTagRules(draftTagRules);
+    setAppliedTagRules(normalizedRules);
+
+    const parsedMinScore = Number.parseFloat(draftMinScore);
+    setAppliedMinScore(Number.isFinite(parsedMinScore) ? parsedMinScore : null);
+
+    setAppliedStatus(draftStatus.trim());
+    setAppliedOrderBy(draftOrderBy);
+  }
+
+  function normalizedScore(value: string) {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+  }
+
+  const filteredGames = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    const includeTags = appliedTagRules
+      .filter((rule) => !rule.startsWith('-'))
+      .map((rule) => rule.toLowerCase());
+    const excludeTags = appliedTagRules
+      .filter((rule) => rule.startsWith('-'))
+      .map((rule) => rule.slice(1).trim().toLowerCase())
+      .filter(Boolean);
+
+    const filtered = scanResult.games.filter((game) => {
+      if (query) {
+        const matchesQuery = game.name.toLowerCase().includes(query)
+          || game.versions.some((version) => version.name.toLowerCase().includes(query))
+          || game.metadata.tags.some((tag) => tag.toLowerCase().includes(query));
+        if (!matchesQuery) {
+          return false;
+        }
       }
 
-      return game.versions.some((version) => version.name.toLowerCase().includes(query));
+      const gameTags = new Set(game.metadata.tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean));
+
+      if (includeTags.some((tag) => !gameTags.has(tag))) {
+        return false;
+      }
+
+      if (excludeTags.some((tag) => gameTags.has(tag))) {
+        return false;
+      }
+
+      if (appliedMinScore !== null && normalizedScore(game.metadata.score) < appliedMinScore) {
+        return false;
+      }
+
+      if (appliedStatus && game.metadata.status.trim().toLowerCase() !== appliedStatus.trim().toLowerCase()) {
+        return false;
+      }
+
+      return true;
     });
-  }, [scanResult.games, searchQuery]);
+
+    const sorted = [...filtered];
+    sorted.sort((left, right) => {
+      if (appliedOrderBy === 'alpha-asc') {
+        return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
+      }
+
+      if (appliedOrderBy === 'alpha-desc') {
+        return right.name.localeCompare(left.name, undefined, { sensitivity: 'base' });
+      }
+
+      const leftScore = normalizedScore(left.metadata.score);
+      const rightScore = normalizedScore(right.metadata.score);
+      if (leftScore !== rightScore) {
+        return appliedOrderBy === 'score-asc' ? leftScore - rightScore : rightScore - leftScore;
+      }
+
+      return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
+    });
+
+    return sorted;
+  }, [scanResult.games, searchQuery, appliedTagRules, appliedMinScore, appliedStatus, appliedOrderBy]);
 
   const selectedGame = useMemo(
     () => filteredGames.find((game) => game.path === selectedGamePath) ?? null,
@@ -333,7 +603,12 @@ function App() {
       }
 
       const game = scanResult.games.find((candidate) => candidate.path === payload.gamePath);
-      setStatus(`Play action placeholder for ${game?.name ?? 'selected game'}.`);
+      if (game) {
+        void playGame(game);
+        return;
+      }
+
+      setStatus('Unable to find selected game in current list.');
     });
 
     return () => {
@@ -364,25 +639,108 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!screenshotModalPath) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setScreenshotModalPath(null);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [screenshotModalPath]);
+
   if (!config) {
     return <main className="shell"><section className="panel panel--loading">{status}</section></main>;
   }
 
   function renderFocusCard(game: GameSummary, isVertical: boolean) {
-    const focusImgSrc = isVertical
-      ? filePathToSrc(game.media.poster ?? game.media.card)
-      : filePathToSrc(game.media.card ?? game.media.poster);
+    const hasScreenshotCarousel = game.media.screenshots.length > 0;
+    const carouselIndex = hasScreenshotCarousel
+      ? focusCarouselIndexByGamePath[game.path] ?? 0
+      : 0;
+    const normalizedCarouselIndex = hasScreenshotCarousel
+      ? ((carouselIndex % game.media.screenshots.length) + game.media.screenshots.length) % game.media.screenshots.length
+      : 0;
+    const focusImgSrc = hasScreenshotCarousel
+      ? filePathToSrc(game.media.screenshots[normalizedCarouselIndex] ?? null)
+      : isVertical
+        ? filePathToSrc(game.media.poster ?? game.media.card)
+        : filePathToSrc(game.media.card ?? game.media.poster);
+    const currentCarouselImagePath = hasScreenshotCarousel
+      ? game.media.screenshots[normalizedCarouselIndex] ?? null
+      : null;
+
+    const moveFocusCarousel = (delta: number) => {
+      if (!hasScreenshotCarousel) {
+        return;
+      }
+
+      setFocusCarouselIndexByGamePath((current) => {
+        const currentIndex = current[game.path] ?? 0;
+        return {
+          ...current,
+          [game.path]: currentIndex + delta,
+        };
+      });
+    };
+
     return (
       <article className={`focus-card panel ${isVertical ? 'focus-card--vertical' : 'focus-card--wide'}`}>
         <div className={`game-card__art ${game.usesPlaceholderArt ? 'game-card__art--placeholder' : ''}`}>
-          {focusImgSrc ? (
+          {hasScreenshotCarousel && focusImgSrc && currentCarouselImagePath ? (
+            <button
+              type="button"
+              className="focus-carousel-image-button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setScreenshotModalPath(currentCarouselImagePath);
+              }}
+            >
+              <img src={focusImgSrc} alt={game.name} className="media-preview media-preview--cover" />
+            </button>
+          ) : focusImgSrc ? (
             <img src={focusImgSrc} alt={game.name} className="media-preview media-preview--cover" />
+          ) : null}
+          {hasScreenshotCarousel && game.media.screenshots.length > 1 ? (
+            <div className="focus-carousel-controls">
+              <button
+                className="button button--icon"
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  moveFocusCarousel(-1);
+                }}
+                aria-label="Previous screenshot"
+              >
+                Prev
+              </button>
+              <span>{normalizedCarouselIndex + 1}/{game.media.screenshots.length}</span>
+              <button
+                className="button button--icon"
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  moveFocusCarousel(1);
+                }}
+                aria-label="Next screenshot"
+              >
+                Next
+              </button>
+            </div>
           ) : null}
           <span>{game.usesPlaceholderArt ? 'Using placeholder art' : `${game.imageCount} images`}</span>
         </div>
         <div className="focus-card__content">
           <h3>{game.name}</h3>
           <p>Latest version: {game.metadata.latestVersion || 'Unknown'}</p>
+          <p>Status: {game.metadata.status || 'Not set'}</p>
           <p>Score: {game.metadata.score || 'Not set'}</p>
           <p>{game.metadata.description || 'No description yet.'}</p>
           {game.metadata.notes.filter(Boolean).slice(0, 2).map((note) => (
@@ -442,6 +800,7 @@ function App() {
           </div>
           <div className="game-card__row game-card__row--muted">
             <p>{game.hasNfo ? 'nfo ready' : 'nfo missing'}</p>
+            <p>{game.metadata.status ? `status: ${game.metadata.status}` : 'status: not set'}</p>
             <p>{game.usesPlaceholderArt ? 'placeholder art' : `${game.imageCount} images`}</p>
           </div>
           {commonActions}
@@ -462,6 +821,7 @@ function App() {
             <h3>{game.name}</h3>
             <p>{game.versionCount} versions detected</p>
             <p>Latest version: {game.metadata.latestVersion || 'Unknown'}</p>
+            <p>Status: {game.metadata.status || 'Not set'}</p>
             <p>Score: {game.metadata.score || 'Not set'}</p>
             {commonActions}
           </div>
@@ -481,6 +841,7 @@ function App() {
           <div className="game-card__body">
             <h3>{game.name}</h3>
             <p>Latest version: {game.metadata.latestVersion || 'Unknown'}</p>
+            <p>Status: {game.metadata.status || 'Not set'}</p>
             <p>Score: {game.metadata.score || 'Not set'}</p>
             <p>{game.metadata.description || 'No description yet.'}</p>
             {game.metadata.notes.filter(Boolean).slice(0, 2).map((note) => (
@@ -512,6 +873,7 @@ function App() {
         <div className="game-card__body">
           <h3>{game.name}</h3>
           <p>{game.versionCount} versions</p>
+          <p>Status: {game.metadata.status || 'Not set'}</p>
           {commonActions}
         </div>
       </article>
@@ -536,6 +898,8 @@ function App() {
     });
   }
 
+  const detailBackgroundSrc = detailGame ? filePathToSrc(detailGame.media.background) : null;
+
   return (
     <main className="shell">
       <header className="topbar panel">
@@ -544,15 +908,20 @@ function App() {
           <p>{status}</p>
         </div>
         <div className="topbar__actions">
-          <label className="topbar__search" aria-label="Search games">
-            <input
-              ref={searchInputRef}
-              type="search"
-              placeholder="Search games or versions"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-            />
-          </label>
+          <div className="topbar__search-group">
+            <label className="topbar__search" aria-label="Search games">
+              <input
+                ref={searchInputRef}
+                type="search"
+                placeholder="Search games or versions"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+              />
+            </label>
+            <button className="button" type="button" onClick={() => setIsFilterPanelOpen((current) => !current)}>
+              {isFilterPanelOpen ? 'Hide filters' : 'Show filters'}
+            </button>
+          </div>
           <button className="button" type="button" onClick={() => setIsSidebarOpen((current) => !current)}>
             {isSidebarOpen ? 'Hide setup' : 'Show setup'}
           </button>
@@ -563,6 +932,148 @@ function App() {
             {isSaving ? 'Saving...' : 'Choose library folder'}
           </button>
         </div>
+        {isFilterPanelOpen ? (
+          <section className="topbar-filters">
+            <div className="topbar-filters__grid">
+              <div className="topbar-filters__group">
+                <div className="topbar-filters__heading">
+                  <strong>Tag rules</strong>
+                  <button className="button button--icon" type="button" onClick={() => setDraftTagRules((current) => [...current, ''])}>
+                    Add rule
+                  </button>
+                </div>
+                <p className="topbar-filters__hint">Use tags as include rules. Prefix with - to exclude a tag.</p>
+                {draftTagRules.map((rule, index) => (
+                  <div className="topbar-filters__rule" key={`filter-rule-${index}`}>
+                    <input
+                      type="text"
+                      value={rule}
+                      placeholder="example: roguelike or -horror"
+                      onChange={(event) =>
+                        setDraftTagRules((current) => current.map((entry, ruleIndex) => (ruleIndex === index ? event.target.value : entry)))
+                      }
+                    />
+                    <button
+                      className="button button--icon"
+                      type="button"
+                      onClick={() => setDraftTagRules((current) => current.filter((_, ruleIndex) => ruleIndex !== index))}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="topbar-filters__group">
+                <label className="field">
+                  <span>Minimum score</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={draftMinScore}
+                    onChange={(event) => setDraftMinScore(event.target.value)}
+                    placeholder="Leave empty to ignore"
+                  />
+                </label>
+
+                <label className="field">
+                  <span>Status</span>
+                  <select value={draftStatus} onChange={(event) => setDraftStatus(event.target.value)}>
+                    <option value="">Any status</option>
+                    {config.statusChoices.map((statusOption) => (
+                      <option key={statusOption} value={statusOption}>
+                        {statusOption}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field">
+                  <span>Order by</span>
+                  <select value={draftOrderBy} onChange={(event) => setDraftOrderBy(event.target.value as FilterOrderByMode)}>
+                    {(Object.keys(orderByModeLabels) as FilterOrderByMode[]).map((mode) => (
+                      <option key={mode} value={mode}>
+                        {orderByModeLabels[mode]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <section className="topbar-presets">
+                  <div className="topbar-filters__heading">
+                    <strong>Presets</strong>
+                    {!isPresetNamingOpen ? (
+                      <button className="button button--icon" type="button" onClick={beginSavePreset}>
+                        Save preset
+                      </button>
+                    ) : null}
+                  </div>
+                  {isPresetNamingOpen ? (
+                    <div className="topbar-presets__create">
+                      <input
+                        type="text"
+                        value={draftPresetName}
+                        autoFocus
+                        placeholder="Preset name"
+                        onChange={(event) => setDraftPresetName(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            void saveCurrentFilterPreset();
+                          }
+                        }}
+                      />
+                      <div className="topbar-presets__create-actions">
+                        <button className="button button--icon" type="button" disabled={isPresetSaving} onClick={() => void saveCurrentFilterPreset()}>
+                          {isPresetSaving ? 'Saving...' : 'Save'}
+                        </button>
+                        <button
+                          className="button button--icon"
+                          type="button"
+                          onClick={() => {
+                            setIsPresetNamingOpen(false);
+                            setDraftPresetName('');
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  {config.filterPresets.length ? (
+                    <div className="topbar-presets__list">
+                      {config.filterPresets.map((preset) => (
+                        <div className="topbar-presets__item" key={preset.name}>
+                          <p>{preset.name}</p>
+                          <div className="topbar-presets__item-actions">
+                            <button className="button button--icon" type="button" onClick={() => loadFilterPresetToDraft(preset)}>
+                              Load
+                            </button>
+                            <button className="button button--icon" type="button" onClick={() => void deleteFilterPreset(preset.name)}>
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="topbar-filters__hint">No saved presets yet.</p>
+                  )}
+                </section>
+              </div>
+            </div>
+
+            <div className="topbar-filters__actions">
+              <button className="button" type="button" onClick={resetStagedFilters}>
+                Reset staged
+              </button>
+              <button className="button button--primary" type="button" onClick={applyFiltersAndOrdering}>
+                Apply
+              </button>
+            </div>
+          </section>
+        ) : null}
       </header>
 
       <section className={`layout ${detailGame ? 'layout--detail' : ''}`}>
@@ -626,6 +1137,21 @@ function App() {
             </label>
 
             <label className="field">
+              <span>Status choices</span>
+              <textarea
+                rows={5}
+                value={config.statusChoices.join('\n')}
+                onChange={(event) =>
+                  setConfig({
+                    ...config,
+                    statusChoices: event.target.value.split('\n').map((value) => value.trim()),
+                  })
+                }
+                placeholder="Backlog&#10;Playing&#10;Completed"
+              />
+            </label>
+
+            <label className="field">
               <span>Poster view columns</span>
               <input
                 type="number"
@@ -663,7 +1189,10 @@ function App() {
           </form>
         </aside>
 
-        <section className={`panel library ${detailGame ? 'library--detail' : ''}`}>
+        <section
+          className={`panel library ${detailGame ? 'library--detail' : ''} ${detailBackgroundSrc ? 'library--detail-bg' : ''}`}
+          style={detailBackgroundSrc ? ({ ['--detail-bg-image' as string]: `url("${detailBackgroundSrc}")` } as CSSProperties) : undefined}
+        >
           {detailGame ? (
             <section className="detail-page">
               <header className="detail-page__header">
@@ -677,8 +1206,14 @@ function App() {
               </header>
               {renderFocusCard(detailGame, true)}
               <section className="detail-section panel">
-                <h3>All metadata</h3>
+                <div className="detail-section__header">
+                  <h3>All metadata</h3>
+                  <button className="button button--icon" type="button" onClick={() => openMetadataModal(detailGame.path)}>
+                    Edit metadata
+                  </button>
+                </div>
                 <p>Latest version: {detailGame.metadata.latestVersion || 'Unknown'}</p>
+                <p>Status: {detailGame.metadata.status || 'Not set'}</p>
                 <p>Score: {detailGame.metadata.score || 'Not set'}</p>
                 <p>Description: {detailGame.metadata.description || 'No description yet.'}</p>
                 <div className="detail-tags">
@@ -703,11 +1238,23 @@ function App() {
                 ) : null}
               </section>
               <section className="detail-section panel">
-                <h3>Screenshots</h3>
+                <div className="detail-section__header">
+                  <h3>Screenshots</h3>
+                  <button className="button button--icon" type="button" onClick={() => openPicturesModal(detailGame.path)}>
+                    Add images
+                  </button>
+                </div>
                 {detailGame.media.screenshots.length ? (
                   <div className="screenshot-grid">
                     {detailGame.media.screenshots.map((imagePath) => (
-                      <img key={imagePath} src={filePathToSrc(imagePath) ?? undefined} alt="Screenshot" className="media-preview" />
+                      <button
+                        key={imagePath}
+                        type="button"
+                        className="screenshot-grid__item"
+                        onClick={() => setScreenshotModalPath(imagePath)}
+                      >
+                        <img src={filePathToSrc(imagePath) ?? undefined} alt="Screenshot" className="media-preview" />
+                      </button>
                     ))}
                   </div>
                 ) : (
@@ -798,6 +1345,17 @@ function App() {
               <label className="field">
                 <span>Score</span>
                 <input type="text" value={metadataDraft.score} onChange={(event) => setMetadataDraft({ ...metadataDraft, score: event.target.value })} />
+              </label>
+              <label className="field">
+                <span>Status</span>
+                <select value={metadataDraft.status} onChange={(event) => setMetadataDraft({ ...metadataDraft, status: event.target.value })}>
+                  <option value="">Not set</option>
+                  {config.statusChoices.map((statusOption) => (
+                    <option key={statusOption} value={statusOption}>
+                      {statusOption}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className="field">
                 <span>Description</span>
@@ -930,6 +1488,16 @@ function App() {
                     <section
                       className={`media-section ${dragSection === 'gallery' ? 'media-section--drag' : ''}`}
                       onDragOver={(event) => {
+                        if (draggedScreenshotPath) {
+                          event.preventDefault();
+                          return;
+                        }
+
+                        const dragTypes = Array.from(event.dataTransfer.types);
+                        if (!dragTypes.includes('Files')) {
+                          return;
+                        }
+
                         event.preventDefault();
                         setDragSection('gallery');
                       }}
@@ -937,6 +1505,12 @@ function App() {
                       onDrop={(event) => {
                         event.preventDefault();
                         setDragSection(null);
+                        if (draggedScreenshotPath) {
+                          setDraggedScreenshotPath(null);
+                          setDragOverScreenshotPath(null);
+                          return;
+                        }
+
                         void importMedia('screenshot', extractDroppedFilePaths(event));
                       }}
                     >
@@ -945,14 +1519,149 @@ function App() {
                         <button className="button button--icon" type="button" disabled={isMediaSaving} onClick={() => void importMedia('screenshot')}>Add screenshot</button>
                       </div>
                       <div className="media-grid">
-                        {game.media.screenshots.length ? game.media.screenshots.map((imagePath) => (
-                          <img key={imagePath} src={filePathToSrc(imagePath) ?? undefined} alt="Screenshot" className="media-preview" />
+                        {game.media.screenshots.length ? game.media.screenshots.map((imagePath, index) => (
+                          <div
+                            key={imagePath}
+                            className={`media-grid__item ${draggedScreenshotPath === imagePath ? 'media-grid__item--dragging' : ''} ${dragOverScreenshotPath === imagePath ? 'media-grid__item--drop-target' : ''}`}
+                            draggable={!isMediaSaving}
+                            onDragStart={(event) => {
+                              setScreenshotContextMenu(null);
+                              setDragSection(null);
+                              setDraggedScreenshotPath(imagePath);
+                              setDragOverScreenshotPath(null);
+                              event.dataTransfer.effectAllowed = 'move';
+                              event.dataTransfer.setData('application/x-local-gallery-screenshot', imagePath);
+                              event.dataTransfer.setData('text/plain', imagePath);
+                            }}
+                            onDragEnd={() => {
+                              setDraggedScreenshotPath(null);
+                              setDragOverScreenshotPath(null);
+                            }}
+                            onDragOver={(event) => {
+                              if (!draggedScreenshotPath || draggedScreenshotPath === imagePath) {
+                                return;
+                              }
+
+                              event.preventDefault();
+                              event.dataTransfer.dropEffect = 'move';
+                            }}
+                            onDragEnter={() => {
+                              if (!draggedScreenshotPath || draggedScreenshotPath === imagePath) {
+                                return;
+                              }
+
+                              setDragOverScreenshotPath(imagePath);
+                            }}
+                            onDragLeave={() => {
+                              setDragOverScreenshotPath((current) => current === imagePath ? null : current);
+                            }}
+                            onDrop={(event) => {
+                              const fromPath = draggedScreenshotPath || extractDraggedScreenshotPath(event);
+                              event.preventDefault();
+                              event.stopPropagation();
+                              setDraggedScreenshotPath(null);
+                              setDragOverScreenshotPath(null);
+                              if (!fromPath || fromPath === imagePath) {
+                                return;
+                              }
+
+                              void reorderScreenshots(fromPath, imagePath);
+                            }}
+                          >
+                            <button
+                              type="button"
+                              className="media-grid__drag-handle"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                if (isMediaSaving) {
+                                  return;
+                                }
+
+                                const rect = event.currentTarget.getBoundingClientRect();
+                                setScreenshotContextMenu({
+                                  x: Math.round(rect.left),
+                                  y: Math.round(rect.bottom + 6),
+                                  imagePath,
+                                });
+                              }}
+                              onContextMenu={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                if (isMediaSaving) {
+                                  return;
+                                }
+
+                                setScreenshotContextMenu({
+                                  x: event.clientX,
+                                  y: event.clientY,
+                                  imagePath,
+                                });
+                              }}
+                              title="Screenshot actions"
+                            >
+                              ...
+                            </button>
+                            <img src={filePathToSrc(imagePath) ?? undefined} alt="Screenshot" className="media-preview" draggable={false} />
+                            <div className="media-grid__reorder">
+                              <button
+                                className="button button--icon"
+                                type="button"
+                                disabled={isMediaSaving || index === 0}
+                                onClick={() => {
+                                  const prev = game.media.screenshots[index - 1];
+                                  if (prev) void reorderScreenshots(imagePath, prev);
+                                }}
+                                aria-label="Move left"
+                              >{'◀'}</button>
+                              <button
+                                className="button button--icon"
+                                type="button"
+                                disabled={isMediaSaving || index === game.media.screenshots.length - 1}
+                                onClick={() => {
+                                  const next = game.media.screenshots[index + 1];
+                                  if (next) void reorderScreenshots(imagePath, next);
+                                }}
+                                aria-label="Move right"
+                              >{'▶'}</button>
+                            </div>
+                          </div>
                         )) : <p>No screenshots</p>}
                       </div>
                     </section>
                   </>
                 );
               })()}
+            </div>
+          </section>
+          {screenshotContextMenu ? (
+            <div
+              className="context-menu"
+              style={{ left: screenshotContextMenu.x, top: screenshotContextMenu.y }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                className="context-menu__item context-menu__item--danger"
+                type="button"
+                onClick={() => {
+                  void removeScreenshot(screenshotContextMenu.imagePath);
+                }}
+              >
+                Remove screenshot
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {screenshotModalPath ? (
+        <div className="modal-backdrop" onClick={() => setScreenshotModalPath(null)}>
+          <section className="modal-panel modal-panel--lightbox" onClick={(event) => event.stopPropagation()}>
+            <header className="modal-panel__header">
+              <h2>Screenshot</h2>
+              <button className="button" type="button" onClick={() => setScreenshotModalPath(null)}>Close</button>
+            </header>
+            <div className="modal-panel__body modal-panel__body--lightbox">
+              <img src={filePathToSrc(screenshotModalPath) ?? undefined} alt="Screenshot preview" className="lightbox-image" />
             </div>
           </section>
         </div>
