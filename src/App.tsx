@@ -1,5 +1,5 @@
-﻿import { FormEvent, Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { ArrowLeft, ArrowRight, FolderOpen, Play, RefreshCw, Settings, SlidersHorizontal } from 'lucide-react';
+﻿import { FormEvent, Fragment, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { ArrowLeft, ArrowRight, ChevronDown, FolderOpen, Play, RefreshCw, Settings, SlidersHorizontal, Tag } from 'lucide-react';
 import type { FilterOrderByMode, FilterPreset, GalleryConfig, GalleryViewMode, GameMetadata, GameSummary, ScanResult } from './types';
 
 const emptyScan: ScanResult = {
@@ -55,6 +55,8 @@ const actionLabels = {
   back: 'Back',
   rescan: 'Rescan',
   scanning: 'Scanning...',
+  showTagPool: 'Show tag pool',
+  hideTagPool: 'Hide tag pool',
   showFilters: 'Show filters',
   hideFilters: 'Hide filters',
   showSetup: 'Show setup',
@@ -62,6 +64,228 @@ const actionLabels = {
   chooseLibraryFolder: 'Choose library folder',
   saving: 'Saving...',
 } as const;
+
+type CustomSelectOption = {
+  value: string;
+  label: string;
+};
+
+type CustomSelectProps = {
+  value: string;
+  options: CustomSelectOption[];
+  ariaLabel: string;
+  onChange: (value: string) => void;
+  className?: string;
+};
+
+function CustomSelect({ value, options, ariaLabel, onChange, className }: CustomSelectProps) {
+  const menuId = useId();
+  const [isOpen, setIsOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
+
+  useEffect(() => {
+    setHighlightedIndex(selectedIndex);
+  }, [selectedIndex, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (rootRef.current?.contains(target)) {
+        return;
+      }
+
+      setIsOpen(false);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+
+    window.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    optionRefs.current[highlightedIndex]?.focus();
+  }, [highlightedIndex, isOpen]);
+
+  function moveHighlight(delta: number) {
+    setHighlightedIndex((current) => {
+      if (!options.length) {
+        return 0;
+      }
+
+      return (current + delta + options.length) % options.length;
+    });
+  }
+
+  function commitHighlightedOption() {
+    const nextOption = options[highlightedIndex];
+    if (!nextOption) {
+      return;
+    }
+
+    onChange(nextOption.value);
+    setIsOpen(false);
+    triggerRef.current?.focus();
+  }
+
+  function handleTriggerKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      if (!isOpen) {
+        setHighlightedIndex(selectedIndex);
+        setIsOpen(true);
+        return;
+      }
+
+      moveHighlight(1);
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!isOpen) {
+        setHighlightedIndex(selectedIndex);
+        setIsOpen(true);
+        return;
+      }
+
+      moveHighlight(-1);
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      if (!isOpen) {
+        setIsOpen(true);
+        return;
+      }
+
+      commitHighlightedOption();
+      return;
+    }
+
+    if (event.key === 'Escape' && isOpen) {
+      event.preventDefault();
+      setIsOpen(false);
+    }
+  }
+
+  function handleMenuKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      moveHighlight(1);
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      moveHighlight(-1);
+      return;
+    }
+
+    if (event.key === 'Home') {
+      event.preventDefault();
+      setHighlightedIndex(0);
+      return;
+    }
+
+    if (event.key === 'End') {
+      event.preventDefault();
+      setHighlightedIndex(Math.max(0, options.length - 1));
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      commitHighlightedOption();
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setIsOpen(false);
+      triggerRef.current?.focus();
+      return;
+    }
+
+    if (event.key === 'Tab') {
+      setIsOpen(false);
+    }
+  }
+
+  const selectedOption = options.find((option) => option.value === value) ?? options[0];
+
+  return (
+    <div className={`custom-select ${className ?? ''}`.trim()} ref={rootRef}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="custom-select__trigger"
+        aria-haspopup="listbox"
+        aria-label={ariaLabel}
+        aria-expanded={isOpen}
+        aria-controls={menuId}
+        aria-activedescendant={isOpen ? `${menuId}-option-${highlightedIndex}` : undefined}
+        onClick={() => setIsOpen((current) => !current)}
+        onKeyDown={handleTriggerKeyDown}
+      >
+        <span>{selectedOption?.label ?? ''}</span>
+        <ChevronDown size={15} aria-hidden="true" />
+      </button>
+      {isOpen ? (
+        <div className="custom-select__menu" id={menuId} role="listbox" aria-label={ariaLabel} onKeyDown={handleMenuKeyDown}>
+          {options.map((option, index) => (
+            <button
+              key={option.value || '__empty__'}
+              ref={(element) => {
+                optionRefs.current[index] = element;
+              }}
+              id={`${menuId}-option-${index}`}
+              type="button"
+              role="option"
+              aria-selected={value === option.value}
+              tabIndex={index === highlightedIndex ? 0 : -1}
+              className={`custom-select__option ${value === option.value ? 'custom-select__option--selected' : ''}`}
+              onClick={() => {
+                onChange(option.value);
+                setIsOpen(false);
+                triggerRef.current?.focus();
+              }}
+              onMouseEnter={() => setHighlightedIndex(index)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function App() {
   const [config, setConfig] = useState<GalleryConfig | null>(null);
@@ -75,8 +299,13 @@ function App() {
   const [detailGamePath, setDetailGamePath] = useState<string | null>(null);
   const [gridColumns, setGridColumns] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isTagPoolPanelOpen, setIsTagPoolPanelOpen] = useState(false);
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
+  const [activeTagPoolEditorIndex, setActiveTagPoolEditorIndex] = useState<number | null>(null);
+  const [tagPoolEditorOriginalValue, setTagPoolEditorOriginalValue] = useState('');
   const [draftTagRules, setDraftTagRules] = useState<string[]>([]);
+  const [activeFilterRuleEditorIndex, setActiveFilterRuleEditorIndex] = useState<number | null>(null);
+  const [activeMetadataTagEditorIndex, setActiveMetadataTagEditorIndex] = useState<number | null>(null);
   const [draftMinScore, setDraftMinScore] = useState('');
   const [draftStatus, setDraftStatus] = useState('');
   const [draftOrderBy, setDraftOrderBy] = useState<FilterOrderByMode>('alpha-asc');
@@ -102,12 +331,13 @@ function App() {
   const [dragOverScreenshotPath, setDragOverScreenshotPath] = useState<string | null>(null);
   const [screenshotContextMenu, setScreenshotContextMenu] = useState<{ x: number; y: number; imagePath: string } | null>(null);
   const [activeTagAutocomplete, setActiveTagAutocomplete] = useState<{
-    scope: 'filter' | 'metadata';
+    scope: 'pool' | 'filter' | 'metadata';
     index: number;
     highlighted: number;
   } | null>(null);
   const cardsContainerRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const didRunStartupTagPoolSyncRef = useRef(false);
 
   useEffect(() => {
     void initialize();
@@ -138,6 +368,55 @@ function App() {
       window.removeEventListener('keydown', handleEscape);
     };
   }, [screenshotContextMenu]);
+
+  useEffect(() => {
+    if (didRunStartupTagPoolSyncRef.current) {
+      return;
+    }
+
+    if (!config?.gamesRoot || !scanResult.scannedAt) {
+      return;
+    }
+
+    didRunStartupTagPoolSyncRef.current = true;
+
+    const startupTagPoolSync = async () => {
+      const gameTagSets = scanResult.games.map((game) =>
+        new Set(game.metadata.tags.map((tag) => tag.trim()).filter(Boolean).map((tag) => tag.toLowerCase())),
+      );
+      const usageByKey = new Map<string, number>();
+      for (const tagSet of gameTagSets) {
+        for (const key of tagSet) {
+          usageByKey.set(key, (usageByKey.get(key) ?? 0) + 1);
+        }
+      }
+
+      const libraryTags = normalizeTagPool(scanResult.games.flatMap((game) => game.metadata.tags));
+      const mergedTagPool = normalizeTagPool([...(config.tagPool ?? []), ...libraryTags]);
+      const tagPoolUsage = Object.fromEntries(
+        mergedTagPool.map((tag) => [tag, usageByKey.get(tag.toLowerCase()) ?? 0]),
+      );
+
+      const isTagPoolSame = JSON.stringify(mergedTagPool) === JSON.stringify(config.tagPool ?? []);
+      const isUsageSame = JSON.stringify(tagPoolUsage) === JSON.stringify(config.tagPoolUsage ?? {});
+      if (isTagPoolSame && isUsageSame) {
+        return;
+      }
+
+      try {
+        const savedConfig = await window.gallery.saveConfig({
+          ...config,
+          tagPool: mergedTagPool,
+          tagPoolUsage,
+        });
+        setConfig(savedConfig);
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : 'Failed to sync startup tag pool.');
+      }
+    };
+
+    void startupTagPoolSync();
+  }, [config, scanResult.scannedAt, scanResult.games]);
 
   async function initialize() {
     try {
@@ -206,9 +485,11 @@ function App() {
       const result = await window.gallery.scanGames();
       setScanResult(result);
       setStatus(result.games.length ? `Found ${result.games.length} game folders.` : 'Scan completed. No games matched yet.');
+      return result;
     } catch (error) {
       setScanResult(emptyScan);
       setStatus(error instanceof Error ? error.message : 'Failed to scan game folders.');
+      return null;
     } finally {
       setIsScanning(false);
     }
@@ -288,7 +569,15 @@ function App() {
       launchExecutable: game.metadata.launchExecutable,
       customTags: game.metadata.customTags.map((tag) => ({ ...tag })),
     });
+    setActiveMetadataTagEditorIndex(null);
+    setActiveTagAutocomplete(null);
     setMetadataModalGamePath(gamePath);
+  }
+
+  function closeMetadataModal() {
+    setMetadataModalGamePath(null);
+    setActiveMetadataTagEditorIndex(null);
+    setActiveTagAutocomplete((current) => (current?.scope === 'metadata' ? null : current));
   }
 
   function openPicturesModal(gamePath: string) {
@@ -322,6 +611,8 @@ function App() {
       return;
     }
 
+    const normalizedMetadataTags = normalizeTagPool(metadataDraft.tags);
+
     setIsMetadataSaving(true);
     try {
       await window.gallery.saveGameMetadata({
@@ -330,11 +621,31 @@ function App() {
         metadata: {
           ...metadataDraft,
           notes: metadataDraft.notes.length ? metadataDraft.notes : [''],
-          tags: [...new Set(metadataDraft.tags.map((tag) => tag.trim()).filter(Boolean))],
+          tags: normalizedMetadataTags,
         },
       });
+
+      if (config) {
+        const existingKeys = new Set(config.tagPool.map((tag) => tag.trim().toLowerCase()).filter(Boolean));
+        const missingTags = normalizedMetadataTags.filter((tag) => !existingKeys.has(tag.toLowerCase()));
+        if (missingTags.length) {
+          const nextTagPool = [...config.tagPool, ...missingTags];
+          const nextUsage = { ...config.tagPoolUsage };
+          for (const tag of missingTags) {
+            nextUsage[tag] = nextUsage[tag] ?? 0;
+          }
+
+          const savedConfig = await window.gallery.saveConfig({
+            ...config,
+            tagPool: nextTagPool,
+            tagPoolUsage: nextUsage,
+          });
+          setConfig(savedConfig);
+        }
+      }
+
       await refreshScan();
-      setMetadataModalGamePath(null);
+      closeMetadataModal();
       setStatus('Metadata saved.');
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Failed to save metadata.');
@@ -430,20 +741,195 @@ function App() {
     return rules.map((entry) => entry.trim()).filter(Boolean);
   }
 
+  function normalizeTagPool(pool: string[]) {
+    const uniqueTags = new Map<string, string>();
+    for (const tag of pool) {
+      const normalized = tag.trim();
+      if (!normalized) {
+        continue;
+      }
+
+      const key = normalized.toLowerCase();
+      if (!uniqueTags.has(key)) {
+        uniqueTags.set(key, normalized);
+      }
+    }
+
+    return [...uniqueTags.values()].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
+  }
+
+  function normalizeMetadataTags(tags: string[]) {
+    const uniqueTags = new Map<string, string>();
+    for (const tag of tags) {
+      const normalized = tag.trim();
+      if (!normalized) {
+        continue;
+      }
+
+      const key = normalized.toLowerCase();
+      if (!uniqueTags.has(key)) {
+        uniqueTags.set(key, normalized);
+      }
+    }
+
+    return [...uniqueTags.values()];
+  }
+
+  function computeTagPoolUsage(pool: string[], games: GameSummary[]) {
+    return Object.fromEntries(
+      normalizeTagPool(pool).map((tag) => {
+        const normalizedTag = tag.toLowerCase();
+        const usage = games.reduce((count, game) => {
+          const gameHasTag = game.metadata.tags.some((entry) => entry.trim().toLowerCase() === normalizedTag);
+          return gameHasTag ? count + 1 : count;
+        }, 0);
+
+        return [tag, usage];
+      }),
+    );
+  }
+
+  function tagExistsInAnyGame(tag: string) {
+    const normalized = tag.trim().toLowerCase();
+    if (!normalized) {
+      return false;
+    }
+
+    return scanResult.games.some((game) =>
+      game.metadata.tags.some((entry) => entry.trim().toLowerCase() === normalized),
+    );
+  }
+
+  async function persistTagPool(
+    nextPool: string[],
+    successMessage?: string,
+    baseConfig?: GalleryConfig | null,
+    usageGames?: GameSummary[],
+  ) {
+    const configSnapshot = baseConfig ?? config;
+    if (!configSnapshot) {
+      return;
+    }
+
+    const normalizedPool = normalizeTagPool(nextPool);
+    const normalizedUsage = usageGames
+      ? computeTagPoolUsage(normalizedPool, usageGames)
+      : Object.fromEntries(
+          normalizedPool.map((tag) => [tag, configSnapshot.tagPoolUsage?.[tag] ?? 0]),
+        );
+
+    try {
+      const savedConfig = await window.gallery.saveConfig({
+        ...configSnapshot,
+        tagPool: normalizedPool,
+        tagPoolUsage: normalizedUsage,
+      });
+      setConfig(savedConfig);
+      if (successMessage) {
+        setStatus(successMessage);
+      }
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to save tag pool.');
+    }
+  }
+
+  async function removeTagFromPoolByIndex(index: number) {
+    if (!config) {
+      return;
+    }
+
+    const candidate = config.tagPool[index] ?? '';
+    if (tagExistsInAnyGame(candidate)) {
+      setStatus(`Cannot remove "${candidate}" because it is used by one or more games.`);
+      return;
+    }
+
+    await persistTagPool(config.tagPool.filter((_, tagIndex) => tagIndex !== index));
+  }
+
+  async function finalizeTagPoolEdit(index: number) {
+    if (!config) {
+      return;
+    }
+
+    const currentValue = (config.tagPool[index] ?? '').trim();
+    if (!currentValue) {
+      const original = tagPoolEditorOriginalValue.trim();
+      if (original && tagExistsInAnyGame(original)) {
+        const restoredPool = config.tagPool.map((entry, tagIndex) => (tagIndex === index ? original : entry));
+        setConfig({ ...config, tagPool: restoredPool });
+        setStatus(`Cannot remove "${original}" because it is used by one or more games.`);
+        setActiveTagPoolEditorIndex(null);
+        setActiveTagAutocomplete(null);
+        return;
+      }
+
+      const nextPool = config.tagPool.filter((_, tagIndex) => tagIndex !== index);
+      setConfig({ ...config, tagPool: nextPool });
+      await persistTagPool(nextPool, undefined, config);
+      setActiveTagPoolEditorIndex(null);
+      setActiveTagAutocomplete(null);
+      return;
+    }
+
+    const originalValue = tagPoolEditorOriginalValue.trim();
+    const nextPool = config.tagPool.map((entry, tagIndex) => (tagIndex === index ? currentValue : entry));
+    setConfig({ ...config, tagPool: nextPool });
+
+    const isRename = Boolean(originalValue) && originalValue.toLowerCase() !== currentValue.toLowerCase();
+    if (!isRename) {
+      await persistTagPool(nextPool, undefined, config);
+      setActiveTagPoolEditorIndex(null);
+      setActiveTagAutocomplete(null);
+      return;
+    }
+
+    try {
+      const sourceKey = originalValue.toLowerCase();
+      const targetTag = currentValue;
+      const gamesToUpdate = scanResult.games.filter((game) =>
+        game.metadata.tags.some((tag) => tag.trim().toLowerCase() === sourceKey),
+      );
+
+      await Promise.all(
+        gamesToUpdate.map((game) => {
+          const nextTags = normalizeMetadataTags(
+            game.metadata.tags.map((tag) => (tag.trim().toLowerCase() === sourceKey ? targetTag : tag)),
+          );
+
+          return window.gallery.saveGameMetadata({
+            gamePath: game.path,
+            title: game.name,
+            metadata: {
+              ...game.metadata,
+              tags: nextTags,
+            },
+          });
+        }),
+      );
+
+      const updatedScan = await refreshScan();
+      await persistTagPool(nextPool, undefined, config, updatedScan?.games ?? scanResult.games);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to propagate tag rename to games.');
+    }
+
+    setActiveTagPoolEditorIndex(null);
+    setActiveTagAutocomplete(null);
+  }
+
   const knownTags = useMemo(() => {
     const uniqueTags = new Map<string, string>();
 
-    for (const game of scanResult.games) {
-      for (const tag of game.metadata.tags) {
-        const normalized = tag.trim();
-        if (!normalized) {
-          continue;
-        }
+    for (const tag of config?.tagPool ?? []) {
+      const normalized = tag.trim();
+      if (!normalized) {
+        continue;
+      }
 
-        const key = normalized.toLowerCase();
-        if (!uniqueTags.has(key)) {
-          uniqueTags.set(key, normalized);
-        }
+      const key = normalized.toLowerCase();
+      if (!uniqueTags.has(key)) {
+        uniqueTags.set(key, normalized);
       }
     }
 
@@ -462,30 +948,68 @@ function App() {
     }
 
     return [...uniqueTags.values()].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
-  }, [scanResult.games, metadataDraft]);
+  }, [config?.tagPool, metadataDraft]);
 
   const activeTagSuggestions = useMemo(() => {
     if (!activeTagAutocomplete) {
       return [] as string[];
     }
 
-    const sourceValue = activeTagAutocomplete.scope === 'filter'
-      ? draftTagRules[activeTagAutocomplete.index] ?? ''
-      : metadataDraft?.tags[activeTagAutocomplete.index] ?? '';
+    const sourceValue = activeTagAutocomplete.scope === 'pool'
+      ? config?.tagPool[activeTagAutocomplete.index] ?? ''
+      : activeTagAutocomplete.scope === 'filter'
+        ? draftTagRules[activeTagAutocomplete.index] ?? ''
+        : metadataDraft?.tags[activeTagAutocomplete.index] ?? '';
 
     const withoutPrefix = sourceValue.trim().startsWith('-') ? sourceValue.trim().slice(1).trim() : sourceValue.trim();
     const query = withoutPrefix.toLowerCase();
     if (!query) {
-      return [] as string[];
+      return knownTags.slice(0, 8);
     }
 
     return knownTags
       .filter((tag) => tag.toLowerCase().includes(query))
       .slice(0, 8);
-  }, [activeTagAutocomplete, draftTagRules, metadataDraft, knownTags]);
+  }, [activeTagAutocomplete, config?.tagPool, draftTagRules, metadataDraft, knownTags]);
 
-  function applyTagSuggestion(scope: 'filter' | 'metadata', index: number, suggestion: string) {
-    if (scope === 'filter') {
+  const topUsedFilterSuggestions = useMemo(() => {
+    if (!config) {
+      return [] as Array<{ tag: string; count: number }>;
+    }
+
+    const activeKeys = new Set(
+      draftTagRules
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+        .map((entry) => (entry.startsWith('-') ? entry.slice(1).trim() : entry).toLowerCase()),
+    );
+
+    return config.tagPool
+      .map((tag) => ({
+        tag,
+        count: Number.isFinite(config.tagPoolUsage?.[tag]) ? config.tagPoolUsage[tag] : 0,
+      }))
+      .filter((entry) => !activeKeys.has(entry.tag.toLowerCase()))
+      .sort((left, right) => {
+        if (left.count !== right.count) {
+          return right.count - left.count;
+        }
+
+        return left.tag.localeCompare(right.tag, undefined, { sensitivity: 'base' });
+      })
+      .slice(0, 10);
+  }, [config, draftTagRules]);
+
+  function applyTagSuggestion(scope: 'pool' | 'filter' | 'metadata', index: number, suggestion: string) {
+    if (scope === 'pool') {
+      if (!config) {
+        return;
+      }
+
+      const nextPool = config.tagPool.map((entry, tagIndex) => (tagIndex === index ? suggestion : entry));
+      setConfig({ ...config, tagPool: nextPool });
+      void persistTagPool(nextPool);
+    } else if (scope === 'filter') {
       setDraftTagRules((current) => {
         const existing = current[index] ?? '';
         const prefix = existing.trim().startsWith('-') ? '-' : '';
@@ -503,7 +1027,7 @@ function App() {
 
   function handleTagAutocompleteKeyDown(
     event: React.KeyboardEvent<HTMLInputElement>,
-    scope: 'filter' | 'metadata',
+    scope: 'pool' | 'filter' | 'metadata',
     index: number,
   ) {
     const isActive = activeTagAutocomplete?.scope === scope && activeTagAutocomplete.index === index;
@@ -558,6 +1082,8 @@ function App() {
 
   function resetStagedFilters() {
     setDraftTagRules([]);
+    setActiveFilterRuleEditorIndex(null);
+    setActiveTagAutocomplete(null);
     setDraftMinScore('');
     setDraftStatus('');
     setDraftOrderBy('alpha-asc');
@@ -1286,6 +1812,16 @@ function App() {
             </label>
           </div>
           <button
+            className={`button button--icon-only ${isTagPoolPanelOpen ? 'is-active' : ''}`}
+            type="button"
+            onClick={() => setIsTagPoolPanelOpen((current) => !current)}
+            aria-pressed={isTagPoolPanelOpen}
+            aria-label={isTagPoolPanelOpen ? actionLabels.hideTagPool : actionLabels.showTagPool}
+            title={isTagPoolPanelOpen ? actionLabels.hideTagPool : actionLabels.showTagPool}
+          >
+            <Tag size={16} aria-hidden="true" />
+          </button>
+          <button
             className={`button button--primary button--icon-only ${isFilterPanelOpen ? 'is-active' : ''}`}
             type="button"
             onClick={() => setIsFilterPanelOpen((current) => !current)}
@@ -1316,73 +1852,260 @@ function App() {
             <RefreshCw size={16} aria-hidden="true" className={isScanning ? 'icon-spin' : undefined} />
           </button>
         </div>
+        {isTagPoolPanelOpen ? (
+          <section className="topbar-filters topbar-tag-pool">
+            <div className="topbar-filters__heading">
+              <strong>Tag pool</strong>
+            </div>
+            <p className="topbar-filters__hint">Click a bubble to edit. Right-click to remove only when unused by all games.</p>
+            <div className="tag-bubbles">
+              {config.tagPool.map((tag, index) => {
+                const isEditing = activeTagPoolEditorIndex === index;
+                const bubbleLabel = tag.trim() || 'Empty tag';
+                const usageCount = Number.isFinite(config.tagPoolUsage?.[tag]) ? config.tagPoolUsage[tag] : 0;
+
+                if (isEditing) {
+                  return (
+                    <div className="tag-bubble tag-bubble--editing" key={`pool-tag-${index}`}>
+                      <div className="tag-autocomplete">
+                        <input
+                          type="text"
+                          autoFocus
+                          value={tag}
+                          placeholder="example: roguelike"
+                          onFocus={() => setActiveTagAutocomplete({ scope: 'pool', index, highlighted: 0 })}
+                          onBlur={() => {
+                            window.setTimeout(() => {
+                              void finalizeTagPoolEdit(index);
+                            }, 100);
+                          }}
+                          onKeyDown={(event) => {
+                            handleTagAutocompleteKeyDown(event, 'pool', index);
+                            if (event.key === 'Enter' || event.key === 'Escape') {
+                              event.preventDefault();
+                              void finalizeTagPoolEdit(index);
+                            }
+                          }}
+                          onChange={(event) => {
+                            setConfig((current) => {
+                              if (!current) {
+                                return current;
+                              }
+
+                              return {
+                                ...current,
+                                tagPool: current.tagPool.map((entry, tagIndex) => (tagIndex === index ? event.target.value : entry)),
+                              };
+                            });
+                            setActiveTagAutocomplete({ scope: 'pool', index, highlighted: 0 });
+                          }}
+                        />
+                        {activeTagAutocomplete?.scope === 'pool' && activeTagAutocomplete.index === index && activeTagSuggestions.length ? (
+                          <div className="tag-autocomplete__menu">
+                            {activeTagSuggestions.map((suggestion, suggestionIndex) => (
+                              <button
+                                key={`${suggestion}-${suggestionIndex}`}
+                                className={`tag-autocomplete__item ${activeTagAutocomplete.highlighted === suggestionIndex ? 'tag-autocomplete__item--active' : ''}`}
+                                type="button"
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  applyTagSuggestion('pool', index, suggestion);
+                                }}
+                              >
+                                {suggestion}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <button
+                    key={`pool-tag-${index}`}
+                    className="tag-bubble tag-bubble--suggested"
+                    type="button"
+                    title={`${bubbleLabel} (${usageCount} game${usageCount === 1 ? '' : 's'})`}
+                    onClick={() => {
+                      setTagPoolEditorOriginalValue(config.tagPool[index] ?? '');
+                      setActiveTagPoolEditorIndex(index);
+                      setActiveTagAutocomplete({ scope: 'pool', index, highlighted: 0 });
+                    }}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      void removeTagFromPoolByIndex(index);
+                      setActiveTagPoolEditorIndex(null);
+                      setActiveTagAutocomplete(null);
+                    }}
+                  >
+                    <span>{bubbleLabel}</span>
+                    <span className="tag-bubble__metric">{usageCount}</span>
+                  </button>
+                );
+              })}
+              <button
+                className="tag-bubble tag-bubble--add"
+                type="button"
+                onClick={() => {
+                  const nextIndex = config.tagPool.length;
+                  const nextPool = [...config.tagPool, ''];
+                  setConfig({ ...config, tagPool: nextPool });
+                  setTagPoolEditorOriginalValue('');
+                  setActiveTagPoolEditorIndex(nextIndex);
+                  setActiveTagAutocomplete({ scope: 'pool', index: nextIndex, highlighted: 0 });
+                }}
+                title="Add pool tag"
+              >
+                +
+              </button>
+            </div>
+          </section>
+        ) : null}
         {isFilterPanelOpen ? (
           <section className="topbar-filters">
             <div className="topbar-filters__grid">
               <div className="topbar-filters__group">
                 <div className="topbar-filters__heading">
                   <strong>Tag rules</strong>
-                  <button className="button button--icon" type="button" onClick={() => setDraftTagRules((current) => [...current, ''])}>
-                    Add rule
-                  </button>
                 </div>
-                <p className="topbar-filters__hint">Use tags as include rules. Prefix with - to exclude a tag.</p>
-                {draftTagRules.map((rule, index) => (
-                  <div className="topbar-filters__rule" key={`filter-rule-${index}`}>
-                    <div className="tag-autocomplete">
-                      <input
-                        type="text"
-                        value={rule}
-                        placeholder="example: roguelike or -horror"
-                        onFocus={() => setActiveTagAutocomplete({ scope: 'filter', index, highlighted: 0 })}
-                        onBlur={() => {
-                          window.setTimeout(() => {
-                            setActiveTagAutocomplete((current) => {
-                              if (!current || current.scope !== 'filter' || current.index !== index) {
-                                return current;
-                              }
+                <p className="topbar-filters__hint">Click a bubble to edit. Right-click a bubble to remove. Prefix with - to exclude.</p>
+                <div className="tag-bubbles">
+                  {draftTagRules.map((rule, index) => {
+                    const isEditing = activeFilterRuleEditorIndex === index;
+                    const normalizedRule = rule.trim();
+                    const isExclude = normalizedRule.startsWith('-');
+                    const bubbleLabel = normalizedRule || 'Empty tag';
 
-                              return null;
-                            });
-                          }, 100);
-                        }}
-                        onKeyDown={(event) => handleTagAutocompleteKeyDown(event, 'filter', index)}
-                        onChange={(event) => {
-                          setDraftTagRules((current) => current.map((entry, ruleIndex) => (ruleIndex === index ? event.target.value : entry)));
+                    if (isEditing) {
+                      return (
+                        <div className="tag-bubble tag-bubble--editing" key={`filter-rule-${index}`}>
+                          <div className="tag-autocomplete">
+                            <input
+                              type="text"
+                              autoFocus
+                              value={rule}
+                              placeholder="example: roguelike or -horror"
+                              onFocus={() => setActiveTagAutocomplete({ scope: 'filter', index, highlighted: 0 })}
+                              onBlur={() => {
+                                window.setTimeout(() => {
+                                  setDraftTagRules((current) => {
+                                    const nextValue = (current[index] ?? '').trim();
+                                    if (nextValue) {
+                                      return current;
+                                    }
+
+                                    return current.filter((_, ruleIndex) => ruleIndex !== index);
+                                  });
+                                  setActiveFilterRuleEditorIndex((current) => (current === index ? null : current));
+                                  setActiveTagAutocomplete((current) => {
+                                    if (!current || current.scope !== 'filter' || current.index !== index) {
+                                      return current;
+                                    }
+
+                                    return null;
+                                  });
+                                }, 100);
+                              }}
+                              onKeyDown={(event) => {
+                                handleTagAutocompleteKeyDown(event, 'filter', index);
+                                if (event.key === 'Enter' || event.key === 'Escape') {
+                                  setActiveFilterRuleEditorIndex(null);
+                                  setActiveTagAutocomplete(null);
+                                }
+                              }}
+                              onChange={(event) => {
+                                setDraftTagRules((current) => current.map((entry, ruleIndex) => (ruleIndex === index ? event.target.value : entry)));
+                                setActiveTagAutocomplete({ scope: 'filter', index, highlighted: 0 });
+                              }}
+                            />
+                            {activeTagAutocomplete?.scope === 'filter' && activeTagAutocomplete.index === index && activeTagSuggestions.length ? (
+                              <div className="tag-autocomplete__menu">
+                                {activeTagSuggestions.map((suggestion, suggestionIndex) => (
+                                  <button
+                                    key={`${suggestion}-${suggestionIndex}`}
+                                    className={`tag-autocomplete__item ${activeTagAutocomplete.highlighted === suggestionIndex ? 'tag-autocomplete__item--active' : ''}`}
+                                    type="button"
+                                    onMouseDown={(event) => {
+                                      event.preventDefault();
+                                      applyTagSuggestion('filter', index, suggestion);
+                                    }}
+                                  >
+                                    {suggestion}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <button
+                        key={`filter-rule-${index}`}
+                        className={`tag-bubble ${isExclude ? 'tag-bubble--exclude' : ''}`}
+                        type="button"
+                        title={bubbleLabel}
+                        onClick={() => {
+                          setActiveFilterRuleEditorIndex(index);
                           setActiveTagAutocomplete({ scope: 'filter', index, highlighted: 0 });
                         }}
-                      />
-                      {activeTagAutocomplete?.scope === 'filter' && activeTagAutocomplete.index === index && activeTagSuggestions.length ? (
-                        <div className="tag-autocomplete__menu">
-                          {activeTagSuggestions.map((suggestion, suggestionIndex) => (
-                            <button
-                              key={`${suggestion}-${suggestionIndex}`}
-                              className={`tag-autocomplete__item ${activeTagAutocomplete.highlighted === suggestionIndex ? 'tag-autocomplete__item--active' : ''}`}
-                              type="button"
-                              onMouseDown={(event) => {
-                                event.preventDefault();
-                                applyTagSuggestion('filter', index, suggestion);
-                              }}
-                            >
-                              {suggestion}
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                    <button
-                      className="button button--icon"
-                      type="button"
-                      onClick={() => setDraftTagRules((current) => current.filter((_, ruleIndex) => ruleIndex !== index))}
-                    >
-                      Remove
-                    </button>
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          setDraftTagRules((current) => current.filter((_, ruleIndex) => ruleIndex !== index));
+                          setActiveFilterRuleEditorIndex(null);
+                          setActiveTagAutocomplete(null);
+                        }}
+                      >
+                        {bubbleLabel}
+                      </button>
+                    );
+                  })}
+                  <button
+                    className="tag-bubble tag-bubble--add"
+                    type="button"
+                    onClick={() => {
+                      const nextIndex = draftTagRules.length;
+                      setDraftTagRules((current) => [...current, '']);
+                      setActiveFilterRuleEditorIndex(nextIndex);
+                      setActiveTagAutocomplete({ scope: 'filter', index: nextIndex, highlighted: 0 });
+                    }}
+                    title="Add tag rule"
+                  >
+                    +
+                  </button>
+                </div>
+                <div className="topbar-filters__suggestions">
+                  <p className="topbar-filters__hint">Top used tags right now. Click to add as a filter.</p>
+                  <div className="tag-bubbles">
+                    {topUsedFilterSuggestions.map((entry) => (
+                      <button
+                        key={`suggestion-${entry.tag}`}
+                        className="tag-bubble tag-bubble--suggested"
+                        type="button"
+                        onClick={() => {
+                          setDraftTagRules((current) => [...current, entry.tag]);
+                          setActiveFilterRuleEditorIndex(null);
+                          setActiveTagAutocomplete(null);
+                        }}
+                        title={`Used in ${entry.count} game${entry.count === 1 ? '' : 's'}`}
+                      >
+                        <span>{entry.tag}</span>
+                        <span className="tag-bubble__metric">{entry.count}</span>
+                      </button>
+                    ))}
+                    {!topUsedFilterSuggestions.length ? (
+                      <p className="topbar-filters__hint topbar-filters__hint--inline">No available suggestions.</p>
+                    ) : null}
                   </div>
-                ))}
+                </div>
               </div>
 
               <div className="topbar-filters__group">
-                <label className="field">
+                <div className="topbar-filters__quick">
+                <label className="field topbar-filters__field">
                   <span>Minimum score</span>
                   <input
                     type="number"
@@ -1394,29 +2117,37 @@ function App() {
                   />
                 </label>
 
-                <label className="field">
-                  <span>Status</span>
-                  <select value={draftStatus} onChange={(event) => setDraftStatus(event.target.value)}>
-                    <option value="">Any status</option>
-                    {config.statusChoices.map((statusOption) => (
-                      <option key={statusOption} value={statusOption}>
-                        {statusOption}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="field">
+                <label className="field topbar-filters__field">
                   <span>Order by</span>
-                  <select value={draftOrderBy} onChange={(event) => setDraftOrderBy(event.target.value as FilterOrderByMode)}>
-                    {(Object.keys(orderByModeLabels) as FilterOrderByMode[]).map((mode) => (
-                      <option key={mode} value={mode}>
-                        {orderByModeLabels[mode]}
-                      </option>
-                    ))}
-                  </select>
+                  <CustomSelect
+                    className="custom-select--order"
+                    ariaLabel="Order by"
+                    value={draftOrderBy}
+                    options={(Object.keys(orderByModeLabels) as FilterOrderByMode[]).map((mode) => ({
+                      value: mode,
+                      label: orderByModeLabels[mode],
+                    }))}
+                    onChange={(nextValue) => setDraftOrderBy(nextValue as FilterOrderByMode)}
+                  />
                 </label>
 
+                <label className="field topbar-filters__field topbar-filters__field--full">
+                  <span>Status</span>
+                  <CustomSelect
+                    ariaLabel="Filter status"
+                    value={draftStatus}
+                    options={[
+                      { value: '', label: 'Any status' },
+                      ...config.statusChoices.map((statusOption) => ({ value: statusOption, label: statusOption })),
+                    ]}
+                    onChange={setDraftStatus}
+                  />
+                </label>
+                </div>
+
+              </div>
+
+              <div className="topbar-filters__group topbar-filters__group--presets">
                 <section className="topbar-presets">
                   <div className="topbar-filters__heading">
                     <strong>Presets</strong>
@@ -1842,11 +2573,11 @@ function App() {
       </section>
 
       {metadataModalGamePath && metadataDraft ? (
-        <div className="modal-backdrop" onClick={() => setMetadataModalGamePath(null)}>
+        <div className="modal-backdrop" onClick={closeMetadataModal}>
           <section className="modal-panel modal-panel--metadata" onClick={(event) => event.stopPropagation()}>
             <header className="modal-panel__header">
               <h2>Edit Metadata</h2>
-              <button className="button" type="button" onClick={() => setMetadataModalGamePath(null)}>Close</button>
+              <button className="button" type="button" onClick={closeMetadataModal}>Close</button>
             </header>
             <div className="modal-panel__body modal-panel__body--metadata">
               <div className="modal-panel__column">
@@ -1860,14 +2591,15 @@ function App() {
                 </label>
                 <label className="field">
                   <span>Status</span>
-                  <select value={metadataDraft.status} onChange={(event) => setMetadataDraft({ ...metadataDraft, status: event.target.value })}>
-                    <option value="">Not set</option>
-                    {config.statusChoices.map((statusOption) => (
-                      <option key={statusOption} value={statusOption}>
-                        {statusOption}
-                      </option>
-                    ))}
-                  </select>
+                  <CustomSelect
+                    ariaLabel="Metadata status"
+                    value={metadataDraft.status}
+                    options={[
+                      { value: '', label: 'Not set' },
+                      ...config.statusChoices.map((statusOption) => ({ value: statusOption, label: statusOption })),
+                    ]}
+                    onChange={(nextValue) => setMetadataDraft({ ...metadataDraft, status: nextValue })}
+                  />
                 </label>
                 <label className="field">
                   <span>Description</span>
@@ -1891,88 +2623,130 @@ function App() {
                 <div className="modal-group modal-group--tight">
                   <div className="modal-group__header">
                     <strong>Tags</strong>
-                    <button className="button button--icon" type="button" onClick={() => setMetadataDraft({ ...metadataDraft, tags: [...metadataDraft.tags, ''] })}>Add tag</button>
                   </div>
-                  {metadataDraft.tags.map((tag, index) => (
-                    <div className="tag-row tag-row--split" key={`core-tag-${index}`}>
-                      <div className="tag-autocomplete">
-                        <input
-                          type="text"
-                          placeholder="Tag"
-                          value={tag}
-                          onFocus={() => setActiveTagAutocomplete({ scope: 'metadata', index, highlighted: 0 })}
-                          onBlur={() => {
-                            window.setTimeout(() => {
-                              setActiveTagAutocomplete((current) => {
-                                if (!current || current.scope !== 'metadata' || current.index !== index) {
-                                  return current;
-                                }
+                  <p className="topbar-filters__hint">Click a bubble to edit. Right-click a bubble to remove.</p>
+                  <div className="tag-bubbles">
+                    {metadataDraft.tags.map((tag, index) => {
+                      const isEditing = activeMetadataTagEditorIndex === index;
+                      const bubbleLabel = tag.trim() || 'Empty tag';
 
-                                return null;
-                              });
-                            }, 100);
-                          }}
-                          onKeyDown={(event) => handleTagAutocompleteKeyDown(event, 'metadata', index)}
-                          onChange={(event) => {
-                            setMetadataDraft({
-                              ...metadataDraft,
-                              tags: metadataDraft.tags.map((entry, tagIndex) => (tagIndex === index ? event.target.value : entry)),
-                            });
+                      if (isEditing) {
+                        return (
+                          <div className="tag-bubble tag-bubble--editing" key={`core-tag-${index}`}>
+                            <div className="tag-autocomplete">
+                              <input
+                                type="text"
+                                autoFocus
+                                value={tag}
+                                placeholder="example: roguelike"
+                                onFocus={() => setActiveTagAutocomplete({ scope: 'metadata', index, highlighted: 0 })}
+                                onBlur={() => {
+                                  window.setTimeout(() => {
+                                    setMetadataDraft((current) => {
+                                      if (!current) {
+                                        return current;
+                                      }
+
+                                      const nextValue = (current.tags[index] ?? '').trim();
+                                      if (nextValue) {
+                                        return current;
+                                      }
+
+                                      return {
+                                        ...current,
+                                        tags: current.tags.filter((_, tagIndex) => tagIndex !== index),
+                                      };
+                                    });
+                                    setActiveMetadataTagEditorIndex((current) => (current === index ? null : current));
+                                    setActiveTagAutocomplete((current) => {
+                                      if (!current || current.scope !== 'metadata' || current.index !== index) {
+                                        return current;
+                                      }
+
+                                      return null;
+                                    });
+                                  }, 100);
+                                }}
+                                onKeyDown={(event) => {
+                                  handleTagAutocompleteKeyDown(event, 'metadata', index);
+                                  if (event.key === 'Enter' || event.key === 'Escape') {
+                                    setActiveMetadataTagEditorIndex(null);
+                                    setActiveTagAutocomplete(null);
+                                  }
+                                }}
+                                onChange={(event) => {
+                                  setMetadataDraft({
+                                    ...metadataDraft,
+                                    tags: metadataDraft.tags.map((entry, tagIndex) => (tagIndex === index ? event.target.value : entry)),
+                                  });
+                                  setActiveTagAutocomplete({ scope: 'metadata', index, highlighted: 0 });
+                                }}
+                              />
+                              {activeTagAutocomplete?.scope === 'metadata' && activeTagAutocomplete.index === index && activeTagSuggestions.length ? (
+                                <div className="tag-autocomplete__menu">
+                                  {activeTagSuggestions.map((suggestion, suggestionIndex) => (
+                                    <button
+                                      key={`${suggestion}-${suggestionIndex}`}
+                                      className={`tag-autocomplete__item ${activeTagAutocomplete.highlighted === suggestionIndex ? 'tag-autocomplete__item--active' : ''}`}
+                                      type="button"
+                                      onMouseDown={(event) => {
+                                        event.preventDefault();
+                                        applyTagSuggestion('metadata', index, suggestion);
+                                      }}
+                                    >
+                                      {suggestion}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <button
+                          key={`core-tag-${index}`}
+                          className="tag-bubble"
+                          type="button"
+                          title={bubbleLabel}
+                          onClick={() => {
+                            setActiveMetadataTagEditorIndex(index);
                             setActiveTagAutocomplete({ scope: 'metadata', index, highlighted: 0 });
                           }}
-                        />
-                        {activeTagAutocomplete?.scope === 'metadata' && activeTagAutocomplete.index === index && activeTagSuggestions.length ? (
-                          <div className="tag-autocomplete__menu">
-                            {activeTagSuggestions.map((suggestion, suggestionIndex) => (
-                              <button
-                                key={`${suggestion}-${suggestionIndex}`}
-                                className={`tag-autocomplete__item ${activeTagAutocomplete.highlighted === suggestionIndex ? 'tag-autocomplete__item--active' : ''}`}
-                                type="button"
-                                onMouseDown={(event) => {
-                                  event.preventDefault();
-                                  applyTagSuggestion('metadata', index, suggestion);
-                                }}
-                              >
-                                {suggestion}
-                              </button>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                      <div />
-                      <button
-                        className="button button--icon"
-                        type="button"
-                        onClick={() =>
-                          setMetadataDraft({
-                            ...metadataDraft,
-                            tags: metadataDraft.tags.filter((_, tagIndex) => tagIndex !== index),
-                          })
-                        }
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="modal-group modal-group--tight">
-                  <div className="modal-group__header">
-                    <strong>Additional tags</strong>
-                    <button className="button button--icon" type="button" onClick={() => setMetadataDraft({ ...metadataDraft, customTags: [...metadataDraft.customTags, { key: '', value: '' }] })}>Add tag</button>
+                          onContextMenu={(event) => {
+                            event.preventDefault();
+                            setMetadataDraft({
+                              ...metadataDraft,
+                              tags: metadataDraft.tags.filter((_, tagIndex) => tagIndex !== index),
+                            });
+                            setActiveMetadataTagEditorIndex(null);
+                            setActiveTagAutocomplete(null);
+                          }}
+                        >
+                          {bubbleLabel}
+                        </button>
+                      );
+                    })}
+                    <button
+                      className="tag-bubble tag-bubble--add"
+                      type="button"
+                      onClick={() => {
+                        const nextIndex = metadataDraft.tags.length;
+                        setMetadataDraft({ ...metadataDraft, tags: [...metadataDraft.tags, ''] });
+                        setActiveMetadataTagEditorIndex(nextIndex);
+                        setActiveTagAutocomplete({ scope: 'metadata', index: nextIndex, highlighted: 0 });
+                      }}
+                      title="Add tag"
+                    >
+                      +
+                    </button>
                   </div>
-                  {metadataDraft.customTags.map((tag, index) => (
-                    <div className="tag-row tag-row--split" key={`tag-${index}`}>
-                      <input type="text" placeholder="Tag" value={tag.key} onChange={(event) => setMetadataDraft({ ...metadataDraft, customTags: metadataDraft.customTags.map((entry, tagIndex) => tagIndex === index ? { ...entry, key: event.target.value } : entry) })} />
-                      <input type="text" placeholder="Value" value={tag.value} onChange={(event) => setMetadataDraft({ ...metadataDraft, customTags: metadataDraft.customTags.map((entry, tagIndex) => tagIndex === index ? { ...entry, value: event.target.value } : entry) })} />
-                      <button className="button button--icon" type="button" onClick={() => setMetadataDraft({ ...metadataDraft, customTags: metadataDraft.customTags.filter((_, tagIndex) => tagIndex !== index) })}>Remove</button>
-                    </div>
-                  ))}
                 </div>
               </div>
             </div>
             <footer className="modal-panel__footer">
-              <button className="button" type="button" onClick={() => setMetadataModalGamePath(null)}>Cancel</button>
+              <button className="button" type="button" onClick={closeMetadataModal}>Cancel</button>
               <button className="button button--primary" type="button" disabled={isMetadataSaving} onClick={() => void saveMetadataChanges()}>
                 {isMetadataSaving ? 'Saving...' : 'Save metadata'}
               </button>

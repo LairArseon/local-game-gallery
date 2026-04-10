@@ -24,6 +24,8 @@ export type GalleryConfig = {
   uiDynamicGridScaling: boolean;
   uiGlobalZoom: number;
   statusChoices: string[];
+  tagPool: string[];
+  tagPoolUsage: Record<string, number>;
   filterPresets: FilterPreset[];
 };
 

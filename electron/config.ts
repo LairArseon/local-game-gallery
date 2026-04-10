@@ -40,6 +40,8 @@ const defaultConfig: GalleryConfig = {
   uiDynamicGridScaling: false,
   uiGlobalZoom: 1,
   statusChoices: ['Backlog', 'Playing', 'Completed', 'On Hold', 'Dropped'],
+  tagPool: [],
+  tagPoolUsage: {},
   filterPresets: [],
 };
 
@@ -64,6 +66,12 @@ export async function saveConfig(config: GalleryConfig) {
     ...config,
     excludePatterns: [...new Set(config.excludePatterns.map((pattern) => pattern.trim()).filter(Boolean))],
     statusChoices: [...new Set((config.statusChoices ?? []).map((value) => value.trim()).filter(Boolean))],
+    tagPool: [...new Set((config.tagPool ?? []).map((value) => value.trim()).filter(Boolean))],
+    tagPoolUsage: Object.fromEntries(
+      Object.entries(config.tagPoolUsage ?? {})
+        .map(([tag, count]): [string, number] => [tag.trim(), Number.parseInt(String(count), 10)])
+        .filter(([tag, count]) => tag && Number.isFinite(count) && count >= 0),
+    ),
     uiBaseFontScale: normalizeUiScale(config.uiBaseFontScale, defaultConfig.uiBaseFontScale),
     uiBaseSpacingScale: normalizeUiScale(config.uiBaseSpacingScale, defaultConfig.uiBaseSpacingScale),
     uiDynamicGridScaling: Boolean(config.uiDynamicGridScaling),
