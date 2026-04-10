@@ -19,6 +19,7 @@
     "dist:win": "npm run build && npm run build:icon && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win nsis"
   },
   "dependencies": {
+    "lucide-react": "^1.8.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
@@ -29,8 +30,8 @@
     "@vitejs/plugin-react": "^5.0.0",
     "concurrently": "^9.2.0",
     "cross-env": "^10.0.0",
-    "electron-builder": "^24.13.3",
     "electron": "^36.2.0",
+    "electron-builder": "^24.13.3",
     "nodemon": "^3.1.10",
     "png-to-ico": "^2.1.8",
     "sharp": "^0.34.3",
