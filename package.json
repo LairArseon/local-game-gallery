@@ -1,6 +1,6 @@
 {
   "name": "local-game-gallery",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Local desktop gallery for browsing installed games",
   "main": "dist-electron/electron/main.js",
