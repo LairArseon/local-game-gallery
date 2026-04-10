@@ -1,4 +1,4 @@
-import { access, mkdir, readdir, stat, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { GalleryConfig, GameSummary, ScanResult } from '../src/types';
 import { createDefaultMetadata, getLatestVersionName, readGameMetadata, scanGameMedia } from './game-library';
@@ -6,6 +6,7 @@ import { createDefaultMetadata, getLatestVersionName, readGameMetadata, scanGame
 const imageExtensions = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']);
 const defaultGameNfoName = 'game.nfo';
 const defaultVersionNfoName = 'version.nfo';
+const activityLogFileName = 'activitylog';
 
 async function pathExists(targetPath: string) {
   try {
@@ -54,6 +55,20 @@ async function countImages(folderPath: string) {
     return entries.filter((entry) => entry.isFile() && imageExtensions.has(path.extname(entry.name).toLowerCase())).length;
   } catch {
     return 0;
+  }
+}
+
+async function readLastPlayedAt(gamePath: string) {
+  const activityLogPath = path.join(gamePath, activityLogFileName);
+  try {
+    const contents = await readFile(activityLogPath, 'utf8');
+    const lines = contents
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    return lines.length ? lines[lines.length - 1] ?? null : null;
+  } catch {
+    return null;
   }
 }
 
@@ -142,10 +157,12 @@ export async function scanGames(config: GalleryConfig): Promise<ScanResult> {
     const media = picturesStats?.isDirectory()
       ? await scanGameMedia(picturesPath)
       : { poster: null, card: null, background: null, screenshots: [] };
+    const lastPlayedAt = await readLastPlayedAt(gamePath);
 
     games.push({
       name: entry.name,
       path: gamePath,
+      lastPlayedAt,
       hasNfo: true,
       picturesPath: picturesStats?.isDirectory() ? picturesPath : null,
       imageCount,

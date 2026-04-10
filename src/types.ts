@@ -21,8 +21,10 @@ export type GalleryConfig = {
   cardColumns: number;
   uiBaseFontScale: number;
   uiBaseSpacingScale: number;
+  uiMetadataGapScale: number;
   uiDynamicGridScaling: boolean;
   uiGlobalZoom: number;
+  showSystemMenuBar: boolean;
   statusChoices: string[];
   tagPool: string[];
   tagPoolUsage: Record<string, number>;
@@ -66,6 +68,7 @@ export type GameMediaAssets = {
 export type GameSummary = {
   name: string;
   path: string;
+  lastPlayedAt: string | null;
   hasNfo: boolean;
   picturesPath: string | null;
   imageCount: number;
@@ -92,8 +95,33 @@ export type GameContextMenuPayload = {
 };
 
 export type GameContextMenuAction = {
-  action: 'open' | 'play' | 'edit-metadata' | 'manage-pictures';
+  action: 'open' | 'play' | 'edit-metadata' | 'manage-pictures' | 'open-game-folder';
   gamePath: string;
+};
+
+export type VersionContextMenuPayload = {
+  versionPath: string;
+  versionName: string;
+};
+
+export type VersionContextMenuAction = {
+  action: 'open-version-folder';
+  versionPath: string;
+};
+
+export type OpenFolderPayload = {
+  folderPath: string;
+};
+
+export type OpenFolderResult = {
+  opened: boolean;
+  message: string;
+};
+
+export type LogEventPayload = {
+  message: string;
+  level?: 'info' | 'warn' | 'error';
+  source?: string;
 };
 
 export type SaveGameMetadataPayload = {
@@ -139,6 +167,14 @@ export type GalleryApi = {
   scanGames: () => Promise<ScanResult>;
   showGameContextMenu: (payload: GameContextMenuPayload) => Promise<void>;
   onGameContextMenuAction: (callback: (payload: GameContextMenuAction) => void) => () => void;
+  showVersionContextMenu: (payload: VersionContextMenuPayload) => Promise<void>;
+  onVersionContextMenuAction: (callback: (payload: VersionContextMenuAction) => void) => () => void;
+  openFolder: (payload: OpenFolderPayload) => Promise<OpenFolderResult>;
+  logEvent: (payload: LogEventPayload) => Promise<void>;
+  getLogContents: () => Promise<string>;
+  openLogFolder: () => Promise<OpenFolderResult>;
+  clearLogContents: () => Promise<void>;
+  setMenuBarVisibility: (visible: boolean) => Promise<void>;
   saveGameMetadata: (payload: SaveGameMetadataPayload) => Promise<void>;
   importGameMediaFromDialog: (payload: ImportGameMediaPayload) => Promise<void>;
   importDroppedGameMedia: (payload: ImportDroppedGameMediaPayload) => Promise<void>;

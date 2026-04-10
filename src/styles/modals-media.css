@@ -219,6 +219,35 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
+.log-viewer {
+  margin: 0;
+  width: 100%;
+  min-height: 420px;
+  max-height: 62vh;
+  overflow: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(7, 10, 16, 0.84);
+  color: rgba(247, 246, 242, 0.92);
+  padding: 12px;
+  line-height: 1.4;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.log-viewer__filters {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(170px, 220px);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.log-viewer__filters .field {
+  margin: 0;
+}
+
 .context-menu__item--danger {
   color: #ff8f8f;
 }

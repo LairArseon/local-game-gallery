@@ -319,6 +319,12 @@ function App() {
   const [metadataModalGamePath, setMetadataModalGamePath] = useState<string | null>(null);
   const [mediaModalGamePath, setMediaModalGamePath] = useState<string | null>(null);
   const [screenshotModalPath, setScreenshotModalPath] = useState<string | null>(null);
+  const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+  const [logContents, setLogContents] = useState('');
+  const [isLogLoading, setIsLogLoading] = useState(false);
+  const [isLogClearing, setIsLogClearing] = useState(false);
+  const [logLevelFilter, setLogLevelFilter] = useState<'all' | 'info' | 'warn' | 'error'>('all');
+  const [logDateFilter, setLogDateFilter] = useState('');
   const [focusCarouselIndexByGamePath, setFocusCarouselIndexByGamePath] = useState<Record<string, number>>({});
   const [metadataDraft, setMetadataDraft] = useState<GameMetadata | null>(null);
   const [isMetadataSaving, setIsMetadataSaving] = useState(false);
@@ -339,9 +345,36 @@ function App() {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const didRunStartupTagPoolSyncRef = useRef(false);
 
+  function toErrorMessage(error: unknown, fallback: string) {
+    return error instanceof Error ? error.message : fallback;
+  }
+
+  async function logAppEvent(message: string, level: 'info' | 'warn' | 'error' = 'info', source = 'renderer') {
+    try {
+      await window.gallery.logEvent({ message, level, source });
+    } catch {
+      // Avoid status recursion if logging backend is unavailable.
+    }
+  }
+
   useEffect(() => {
     void initialize();
   }, []);
+
+  const filteredLogContents = useMemo(() => {
+    if (!logContents.trim()) {
+      return '';
+    }
+
+    const lines = logContents.split(/\r?\n/).filter(Boolean);
+    const filtered = lines.filter((line) => {
+      const matchesLevel = logLevelFilter === 'all' || line.includes(`[${logLevelFilter.toUpperCase()}]`);
+      const matchesDate = !logDateFilter || line.startsWith(`[${logDateFilter}`);
+      return matchesLevel && matchesDate;
+    });
+
+    return filtered.join('\n');
+  }, [logContents, logDateFilter, logLevelFilter]);
 
   useEffect(() => {
     if (!screenshotContextMenu) {
@@ -368,6 +401,10 @@ function App() {
       window.removeEventListener('keydown', handleEscape);
     };
   }, [screenshotContextMenu]);
+
+  useEffect(() => {
+    void logAppEvent(status, 'info', 'status-bar');
+  }, [status]);
 
   useEffect(() => {
     if (didRunStartupTagPoolSyncRef.current) {
@@ -411,7 +448,9 @@ function App() {
         });
         setConfig(savedConfig);
       } catch (error) {
-        setStatus(error instanceof Error ? error.message : 'Failed to sync startup tag pool.');
+        const message = toErrorMessage(error, 'Failed to sync startup tag pool.');
+        setStatus(message);
+        void logAppEvent(message, 'error', 'startup-tag-pool-sync');
       }
     };
 
@@ -422,6 +461,7 @@ function App() {
     try {
       const loadedConfig = await window.gallery.getConfig();
       setConfig(loadedConfig);
+      await window.gallery.setMenuBarVisibility(loadedConfig.showSystemMenuBar);
       setViewMode(loadedConfig.preferredViewMode ?? 'poster');
       setIsSidebarOpen(!loadedConfig.gamesRoot);
       setStatus(loadedConfig.gamesRoot ? 'Ready to scan your library.' : 'Pick a root folder to begin.');
@@ -430,7 +470,9 @@ function App() {
         await refreshScan();
       }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to load configuration.');
+      const message = toErrorMessage(error, 'Failed to load configuration.');
+      setStatus(message);
+      void logAppEvent(message, 'error', 'initialize');
     }
   }
 
@@ -450,7 +492,9 @@ function App() {
       setStatus('Library folder saved.');
       await refreshScan();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to open folder picker.');
+      const message = toErrorMessage(error, 'Failed to open folder picker.');
+      setStatus(message);
+      void logAppEvent(message, 'error', 'pick-root');
     } finally {
       setIsSaving(false);
     }
@@ -469,11 +513,14 @@ function App() {
         excludePatterns: config.excludePatterns.filter(Boolean),
       });
       setConfig(savedConfig);
+      await window.gallery.setMenuBarVisibility(savedConfig.showSystemMenuBar);
       setStatus('Configuration saved.');
       setIsSidebarOpen(false);
       await refreshScan();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to save configuration.');
+      const message = toErrorMessage(error, 'Failed to save configuration.');
+      setStatus(message);
+      void logAppEvent(message, 'error', 'save-config');
     } finally {
       setIsSaving(false);
     }
@@ -488,7 +535,9 @@ function App() {
       return result;
     } catch (error) {
       setScanResult(emptyScan);
-      setStatus(error instanceof Error ? error.message : 'Failed to scan game folders.');
+      const message = toErrorMessage(error, 'Failed to scan game folders.');
+      setStatus(message);
+      void logAppEvent(message, 'error', 'scan-games');
       return null;
     } finally {
       setIsScanning(false);
@@ -510,6 +559,7 @@ function App() {
       setConfig(savedConfig);
     } catch {
       setStatus('Failed to persist selected view mode.');
+      void logAppEvent('Failed to persist selected view mode.', 'warn', 'change-view-mode');
     }
   }
 
@@ -533,7 +583,9 @@ function App() {
         await refreshScan();
       }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to launch game.');
+      const message = toErrorMessage(error, 'Failed to launch game.');
+      setStatus(message);
+      void logAppEvent(message, 'error', 'play-game');
     }
   }
 
@@ -551,6 +603,65 @@ function App() {
 
     setDetailGamePath(game.path);
     setSelectedGamePath(game.path);
+  }
+
+  async function openFolderInExplorer(folderPath: string) {
+    try {
+      const result = await window.gallery.openFolder({ folderPath });
+      setStatus(result.message);
+    } catch (error) {
+      const message = toErrorMessage(error, 'Failed to open folder.');
+      setStatus(message);
+      void logAppEvent(message, 'error', 'open-folder');
+    }
+  }
+
+  async function openLogViewer() {
+    setIsLogModalOpen(true);
+    setIsLogLoading(true);
+    try {
+      const contents = await window.gallery.getLogContents();
+      setLogContents(contents);
+    } catch (error) {
+      const message = toErrorMessage(error, 'Failed to load log contents.');
+      setLogContents(message);
+      setStatus(message);
+      void logAppEvent(message, 'error', 'log-viewer');
+    } finally {
+      setIsLogLoading(false);
+    }
+  }
+
+  async function clearLogsFromViewer() {
+    const confirmed = window.confirm('Clear all logs? This cannot be undone.');
+    if (!confirmed) {
+      return;
+    }
+
+    setIsLogClearing(true);
+    try {
+      await window.gallery.clearLogContents();
+      setLogContents('');
+      setStatus('Logs cleared.');
+      void logAppEvent('Logs cleared by user.', 'warn', 'log-viewer');
+    } catch (error) {
+      const message = toErrorMessage(error, 'Failed to clear logs.');
+      setStatus(message);
+      void logAppEvent(message, 'error', 'log-viewer');
+    } finally {
+      setIsLogClearing(false);
+    }
+  }
+
+  async function openLogFolderFromSetup() {
+    try {
+      const result = await window.gallery.openLogFolder();
+      setStatus(result.message);
+    } catch (error) {
+      const message = toErrorMessage(error, 'Failed to open logs folder.');
+      setStatus(message);
+      void logAppEvent(message, 'error', 'open-log-folder');
+    }
   }
 
   function openMetadataModal(gamePath: string) {
@@ -648,7 +759,9 @@ function App() {
       closeMetadataModal();
       setStatus('Metadata saved.');
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to save metadata.');
+      const message = toErrorMessage(error, 'Failed to save metadata.');
+      setStatus(message);
+      void logAppEvent(message, 'error', 'save-metadata');
     } finally {
       setIsMetadataSaving(false);
     }
@@ -680,7 +793,9 @@ function App() {
       setPendingFeaturedDropPaths([]);
       setStatus('Pictures updated.');
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to import pictures.');
+      const message = toErrorMessage(error, 'Failed to import pictures.');
+      setStatus(message);
+      void logAppEvent(message, 'error', 'import-media');
     } finally {
       setIsMediaSaving(false);
     }
@@ -698,7 +813,9 @@ function App() {
       setMediaRenderVersion((current) => current + 1);
       setStatus('Screenshots reordered.');
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to reorder screenshots.');
+      const message = toErrorMessage(error, 'Failed to reorder screenshots.');
+      setStatus(message);
+      void logAppEvent(message, 'error', 'reorder-screenshots');
     } finally {
       setIsMediaSaving(false);
     }
@@ -718,7 +835,9 @@ function App() {
       setMediaRenderVersion((current) => current + 1);
       setStatus('Screenshot removed.');
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to remove screenshot.');
+      const message = toErrorMessage(error, 'Failed to remove screenshot.');
+      setStatus(message);
+      void logAppEvent(message, 'error', 'remove-screenshot');
     } finally {
       setIsMediaSaving(false);
     }
@@ -731,6 +850,25 @@ function App() {
 
     const base = encodeURI(`file:///${filePath.replace(/\\/g, '/')}`);
     return `${base}?v=${mediaRenderVersion}`;
+  }
+
+  function formatLastPlayed(value: string | null) {
+    if (!value) {
+      return 'Never';
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return value;
+    }
+
+    return parsed.toLocaleString(undefined, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   }
 
   function toggleGameSelection(path: string) {
@@ -829,7 +967,9 @@ function App() {
         setStatus(successMessage);
       }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to save tag pool.');
+      const message = toErrorMessage(error, 'Failed to save tag pool.');
+      setStatus(message);
+      void logAppEvent(message, 'error', 'save-tag-pool');
     }
   }
 
@@ -911,7 +1051,9 @@ function App() {
       const updatedScan = await refreshScan();
       await persistTagPool(nextPool, undefined, config, updatedScan?.games ?? scanResult.games);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to propagate tag rename to games.');
+      const message = toErrorMessage(error, 'Failed to propagate tag rename to games.');
+      setStatus(message);
+      void logAppEvent(message, 'error', 'rename-tag-pool');
     }
 
     setActiveTagPoolEditorIndex(null);
@@ -1129,7 +1271,9 @@ function App() {
       setIsPresetNamingOpen(false);
       setStatus(`Filter preset saved as ${name}.`);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to save filter preset.');
+      const message = toErrorMessage(error, 'Failed to save filter preset.');
+      setStatus(message);
+      void logAppEvent(message, 'error', 'save-filter-preset');
     } finally {
       setIsPresetSaving(false);
     }
@@ -1155,7 +1299,9 @@ function App() {
       setConfig(savedConfig);
       setStatus(`Removed preset ${name}.`);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to delete filter preset.');
+      const message = toErrorMessage(error, 'Failed to delete filter preset.');
+      setStatus(message);
+      void logAppEvent(message, 'error', 'delete-filter-preset');
     }
   }
 
@@ -1267,10 +1413,13 @@ function App() {
   const effectiveGlobalZoom = clamp(config?.uiGlobalZoom ?? 1, 0.75, 2);
   const effectiveFontScale = clamp((config?.uiBaseFontScale ?? 1) * dynamicUiScaleFactor * effectiveGlobalZoom, 0.6, 2.4);
   const effectiveSpacingScale = clamp((config?.uiBaseSpacingScale ?? 1) * dynamicUiScaleFactor * effectiveGlobalZoom, 0.6, 2.4);
+  const metadataGapSetting = config?.uiMetadataGapScale ?? 1;
+  const effectiveMetadataGapScale = clamp((metadataGapSetting * 0.5) * effectiveFontScale, 0.12, 3);
   const effectiveMediaScale = clamp((effectiveFontScale + effectiveSpacingScale) / 2, 0.7, 1.6);
   const contentScaleStyle = {
     ['--content-font-scale' as string]: effectiveFontScale.toFixed(3),
     ['--content-spacing-scale' as string]: effectiveSpacingScale.toFixed(3),
+    ['--metadata-gap-scale' as string]: effectiveMetadataGapScale.toFixed(3),
     ['--content-media-scale' as string]: effectiveMediaScale.toFixed(3),
   } as CSSProperties;
 
@@ -1384,6 +1533,11 @@ function App() {
         return;
       }
 
+      if (payload.action === 'open-game-folder') {
+        void openFolderInExplorer(payload.gamePath);
+        return;
+      }
+
       if (payload.action === 'edit-metadata') {
         openMetadataModal(payload.gamePath);
         return;
@@ -1407,6 +1561,18 @@ function App() {
       dispose();
     };
   }, [scanResult.games]);
+
+  useEffect(() => {
+    const dispose = window.gallery.onVersionContextMenuAction((payload) => {
+      if (payload.action === 'open-version-folder') {
+        void openFolderInExplorer(payload.versionPath);
+      }
+    });
+
+    return () => {
+      dispose();
+    };
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1554,6 +1720,7 @@ function App() {
           <p>Latest version: {game.metadata.latestVersion || 'Unknown'}</p>
           <p>Status: {game.metadata.status || 'Not set'}</p>
           <p>Score: {game.metadata.score || 'Not set'}</p>
+          <p>Last date played: {formatLastPlayed(game.lastPlayedAt)}</p>
           <p>{game.metadata.description || 'No description yet.'}</p>
           {game.metadata.notes.filter(Boolean).slice(0, 2).map((note) => (
             <p key={note}>Note: {note}</p>
@@ -1644,7 +1811,6 @@ function App() {
         >
           <div className="game-card__row">
             <h3>{game.name}</h3>
-            <p>{game.versionCount} versions</p>
           </div>
           <div className="game-card__compact-main">
             <div className="game-card__compact-meta">
@@ -1689,7 +1855,6 @@ function App() {
           {art}
           <div className="game-card__body">
             <h3>{game.name}</h3>
-            <p>{game.versionCount} versions detected</p>
             <p>Latest version: {game.metadata.latestVersion || 'Unknown'}</p>
             <p>Status: {game.metadata.status || 'Not set'}</p>
             <p>Score: {game.metadata.score || 'Not set'}</p>
@@ -1764,8 +1929,8 @@ function App() {
         {art}
         <div className="game-card__body">
           <h3>{game.name}</h3>
-          <p>{game.versionCount} versions</p>
           <p>Status: {game.metadata.status || 'Not set'}</p>
+          <p>Score: {game.metadata.score || 'Not set'}</p>
           {commonActions}
         </div>
       </article>
@@ -1797,7 +1962,7 @@ function App() {
       <header className="topbar panel">
         <div className="topbar__title">
           <p className="eyebrow">Local Game Gallery</p>
-          <p>{status}</p>
+          <p>Games found: {scanResult.games.length}</p>
         </div>
         <div className="topbar__actions">
           <div className="topbar__search-group">
@@ -2381,6 +2546,24 @@ function App() {
               <small className="field__hint">Affects only game content spacing.</small>
             </label>
 
+            <label className="field">
+              <span>Metadata line spacing scale</span>
+              <input
+                type="number"
+                min={0.5}
+                max={4}
+                step={0.05}
+                value={config.uiMetadataGapScale ?? 1}
+                onChange={(event) =>
+                  setConfig({
+                    ...config,
+                    uiMetadataGapScale: clamp(Number.parseFloat(event.target.value || '1') || 1, 0.5, 4),
+                  })
+                }
+              />
+              <small className="field__hint">Controls spacing between metadata lines in poster/card/expanded views and scales with font size.</small>
+            </label>
+
             <label className="field field--toggle">
               <span>Dynamic scaling from grid density</span>
               <input
@@ -2392,6 +2575,23 @@ function App() {
                     uiDynamicGridScaling: event.target.checked,
                   })
                 }
+              />
+            </label>
+
+            <label className="field field--toggle">
+              <span>Show system menu bar</span>
+              <input
+                type="checkbox"
+                checked={Boolean(config.showSystemMenuBar)}
+                onChange={(event) => {
+                  const nextVisible = event.target.checked;
+                  setConfig({
+                    ...config,
+                    showSystemMenuBar: nextVisible,
+                  });
+                  void window.gallery.setMenuBarVisibility(nextVisible);
+                  void logAppEvent(`System menu bar ${nextVisible ? 'shown' : 'hidden'} from setup toggle.`, 'info', 'menu-bar');
+                }}
               />
             </label>
 
@@ -2412,6 +2612,15 @@ function App() {
               />
               <small className="field__hint">Also works with Ctrl + mouse wheel and +/- keys. Ctrl+0 resets to 100%.</small>
             </label>
+
+            <div className="setup-log-actions">
+              <button className="button button--icon" type="button" onClick={() => void openLogViewer()}>
+                View logs
+              </button>
+              <button className="button button--icon" type="button" onClick={() => void openLogFolderFromSetup()}>
+                Open logs folder
+              </button>
+            </div>
 
             <button className="button button--primary" type="submit" disabled={isSaving}>
               {isSaving ? 'Saving...' : 'Save setup'}
@@ -2454,30 +2663,68 @@ function App() {
                     Edit metadata
                   </button>
                 </div>
-                <p>Latest version: {detailGame.metadata.latestVersion || 'Unknown'}</p>
-                <p>Status: {detailGame.metadata.status || 'Not set'}</p>
-                <p>Score: {detailGame.metadata.score || 'Not set'}</p>
-                <p>Description: {detailGame.metadata.description || 'No description yet.'}</p>
-                <div className="detail-tags">
-                  <strong>Notes</strong>
-                  {detailGame.metadata.notes.filter(Boolean).map((note) => (
-                    <p key={note}>{note}</p>
-                  ))}
+                <div className="detail-metadata-grid">
+                  <div>
+                    <p>Latest version: {detailGame.metadata.latestVersion || 'Unknown'}</p>
+                    <p>Status: {detailGame.metadata.status || 'Not set'}</p>
+                    <p>Score: {detailGame.metadata.score || 'Not set'}</p>
+                    <p>Description: {detailGame.metadata.description || 'No description yet.'}</p>
+                    <div className="detail-tags">
+                      <strong>Notes</strong>
+                      {detailGame.metadata.notes.filter(Boolean).map((note) => (
+                        <p key={note}>{note}</p>
+                      ))}
+                    </div>
+                    {detailGame.metadata.tags.length ? (
+                      <div className="detail-tags">
+                        <strong>Tags</strong>
+                        <p>{detailGame.metadata.tags.join(', ')}</p>
+                      </div>
+                    ) : null}
+                    {detailGame.metadata.customTags.length ? (
+                      <div className="detail-tags">
+                        <strong>Additional tags</strong>
+                        {detailGame.metadata.customTags.map((tag) => (
+                          <p key={tag.key}>{tag.key}: {tag.value}</p>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  <aside className="detail-versions">
+                    <div className="detail-versions__header">
+                      <strong>Versions</strong>
+                      <button className="button button--icon" type="button" onClick={() => void openFolderInExplorer(detailGame.path)}>
+                        Open game folder
+                      </button>
+                    </div>
+                    {detailGame.versions.length ? (
+                      <ul className="detail-versions__list">
+                        {detailGame.versions.map((version) => (
+                          <li key={version.path}>
+                            <button
+                              className="detail-versions__item"
+                              type="button"
+                              onContextMenu={(event) => {
+                                event.preventDefault();
+                                void window.gallery.showVersionContextMenu({
+                                  versionPath: version.path,
+                                  versionName: version.name,
+                                });
+                              }}
+                              onClick={() => void openFolderInExplorer(version.path)}
+                              title="Right-click for version folder actions"
+                            >
+                              <span>{version.name}</span>
+                              <span>{version.hasNfo ? 'nfo' : 'no nfo'}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p>No versions detected.</p>
+                    )}
+                  </aside>
                 </div>
-                {detailGame.metadata.tags.length ? (
-                  <div className="detail-tags">
-                    <strong>Tags</strong>
-                    <p>{detailGame.metadata.tags.join(', ')}</p>
-                  </div>
-                ) : null}
-                {detailGame.metadata.customTags.length ? (
-                  <div className="detail-tags">
-                    <strong>Additional tags</strong>
-                    {detailGame.metadata.customTags.map((tag) => (
-                      <p key={tag.key}>{tag.key}: {tag.value}</p>
-                    ))}
-                  </div>
-                ) : null}
               </section>
               <section className="detail-section panel">
                 <div className="detail-section__header">
@@ -2974,6 +3221,46 @@ function App() {
               </button>
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {isLogModalOpen ? (
+        <div className="modal-backdrop" onClick={() => setIsLogModalOpen(false)}>
+          <section className="modal-panel modal-panel--wide" onClick={(event) => event.stopPropagation()}>
+            <header className="modal-panel__header">
+              <h2>Event logs</h2>
+              <button className="button" type="button" onClick={() => setIsLogModalOpen(false)}>Close</button>
+            </header>
+            <div className="modal-panel__body">
+              <div className="log-viewer__filters">
+                <label className="field">
+                  <span>Level</span>
+                  <CustomSelect
+                    ariaLabel="Log level filter"
+                    value={logLevelFilter}
+                    options={[
+                      { value: 'all', label: 'All' },
+                      { value: 'info', label: 'Info' },
+                      { value: 'warn', label: 'Warn' },
+                      { value: 'error', label: 'Error' },
+                    ]}
+                    onChange={(nextValue) => setLogLevelFilter(nextValue as 'all' | 'info' | 'warn' | 'error')}
+                  />
+                </label>
+                <label className="field">
+                  <span>Date</span>
+                  <input type="date" value={logDateFilter} onChange={(event) => setLogDateFilter(event.target.value)} />
+                </label>
+              </div>
+              <pre className="log-viewer">{isLogLoading ? 'Loading logs...' : (filteredLogContents || 'No logs found for current filters.')}</pre>
+            </div>
+            <footer className="modal-panel__footer">
+              <button className="button" type="button" disabled={isLogClearing} onClick={() => void clearLogsFromViewer()}>
+                {isLogClearing ? 'Clearing...' : 'Clear logs'}
+              </button>
+              <button className="button" type="button" onClick={() => setIsLogModalOpen(false)}>Close</button>
+            </footer>
+          </section>
         </div>
       ) : null}
 

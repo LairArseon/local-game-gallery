@@ -19,4 +19,5 @@
 
 .game-card--poster .game-card__actions {
   margin-top: auto;
+  padding-top: calc(8px * var(--metadata-gap-scale, 1));
 }

@@ -738,6 +738,13 @@ button {
   height: 20px;
 }
 
+.setup-log-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
 .warnings {
   margin-bottom: 16px;
   padding: 14px 16px;

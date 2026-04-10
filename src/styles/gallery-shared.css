@@ -90,7 +90,7 @@
 }
 
 .game-card__body p {
-  margin: 8px 0;
+  margin: calc(8px * var(--metadata-gap-scale, 1)) 0;
 }
 
 .game-card__actions {

@@ -7,6 +7,8 @@ const minUiScale = 0.75;
 const maxUiScale = 1.5;
 const minGlobalZoom = 0.75;
 const maxGlobalZoom = 2;
+const minMetadataGapScale = 0.5;
+const maxMetadataGapScale = 4;
 
 function normalizeUiScale(value: number | string | undefined, fallback = 1) {
   const parsed = Number.parseFloat(String(value ?? ''));
@@ -26,6 +28,15 @@ function normalizeGlobalZoom(value: number | string | undefined, fallback = 1) {
   return Math.min(maxGlobalZoom, Math.max(minGlobalZoom, parsed));
 }
 
+function normalizeMetadataGapScale(value: number | string | undefined, fallback = 1) {
+  const parsed = Number.parseFloat(String(value ?? ''));
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.min(maxMetadataGapScale, Math.max(minMetadataGapScale, parsed));
+}
+
 const defaultConfig: GalleryConfig = {
   gamesRoot: '',
   excludePatterns: ['.git', 'Thumbs.db'],
@@ -37,8 +48,10 @@ const defaultConfig: GalleryConfig = {
   cardColumns: 4,
   uiBaseFontScale: 1,
   uiBaseSpacingScale: 1,
+  uiMetadataGapScale: 1,
   uiDynamicGridScaling: false,
   uiGlobalZoom: 1,
+  showSystemMenuBar: true,
   statusChoices: ['Backlog', 'Playing', 'Completed', 'On Hold', 'Dropped'],
   tagPool: [],
   tagPoolUsage: {},
@@ -67,6 +80,7 @@ export async function saveConfig(config: GalleryConfig) {
     excludePatterns: [...new Set(config.excludePatterns.map((pattern) => pattern.trim()).filter(Boolean))],
     statusChoices: [...new Set((config.statusChoices ?? []).map((value) => value.trim()).filter(Boolean))],
     tagPool: [...new Set((config.tagPool ?? []).map((value) => value.trim()).filter(Boolean))],
+    showSystemMenuBar: Boolean(config.showSystemMenuBar),
     tagPoolUsage: Object.fromEntries(
       Object.entries(config.tagPoolUsage ?? {})
         .map(([tag, count]): [string, number] => [tag.trim(), Number.parseInt(String(count), 10)])
@@ -74,6 +88,7 @@ export async function saveConfig(config: GalleryConfig) {
     ),
     uiBaseFontScale: normalizeUiScale(config.uiBaseFontScale, defaultConfig.uiBaseFontScale),
     uiBaseSpacingScale: normalizeUiScale(config.uiBaseSpacingScale, defaultConfig.uiBaseSpacingScale),
+    uiMetadataGapScale: normalizeMetadataGapScale(config.uiMetadataGapScale, defaultConfig.uiMetadataGapScale),
     uiDynamicGridScaling: Boolean(config.uiDynamicGridScaling),
     uiGlobalZoom: normalizeGlobalZoom(config.uiGlobalZoom, defaultConfig.uiGlobalZoom),
     filterPresets: (config.filterPresets ?? [])

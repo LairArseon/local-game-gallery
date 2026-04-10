@@ -1,9 +1,10 @@
-﻿import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron';
+﻿import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
 import type { OpenDialogOptions } from 'electron';
-import { access, readdir } from 'node:fs/promises';
+import { access, appendFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { loadConfig, saveConfig } from './config';
+import { appendLogEvent, clearLogContents, openLogFolder, readLogContents } from './logger';
 import { importDroppedGameMedia, readGameMetadata, removeScreenshot, reorderScreenshots, saveGameMetadata } from './game-library';
 import { scanGames } from './scanner';
 import type {
@@ -11,14 +12,27 @@ import type {
   GalleryConfig,
   ImportDroppedGameMediaPayload,
   ImportGameMediaPayload,
+  LogEventPayload,
+  OpenFolderPayload,
+  OpenFolderResult,
   PlayGamePayload,
   PlayGameResult,
   RemoveScreenshotPayload,
   ReorderScreenshotsPayload,
   SaveGameMetadataPayload,
+  VersionContextMenuPayload,
 } from '../src/types';
 
 let mainWindow: BrowserWindow | null = null;
+
+function applyMenuBarVisibility(window: BrowserWindow, visible: boolean) {
+  if (process.platform === 'darwin') {
+    return;
+  }
+
+  window.setAutoHideMenuBar(!visible);
+  window.setMenuBarVisibility(visible);
+}
 
 async function fileExists(filePath: string) {
   try {
@@ -74,7 +88,14 @@ function launchExecutable(executablePath: string) {
   processHandle.unref();
 }
 
+async function appendGameLaunchActivity(gamePath: string) {
+  const activityLogPath = path.join(gamePath, 'activitylog');
+  const timestamp = new Date().toISOString();
+  await appendFile(activityLogPath, `${timestamp}\n`, 'utf8');
+}
+
 async function createWindow() {
+  const config = await loadConfig();
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 960,
@@ -82,12 +103,15 @@ async function createWindow() {
     minHeight: 720,
     backgroundColor: '#10131b',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    autoHideMenuBar: process.platform === 'darwin' ? false : !config.showSystemMenuBar,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
+
+  applyMenuBarVisibility(mainWindow, config.showSystemMenuBar);
 
   const devServerUrl = process.env.VITE_DEV_SERVER_URL;
   if (devServerUrl) {
@@ -160,6 +184,52 @@ ipcMain.handle('gallery:remove-screenshot', async (_event, payload: RemoveScreen
   await removeScreenshot(payload.screenshotPath);
 });
 
+ipcMain.handle('gallery:log-event', async (_event, payload: LogEventPayload) => {
+  await appendLogEvent(payload);
+});
+
+ipcMain.handle('gallery:get-log-contents', async () => readLogContents());
+
+ipcMain.handle('gallery:open-log-folder', async (): Promise<OpenFolderResult> => openLogFolder());
+
+ipcMain.handle('gallery:clear-log-contents', async () => {
+  await clearLogContents();
+});
+
+ipcMain.handle('gallery:set-menu-bar-visibility', async (_event, visible: boolean) => {
+  if (!mainWindow) {
+    return;
+  }
+
+  applyMenuBarVisibility(mainWindow, Boolean(visible));
+});
+
+ipcMain.handle('gallery:open-folder', async (_event, payload: OpenFolderPayload): Promise<OpenFolderResult> => {
+  const result = await shell.openPath(payload.folderPath);
+  if (result) {
+    await appendLogEvent({
+      level: 'error',
+      source: 'main-open-folder',
+      message: `Failed opening folder "${payload.folderPath}": ${result}`,
+    });
+    return {
+      opened: false,
+      message: result,
+    };
+  }
+
+  await appendLogEvent({
+    level: 'info',
+    source: 'main-open-folder',
+    message: `Opened folder "${payload.folderPath}"`,
+  });
+
+  return {
+    opened: true,
+    message: `Opened folder: ${payload.folderPath}`,
+  };
+});
+
 ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Promise<PlayGameResult> => {
   const metadata = await readGameMetadata(
     payload.gamePath,
@@ -172,6 +242,12 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
     const absoluteStoredPath = toExecutableAbsolutePath(payload.gamePath, storedExecutable);
     if (await fileExists(absoluteStoredPath)) {
       launchExecutable(absoluteStoredPath);
+      await appendGameLaunchActivity(payload.gamePath);
+      await appendLogEvent({
+        level: 'info',
+        source: 'main-play-game',
+        message: `Launching stored executable "${absoluteStoredPath}" for game "${payload.gameName}"`,
+      });
       return {
         launched: true,
         executablePath: absoluteStoredPath,
@@ -184,6 +260,11 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
   const discoveredExecutables = [...new Set((await Promise.all(searchFolders.map((folder) => findExecutablesInFolder(folder)))).flat())].sort();
 
   if (!discoveredExecutables.length) {
+    await appendLogEvent({
+      level: 'warn',
+      source: 'main-play-game',
+      message: `No executable files found for game "${payload.gameName}"`,
+    });
     return {
       launched: false,
       executablePath: null,
@@ -224,6 +305,11 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
     });
 
     if (selection.response === discoveredExecutables.length) {
+      await appendLogEvent({
+        level: 'warn',
+        source: 'main-play-game',
+        message: `Play canceled for game "${payload.gameName}"`,
+      });
       return {
         launched: false,
         executablePath: null,
@@ -242,6 +328,12 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
   });
 
   launchExecutable(selectedExecutable);
+  await appendGameLaunchActivity(payload.gamePath);
+  await appendLogEvent({
+    level: 'info',
+    source: 'main-play-game',
+    message: `Launching selected executable "${selectedExecutable}" for game "${payload.gameName}"`,
+  });
   return {
     launched: true,
     executablePath: selectedExecutable,
@@ -274,6 +366,15 @@ ipcMain.handle('gallery:show-game-context-menu', (event, payload: GameContextMen
         });
       },
     },
+    {
+      label: 'Open game folder',
+      click: () => {
+        window.webContents.send('gallery:context-menu-action', {
+          action: 'open-game-folder',
+          gamePath: payload.gamePath,
+        });
+      },
+    },
     { type: 'separator' },
     {
       label: 'Edit Metadata',
@@ -290,6 +391,27 @@ ipcMain.handle('gallery:show-game-context-menu', (event, payload: GameContextMen
         window.webContents.send('gallery:context-menu-action', {
           action: 'manage-pictures',
           gamePath: payload.gamePath,
+        });
+      },
+    },
+  ]);
+
+  menu.popup({ window });
+});
+
+ipcMain.handle('gallery:show-version-context-menu', (event, payload: VersionContextMenuPayload) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!window) {
+    return;
+  }
+
+  const menu = Menu.buildFromTemplate([
+    {
+      label: 'Open version folder',
+      click: () => {
+        window.webContents.send('gallery:version-context-menu-action', {
+          action: 'open-version-folder',
+          versionPath: payload.versionPath,
         });
       },
     },

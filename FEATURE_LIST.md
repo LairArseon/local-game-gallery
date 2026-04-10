@@ -23,8 +23,8 @@ Status options:
 - [1. App Vault (Password-Protected Hidden Games)](#1-app-vault-password-protected-hidden-games) - `idea`
 - [2. In-App App Icon Customization (Drop PNG)](#2-in-app-app-icon-customization-drop-png) - `planned`
 - [3. New Version Notifications and Mismatch Badges](#3-new-version-notifications-and-mismatch-badges) - `planned`
-- [4. Quick Folder Navigation from Game and Version Menus](#4-quick-folder-navigation-from-game-and-version-menus) - `planned`
-- [5. Filter Pane Redesign (Tag Bubbles + Condensed Layout)](#5-filter-pane-redesign-tag-bubbles--condensed-layout) - `in-progress`
+- [4. Quick Folder Navigation from Game and Version Menus](#4-quick-folder-navigation-from-game-and-version-menus) - `in-progress`
+- [5. Filter Pane Redesign (Tag Bubbles + Condensed Layout)](#5-filter-pane-redesign-tag-bubbles--condensed-layout) - `done`
 - [6. Top Bar Action Prioritization + F5 Rescan Shortcut](#6-top-bar-action-prioritization--f5-rescan-shortcut) - `done`
 - [7. Consistent Open/Play Actions in Focused Views](#7-consistent-openplay-actions-in-focused-views) - `done`
 - [8. Adjustable Text and Padding Scaling Across Views](#8-adjustable-text-and-padding-scaling-across-views) - `done`
@@ -155,7 +155,7 @@ During startup or manual rescans, detect games whose detected latest version doe
 
 ## 4. Quick Folder Navigation from Game and Version Menus
 
-- Status: `planned`
+- Status: `in-progress`
 - Priority: `medium`
 - Goal: Improve folder access by adding direct "open folder" actions from game and version context menus.
 
@@ -194,11 +194,15 @@ Add context-menu actions to jump directly to filesystem folders:
 - Should version list be sortable by semantic version and/or modified date?
 - Should this action also be available from notification items (future features)?
 
+### Work note
+
+- Started on 2026-04-10.
+
 ---
 
 ## 5. Filter Pane Redesign (Tag Bubbles + Condensed Layout)
 
-- Status: `in-progress`
+- Status: `done`
 - Priority: `medium`
 - Goal: Make the filter panel denser and easier to scan by replacing vertical tag inputs with compact tag bubbles and improving column usage.
 
@@ -207,6 +211,7 @@ Add context-menu actions to jump directly to filesystem folders:
 - Started on 2026-04-10.
 - Replaced vertical tag rule rows with bubble-based interaction (`+` add, click-to-edit, right-click remove).
 - Condensed right-side controls so `Minimum score` and `Order by` share horizontal space.
+- Completed on 2026-04-10.
 
 ### Summary
 
