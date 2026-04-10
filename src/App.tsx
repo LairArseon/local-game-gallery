@@ -1,5 +1,5 @@
 ﻿import { FormEvent, Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { ArrowLeft, ArrowRight, Play, RefreshCw, Settings, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, ArrowRight, FolderOpen, Play, RefreshCw, Settings, SlidersHorizontal } from 'lucide-react';
 import type { FilterOrderByMode, FilterPreset, GalleryConfig, GalleryViewMode, GameMetadata, GameSummary, ScanResult } from './types';
 
 const emptyScan: ScanResult = {
@@ -191,6 +191,7 @@ function App() {
       });
       setConfig(savedConfig);
       setStatus('Configuration saved.');
+      setIsSidebarOpen(false);
       await refreshScan();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Failed to save configuration.');
@@ -905,6 +906,26 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'F5') {
+        return;
+      }
+
+      event.preventDefault();
+      if (isScanning) {
+        return;
+      }
+
+      void refreshScan();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isScanning]);
+
+  useEffect(() => {
     if (!screenshotModalPath) {
       return;
     }
@@ -1265,7 +1286,7 @@ function App() {
             </label>
           </div>
           <button
-            className={`button button--icon-only ${isFilterPanelOpen ? 'is-active' : ''}`}
+            className={`button button--primary button--icon-only ${isFilterPanelOpen ? 'is-active' : ''}`}
             type="button"
             onClick={() => setIsFilterPanelOpen((current) => !current)}
             aria-pressed={isFilterPanelOpen}
@@ -1293,9 +1314,6 @@ function App() {
             title={isScanning ? actionLabels.scanning : actionLabels.rescan}
           >
             <RefreshCw size={16} aria-hidden="true" className={isScanning ? 'icon-spin' : undefined} />
-          </button>
-          <button className="button button--primary" type="button" onClick={pickRoot} disabled={isSaving}>
-            {isSaving ? actionLabels.saving : actionLabels.chooseLibraryFolder}
           </button>
         </div>
         {isFilterPanelOpen ? (
@@ -1485,12 +1503,24 @@ function App() {
 
             <label className="field">
               <span>Games root</span>
-              <input
-                type="text"
-                value={config.gamesRoot}
-                onChange={(event) => setConfig({ ...config, gamesRoot: event.target.value })}
-                placeholder="D:\\Games or /home/you/Games"
-              />
+              <div className="field__input-with-action">
+                <input
+                  type="text"
+                  value={config.gamesRoot}
+                  onChange={(event) => setConfig({ ...config, gamesRoot: event.target.value })}
+                  placeholder="D:\\Games or /home/you/Games"
+                />
+                <button
+                  className="button button--icon-only field__picker-button"
+                  type="button"
+                  onClick={pickRoot}
+                  disabled={isSaving}
+                  aria-label={actionLabels.chooseLibraryFolder}
+                  title={actionLabels.chooseLibraryFolder}
+                >
+                  <FolderOpen size={16} aria-hidden="true" />
+                </button>
+              </div>
             </label>
 
             <label className="field">

@@ -25,7 +25,7 @@ Status options:
 - [3. New Version Notifications and Mismatch Badges](#3-new-version-notifications-and-mismatch-badges) - `planned`
 - [4. Quick Folder Navigation from Game and Version Menus](#4-quick-folder-navigation-from-game-and-version-menus) - `planned`
 - [5. Filter Pane Redesign (Tag Bubbles + Condensed Layout)](#5-filter-pane-redesign-tag-bubbles--condensed-layout) - `planned`
-- [6. Top Bar Action Prioritization + F5 Rescan Shortcut](#6-top-bar-action-prioritization--f5-rescan-shortcut) - `planned`
+- [6. Top Bar Action Prioritization + F5 Rescan Shortcut](#6-top-bar-action-prioritization--f5-rescan-shortcut) - `done`
 - [7. Consistent Open/Play Actions in Focused Views](#7-consistent-openplay-actions-in-focused-views) - `done`
 - [8. Adjustable Text and Padding Scaling Across Views](#8-adjustable-text-and-padding-scaling-across-views) - `done`
 - [9. Action Label Wording Refresh (Top Bar + Game Actions)](#9-action-label-wording-refresh-top-bar--game-actions) - `done`
@@ -243,9 +243,16 @@ Refactor the filter panel layout so tag rules take less vertical space and contr
 
 ## 6. Top Bar Action Prioritization + F5 Rescan Shortcut
 
-- Status: `planned`
+- Status: `done`
 - Priority: `medium`
 - Goal: Improve action discoverability by moving rarely used setup actions out of the top bar and promoting frequently used filter access, plus add keyboard rescan shortcut.
+
+### Work note
+
+- Completed on 2026-04-10.
+- Moved `Choose library folder` from top bar into Setup section.
+- Promoted filter toggle as highlighted top-bar action.
+- Added global `F5` shortcut that prevents reload and triggers existing rescan flow.
 
 ### Summary
 

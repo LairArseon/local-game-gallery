@@ -432,6 +432,18 @@ button {
   padding: 0.9rem 1rem;
 }
 
+.field__input-with-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.field__picker-button {
+  width: 2.4rem;
+  height: 2.4rem;
+}
+
 .field textarea {
   resize: vertical;
 }
