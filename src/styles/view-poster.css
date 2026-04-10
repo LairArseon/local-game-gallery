@@ -1,0 +1,8 @@
+.cards--poster {
+  grid-template-columns: repeat(var(--grid-columns, 1), minmax(0, 1fr));
+}
+
+.game-card--poster .game-card__art {
+  aspect-ratio: 2 / 3;
+  min-height: 0;
+}

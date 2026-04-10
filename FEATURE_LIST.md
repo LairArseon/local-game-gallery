@@ -27,8 +27,8 @@ Status options:
 - [5. Filter Pane Redesign (Tag Bubbles + Condensed Layout)](#5-filter-pane-redesign-tag-bubbles--condensed-layout) - `planned`
 - [6. Top Bar Action Prioritization + F5 Rescan Shortcut](#6-top-bar-action-prioritization--f5-rescan-shortcut) - `planned`
 - [7. Consistent Open/Play Actions in Focused Views](#7-consistent-openplay-actions-in-focused-views) - `idea`
-- [8. Adjustable Text and Padding Scaling Across Views](#8-adjustable-text-and-padding-scaling-across-views) - `idea`
-- [9. Action Label Wording Refresh (Top Bar + Game Actions)](#9-action-label-wording-refresh-top-bar--game-actions) - `idea`
+- [8. Adjustable Text and Padding Scaling Across Views](#8-adjustable-text-and-padding-scaling-across-views) - `done`
+- [9. Action Label Wording Refresh (Top Bar + Game Actions)](#9-action-label-wording-refresh-top-bar--game-actions) - `in-progress`
 
 ---
 
@@ -320,9 +320,24 @@ The `Open` action currently exists in game cards/list views, but it should also 
 
 ## 8. Adjustable Text and Padding Scaling Across Views
 
-- Status: `idea`
+- Status: `done`
 - Priority: `medium`
 - Goal: Keep typography and spacing proportional when grid density changes by adding user controls for base sizing and optional dynamic scaling.
+
+### Work note
+
+- Started on 2026-04-10.
+- Refined scope after validation: base font/spacing controls now target game content areas only (grid/list/card/detail), not top/setup menus.
+- Added separate global zoom behavior aligned with browser-style zoom controls (`Ctrl + wheel`, `+`, `-`, `Ctrl+0`).
+- Updated zoom implementation so global zoom also scales images consistently with the rest of the UI.
+- Tuned dynamic scaling curve for stronger, more predictable response to grid column density.
+- Added media scaling coupling so when content scales down/up, image layout dimensions in list/card/detail/focus views scale proportionally.
+- Added `0 = auto` behavior for poster/card column settings so columns can adapt to effective element size.
+- Card view adjusted to use top-stacked media (image above metadata) to reduce wasted vertical whitespace in denser layouts.
+- Expanded view media column now scales more responsively with content/media scaling.
+- Global zoom container behavior adjusted so zoom-out can actually increase visible row density instead of preserving the same row count.
+- Refactored stylesheet into split files (base, shared gallery, per-view files, focus/detail, modals/media, responsive) to simplify future maintenance.
+- Marked complete on 2026-04-10 after validation in poster/card/compact/expanded/detail flows.
 
 ### Summary
 
@@ -366,9 +381,14 @@ When users increase grid density (for example, adding more columns in card view)
 
 ## 9. Action Label Wording Refresh (Top Bar + Game Actions)
 
-- Status: `idea`
+- Status: `in-progress`
 - Priority: `medium`
 - Goal: Replace current action wording with clearer labels across top-bar and game-level actions while keeping behavior unchanged.
+
+### Work note
+
+- Started on 2026-04-10 as next recommended task after Feature 8 completion.
+- Initial implementation pass will centralize action label strings before applying revised wording values.
 
 ### Summary
 

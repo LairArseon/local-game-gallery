@@ -1,0 +1,122 @@
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: calc(18px * var(--content-spacing-scale));
+}
+
+.cards--compact,
+.cards--expanded {
+  grid-template-columns: 1fr;
+}
+
+.gallery-body {
+  display: grid;
+  gap: calc(16px * var(--content-spacing-scale));
+  font-size: calc(1rem * var(--content-font-scale));
+}
+
+.game-card,
+.empty-state {
+  overflow: hidden;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.game-card {
+  cursor: pointer;
+}
+
+.game-card--selected {
+  border-color: rgba(246, 199, 115, 0.8);
+  box-shadow: 0 0 0 1px rgba(246, 199, 115, 0.4);
+}
+
+.game-card__art {
+  min-height: calc(120px * var(--content-media-scale));
+  padding: calc(18px * var(--content-spacing-scale));
+  display: flex;
+  align-items: end;
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(25, 30, 42, 0.1), rgba(12, 14, 20, 0.8)),
+    radial-gradient(circle at top, rgba(116, 189, 255, 0.38), transparent 45%),
+    linear-gradient(135deg, #22324d 0%, #11141b 100%);
+}
+
+.game-card__art--placeholder {
+  background:
+    linear-gradient(180deg, rgba(68, 49, 22, 0.28), rgba(24, 20, 13, 0.82)),
+    repeating-linear-gradient(
+      135deg,
+      rgba(244, 170, 82, 0.2) 0,
+      rgba(244, 170, 82, 0.2) 14px,
+      rgba(12, 14, 20, 0.25) 14px,
+      rgba(12, 14, 20, 0.25) 28px
+    ),
+    linear-gradient(135deg, #3a2f1d 0%, #17130d 100%);
+}
+
+.game-card__art span {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 0.85rem;
+}
+
+.media-preview {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: 16px;
+  display: block;
+}
+
+.media-preview--cover {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  border-radius: 0;
+  object-position: center center;
+}
+
+.game-card__body,
+.empty-state {
+  padding: calc(18px * var(--content-spacing-scale));
+}
+
+.game-card__body p {
+  margin: 8px 0;
+}
+
+.game-card__actions {
+  display: flex;
+  gap: calc(8px * var(--content-spacing-scale));
+  margin-top: calc(10px * var(--content-spacing-scale));
+}
+
+.button--icon {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.82rem;
+}
+
+.version-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.version-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.9rem;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}

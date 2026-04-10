@@ -23,6 +23,24 @@ const gridMinCardWidthPx: Record<GalleryViewMode, number> = {
   expanded: 1,
 };
 
+const dynamicScaleBaselineColumns: Record<'poster' | 'card', number> = {
+  poster: 5,
+  card: 4,
+};
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function isTypingTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  const tagName = target.tagName.toLowerCase();
+  return target.isContentEditable || tagName === 'input' || tagName === 'textarea' || tagName === 'select';
+}
+
 const orderByModeLabels: Record<FilterOrderByMode, string> = {
   'alpha-asc': 'Alphabetically up',
   'alpha-desc': 'Alphabetically down',
@@ -688,6 +706,106 @@ function App() {
     [scanResult.games, detailGamePath],
   );
 
+  const dynamicUiScaleFactor = useMemo(() => {
+    if (!config?.uiDynamicGridScaling) {
+      return 1;
+    }
+
+    if (viewMode !== 'poster' && viewMode !== 'card') {
+      return 1;
+    }
+
+    const baselineColumns = dynamicScaleBaselineColumns[viewMode];
+    const activeColumns = Math.max(1, gridColumns || baselineColumns);
+    const ratio = baselineColumns / activeColumns;
+
+    return clamp(Math.pow(ratio, 0.5), 0.75, 1.25);
+  }, [config?.uiDynamicGridScaling, viewMode, gridColumns]);
+
+  const effectiveGlobalZoom = clamp(config?.uiGlobalZoom ?? 1, 0.75, 2);
+  const effectiveFontScale = clamp((config?.uiBaseFontScale ?? 1) * dynamicUiScaleFactor * effectiveGlobalZoom, 0.6, 2.4);
+  const effectiveSpacingScale = clamp((config?.uiBaseSpacingScale ?? 1) * dynamicUiScaleFactor * effectiveGlobalZoom, 0.6, 2.4);
+  const effectiveMediaScale = clamp((effectiveFontScale + effectiveSpacingScale) / 2, 0.7, 1.6);
+  const contentScaleStyle = {
+    ['--content-font-scale' as string]: effectiveFontScale.toFixed(3),
+    ['--content-spacing-scale' as string]: effectiveSpacingScale.toFixed(3),
+    ['--content-media-scale' as string]: effectiveMediaScale.toFixed(3),
+  } as CSSProperties;
+
+  useEffect(() => {
+    const updateGlobalZoom = (nextZoom: number) => {
+      setConfig((current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          uiGlobalZoom: clamp(nextZoom, 0.75, 2),
+        };
+      });
+    };
+
+    const adjustGlobalZoom = (delta: number) => {
+      setConfig((current) => {
+        if (!current) {
+          return current;
+        }
+
+        const currentZoom = Number.isFinite(current.uiGlobalZoom) ? current.uiGlobalZoom : 1;
+        const nextZoom = Math.round((currentZoom + delta) * 100) / 100;
+        return {
+          ...current,
+          uiGlobalZoom: clamp(nextZoom, 0.75, 2),
+        };
+      });
+    };
+
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey) {
+        return;
+      }
+
+      event.preventDefault();
+      adjustGlobalZoom(event.deltaY < 0 ? 0.05 : -0.05);
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const key = event.key;
+      const normalizedKey = key.toLowerCase();
+      const ctrlOrMetaPressed = event.ctrlKey || event.metaKey;
+      const canUsePlainPlusMinus = !event.altKey && !ctrlOrMetaPressed && !isTypingTarget(event.target);
+
+      if (ctrlOrMetaPressed && normalizedKey === '0') {
+        event.preventDefault();
+        updateGlobalZoom(1);
+        return;
+      }
+
+      const isZoomInKey = key === '+' || key === '=' || normalizedKey === 'numpadadd';
+      const isZoomOutKey = key === '-' || key === '_' || normalizedKey === 'numpadsubtract';
+
+      if ((ctrlOrMetaPressed || canUsePlainPlusMinus) && isZoomInKey) {
+        event.preventDefault();
+        adjustGlobalZoom(0.05);
+        return;
+      }
+
+      if ((ctrlOrMetaPressed || canUsePlainPlusMinus) && isZoomOutKey) {
+        event.preventDefault();
+        adjustGlobalZoom(-0.05);
+      }
+    };
+
+    window.addEventListener('wheel', onWheel, { passive: false });
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, []);
+
   useEffect(() => {
     if (viewMode !== 'poster' && viewMode !== 'card') {
       return;
@@ -698,11 +816,12 @@ function App() {
       return;
     }
 
-    const minCardWidth = gridMinCardWidthPx[viewMode];
+    const minCardWidth = gridMinCardWidthPx[viewMode] * clamp(effectiveMediaScale, 0.7, 1.6);
     const updateColumns = () => {
       const width = container.clientWidth;
       const maxFitColumns = Math.max(1, Math.floor((width + gridGapPx) / (minCardWidth + gridGapPx)));
-      const preferredColumns = viewMode === 'poster' ? config?.posterColumns ?? maxFitColumns : config?.cardColumns ?? maxFitColumns;
+      const configuredColumns = viewMode === 'poster' ? config?.posterColumns : config?.cardColumns;
+      const preferredColumns = configuredColumns && configuredColumns > 0 ? configuredColumns : maxFitColumns;
       const nextColumns = Math.max(1, Math.min(preferredColumns, maxFitColumns));
       setGridColumns(nextColumns);
     };
@@ -714,7 +833,7 @@ function App() {
     return () => {
       observer.disconnect();
     };
-  }, [viewMode, filteredGames.length, detailGamePath, config?.posterColumns, config?.cardColumns]);
+  }, [viewMode, filteredGames.length, detailGamePath, config?.posterColumns, config?.cardColumns, effectiveMediaScale]);
 
   useEffect(() => {
     const dispose = window.gallery.onGameContextMenuAction((payload) => {
@@ -1323,32 +1442,102 @@ function App() {
               <span>Poster view columns</span>
               <input
                 type="number"
-                min={1}
+                min={0}
                 max={12}
                 value={config.posterColumns}
                 onChange={(event) =>
                   setConfig({
                     ...config,
-                    posterColumns: Math.max(1, Number.parseInt(event.target.value || '1', 10) || 1),
+                    posterColumns: Math.max(0, Number.parseInt(event.target.value || '0', 10) || 0),
                   })
                 }
               />
+              <small className="field__hint">Use 0 to auto-fit columns based on current element size.</small>
             </label>
 
             <label className="field">
               <span>Card view columns</span>
               <input
                 type="number"
-                min={1}
+                min={0}
                 max={12}
                 value={config.cardColumns}
                 onChange={(event) =>
                   setConfig({
                     ...config,
-                    cardColumns: Math.max(1, Number.parseInt(event.target.value || '1', 10) || 1),
+                    cardColumns: Math.max(0, Number.parseInt(event.target.value || '0', 10) || 0),
                   })
                 }
               />
+              <small className="field__hint">Use 0 to auto-fit columns based on current element size.</small>
+            </label>
+
+            <label className="field">
+              <span>Base font scale</span>
+              <input
+                type="number"
+                min={0.75}
+                max={1.5}
+                step={0.05}
+                value={config.uiBaseFontScale ?? 1}
+                onChange={(event) =>
+                  setConfig({
+                    ...config,
+                    uiBaseFontScale: clamp(Number.parseFloat(event.target.value || '1') || 1, 0.75, 1.5),
+                  })
+                }
+              />
+              <small className="field__hint">Affects only game content cards/lists/detail, not setup or top menus.</small>
+            </label>
+
+            <label className="field">
+              <span>Base spacing scale</span>
+              <input
+                type="number"
+                min={0.75}
+                max={1.5}
+                step={0.05}
+                value={config.uiBaseSpacingScale ?? 1}
+                onChange={(event) =>
+                  setConfig({
+                    ...config,
+                    uiBaseSpacingScale: clamp(Number.parseFloat(event.target.value || '1') || 1, 0.75, 1.5),
+                  })
+                }
+              />
+              <small className="field__hint">Affects only game content spacing.</small>
+            </label>
+
+            <label className="field field--toggle">
+              <span>Dynamic scaling from grid density</span>
+              <input
+                type="checkbox"
+                checked={Boolean(config.uiDynamicGridScaling)}
+                onChange={(event) =>
+                  setConfig({
+                    ...config,
+                    uiDynamicGridScaling: event.target.checked,
+                  })
+                }
+              />
+            </label>
+
+            <label className="field">
+              <span>Global zoom</span>
+              <input
+                type="number"
+                min={0.75}
+                max={2}
+                step={0.05}
+                value={config.uiGlobalZoom ?? 1}
+                onChange={(event) =>
+                  setConfig({
+                    ...config,
+                    uiGlobalZoom: clamp(Number.parseFloat(event.target.value || '1') || 1, 0.75, 2),
+                  })
+                }
+              />
+              <small className="field__hint">Also works with Ctrl + mouse wheel and +/- keys. Ctrl+0 resets to 100%.</small>
             </label>
 
             <button className="button button--primary" type="submit" disabled={isSaving}>
@@ -1362,7 +1551,7 @@ function App() {
           style={detailBackgroundSrc ? ({ ['--detail-bg-image' as string]: `url("${detailBackgroundSrc}")` } as CSSProperties) : undefined}
         >
           {detailGame ? (
-            <section className="detail-page">
+            <section className="detail-page" style={contentScaleStyle}>
               <header className="detail-page__header">
                 <button className="button" type="button" onClick={() => setDetailGamePath(null)}>
                   Back
@@ -1462,7 +1651,7 @@ function App() {
             </div>
           ) : null}
 
-          <div className={`gallery-body gallery-body--${viewMode}`}>
+          <div className={`gallery-body gallery-body--${viewMode}`} style={contentScaleStyle}>
             {viewMode === 'compact' || viewMode === 'expanded' ? (
               <div className={`focus-split ${selectedGame ? 'focus-split--open' : ''}`}>
                 <div className={`focus-list cards cards--${viewMode}`}>

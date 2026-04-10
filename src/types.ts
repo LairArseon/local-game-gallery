@@ -19,6 +19,10 @@ export type GalleryConfig = {
   preferredViewMode: GalleryViewMode;
   posterColumns: number;
   cardColumns: number;
+  uiBaseFontScale: number;
+  uiBaseSpacingScale: number;
+  uiDynamicGridScaling: boolean;
+  uiGlobalZoom: number;
   statusChoices: string[];
   filterPresets: FilterPreset[];
 };

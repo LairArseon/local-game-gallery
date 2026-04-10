@@ -1,0 +1,19 @@
+.cards--card {
+  grid-template-columns: repeat(var(--grid-columns, 1), minmax(0, 1fr));
+}
+
+.game-card--card {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.game-card--card .game-card__art {
+  min-height: 0;
+  aspect-ratio: 16 / 9;
+  align-self: stretch;
+  background-color: #06080d;
+}
+
+.game-card--card .media-preview--cover {
+  object-fit: contain;
+}

@@ -3,6 +3,29 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { GalleryConfig } from '../src/types';
 
+const minUiScale = 0.75;
+const maxUiScale = 1.5;
+const minGlobalZoom = 0.75;
+const maxGlobalZoom = 2;
+
+function normalizeUiScale(value: number | string | undefined, fallback = 1) {
+  const parsed = Number.parseFloat(String(value ?? ''));
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.min(maxUiScale, Math.max(minUiScale, parsed));
+}
+
+function normalizeGlobalZoom(value: number | string | undefined, fallback = 1) {
+  const parsed = Number.parseFloat(String(value ?? ''));
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.min(maxGlobalZoom, Math.max(minGlobalZoom, parsed));
+}
+
 const defaultConfig: GalleryConfig = {
   gamesRoot: '',
   excludePatterns: ['.git', 'Thumbs.db'],
@@ -12,6 +35,10 @@ const defaultConfig: GalleryConfig = {
   preferredViewMode: 'poster',
   posterColumns: 5,
   cardColumns: 4,
+  uiBaseFontScale: 1,
+  uiBaseSpacingScale: 1,
+  uiDynamicGridScaling: false,
+  uiGlobalZoom: 1,
   statusChoices: ['Backlog', 'Playing', 'Completed', 'On Hold', 'Dropped'],
   filterPresets: [],
 };
@@ -37,6 +64,10 @@ export async function saveConfig(config: GalleryConfig) {
     ...config,
     excludePatterns: [...new Set(config.excludePatterns.map((pattern) => pattern.trim()).filter(Boolean))],
     statusChoices: [...new Set((config.statusChoices ?? []).map((value) => value.trim()).filter(Boolean))],
+    uiBaseFontScale: normalizeUiScale(config.uiBaseFontScale, defaultConfig.uiBaseFontScale),
+    uiBaseSpacingScale: normalizeUiScale(config.uiBaseSpacingScale, defaultConfig.uiBaseSpacingScale),
+    uiDynamicGridScaling: Boolean(config.uiDynamicGridScaling),
+    uiGlobalZoom: normalizeGlobalZoom(config.uiGlobalZoom, defaultConfig.uiGlobalZoom),
     filterPresets: (config.filterPresets ?? [])
       .map((preset) => ({
         ...preset,
