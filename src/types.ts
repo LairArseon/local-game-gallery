@@ -24,11 +24,38 @@ export type GalleryConfig = {
   uiMetadataGapScale: number;
   uiDynamicGridScaling: boolean;
   uiGlobalZoom: number;
+  appIconPngPath: string;
   showSystemMenuBar: boolean;
   statusChoices: string[];
   tagPool: string[];
   tagPoolUsage: Record<string, number>;
   filterPresets: FilterPreset[];
+};
+
+export type AppIconInspectPayload = {
+  filePath: string;
+};
+
+export type AppIconInspectResult = {
+  isValid: boolean;
+  message: string;
+  width: number;
+  height: number;
+  willPadToSquare: boolean;
+};
+
+export type StageDroppedAppIconPayload = {
+  fileName: string;
+  buffer: ArrayBuffer;
+};
+
+export type ApplyRuntimeAppIconPayload = {
+  filePath: string;
+};
+
+export type ApplyRuntimeAppIconResult = {
+  applied: boolean;
+  message: string;
 };
 
 export type VersionSummary = {
@@ -164,6 +191,10 @@ export type GalleryApi = {
   getConfig: () => Promise<GalleryConfig>;
   saveConfig: (config: GalleryConfig) => Promise<GalleryConfig>;
   pickGamesRoot: () => Promise<string | null>;
+  pickAppIconPng: () => Promise<string | null>;
+  inspectAppIconFile: (payload: AppIconInspectPayload) => Promise<AppIconInspectResult>;
+  stageDroppedAppIcon: (payload: StageDroppedAppIconPayload) => Promise<string>;
+  applyRuntimeAppIcon: (payload: ApplyRuntimeAppIconPayload) => Promise<ApplyRuntimeAppIconResult>;
   scanGames: () => Promise<ScanResult>;
   showGameContextMenu: (payload: GameContextMenuPayload) => Promise<void>;
   onGameContextMenuAction: (callback: (payload: GameContextMenuAction) => void) => () => void;

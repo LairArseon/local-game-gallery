@@ -1,7 +1,12 @@
 ﻿import { contextBridge, ipcRenderer } from 'electron';
 import type {
+  ApplyRuntimeAppIconPayload,
+  ApplyRuntimeAppIconResult,
+  AppIconInspectPayload,
+  StageDroppedAppIconPayload,
   GameContextMenuPayload,
   GameContextMenuAction,
+  AppIconInspectResult,
   GalleryApi,
   GalleryConfig,
   ImportDroppedGameMediaPayload,
@@ -20,6 +25,13 @@ const api: GalleryApi = {
   getConfig: () => ipcRenderer.invoke('gallery:get-config'),
   saveConfig: (config: GalleryConfig) => ipcRenderer.invoke('gallery:save-config', config),
   pickGamesRoot: () => ipcRenderer.invoke('gallery:pick-games-root'),
+  pickAppIconPng: (): Promise<string | null> => ipcRenderer.invoke('gallery:pick-app-icon-png'),
+  inspectAppIconFile: (payload: AppIconInspectPayload): Promise<AppIconInspectResult> =>
+    ipcRenderer.invoke('gallery:inspect-app-icon-file', payload),
+  stageDroppedAppIcon: (payload: StageDroppedAppIconPayload): Promise<string> =>
+    ipcRenderer.invoke('gallery:stage-dropped-app-icon', payload),
+  applyRuntimeAppIcon: (payload: ApplyRuntimeAppIconPayload): Promise<ApplyRuntimeAppIconResult> =>
+    ipcRenderer.invoke('gallery:apply-runtime-app-icon', payload),
   scanGames: () => ipcRenderer.invoke('gallery:scan-games'),
   showGameContextMenu: (payload: GameContextMenuPayload) => ipcRenderer.invoke('gallery:show-game-context-menu', payload),
   showVersionContextMenu: (payload: VersionContextMenuPayload) => ipcRenderer.invoke('gallery:show-version-context-menu', payload),

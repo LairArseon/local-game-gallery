@@ -51,6 +51,13 @@
     max-height: none;
   }
 
+  .layout .settings {
+    position: static;
+    left: auto;
+    top: auto;
+    z-index: auto;
+  }
+
   .panel-heading--library {
     display: grid;
   }

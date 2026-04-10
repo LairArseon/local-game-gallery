@@ -1,9 +1,9 @@
 ﻿/**
  * Electron main process bootstrap, IPC wiring, and desktop integrations.
  */
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell } from 'electron';
 import type { OpenDialogOptions } from 'electron';
-import { access, appendFile, readdir } from 'node:fs/promises';
+import { access, appendFile, mkdir, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { loadConfig, saveConfig } from './config';
@@ -11,6 +11,11 @@ import { appendLogEvent, clearLogContents, openLogFolder, readLogContents } from
 import { importDroppedGameMedia, readGameMetadata, removeScreenshot, reorderScreenshots, saveGameMetadata } from './game-library';
 import { scanGames } from './scanner';
 import type {
+  ApplyRuntimeAppIconPayload,
+  ApplyRuntimeAppIconResult,
+  AppIconInspectPayload,
+  AppIconInspectResult,
+  StageDroppedAppIconPayload,
   GameContextMenuPayload,
   GalleryConfig,
   ImportDroppedGameMediaPayload,
@@ -97,16 +102,36 @@ async function appendGameLaunchActivity(gamePath: string) {
   await appendFile(activityLogPath, `${timestamp}\n`, 'utf8');
 }
 
+function isPngBuffer(buffer: Buffer) {
+  if (buffer.length < 8) {
+    return false;
+  }
+
+  return buffer[0] === 0x89
+    && buffer[1] === 0x50
+    && buffer[2] === 0x4e
+    && buffer[3] === 0x47
+    && buffer[4] === 0x0d
+    && buffer[5] === 0x0a
+    && buffer[6] === 0x1a
+    && buffer[7] === 0x0a;
+}
+
 async function createWindow() {
   const config = await loadConfig();
+  const configuredIconPath = String(config.appIconPngPath ?? '').trim();
+  const configuredIcon = configuredIconPath ? nativeImage.createFromPath(configuredIconPath) : null;
+  const startupIcon = configuredIcon && !configuredIcon.isEmpty() ? configuredIcon : undefined;
+
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 960,
     minWidth: 1100,
     minHeight: 720,
     backgroundColor: '#10131b',
+    icon: startupIcon,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    autoHideMenuBar: false,
+    autoHideMenuBar: process.platform === 'darwin' ? false : !config.showSystemMenuBar,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -114,7 +139,11 @@ async function createWindow() {
     },
   });
 
-  applyMenuBarVisibility(mainWindow, true);
+  if (startupIcon) {
+    mainWindow.setIcon(startupIcon);
+  }
+
+  applyMenuBarVisibility(mainWindow, config.showSystemMenuBar);
 
   mainWindow.webContents.on('before-input-event', (_event, input) => {
     const key = input.key.toLowerCase();
@@ -155,6 +184,150 @@ ipcMain.handle('gallery:pick-games-root', async () => {
   }
 
   return result.filePaths[0] ?? null;
+});
+
+ipcMain.handle('gallery:pick-app-icon-png', async () => {
+  const window = BrowserWindow.getFocusedWindow() ?? mainWindow;
+  const options: OpenDialogOptions = {
+    properties: ['openFile'],
+    filters: [{ name: 'PNG images', extensions: ['png'] }],
+    title: 'Choose a PNG app icon',
+  };
+  const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
+
+  if (result.canceled) {
+    return null;
+  }
+
+  return result.filePaths[0] ?? null;
+});
+
+ipcMain.handle('gallery:inspect-app-icon-file', async (_event, payload: AppIconInspectPayload): Promise<AppIconInspectResult> => {
+  const filePath = String(payload.filePath ?? '').trim();
+  if (!filePath) {
+    return {
+      isValid: false,
+      message: 'No icon path provided.',
+      width: 0,
+      height: 0,
+      willPadToSquare: false,
+    };
+  }
+
+  if (path.extname(filePath).toLowerCase() !== '.png') {
+    return {
+      isValid: false,
+      message: 'Only PNG files are supported for app icons.',
+      width: 0,
+      height: 0,
+      willPadToSquare: false,
+    };
+  }
+
+  if (!(await fileExists(filePath))) {
+    return {
+      isValid: false,
+      message: 'Selected icon file was not found on disk.',
+      width: 0,
+      height: 0,
+      willPadToSquare: false,
+    };
+  }
+
+  const image = nativeImage.createFromPath(filePath);
+  if (image.isEmpty()) {
+    return {
+      isValid: false,
+      message: 'Could not read PNG image data from the selected file.',
+      width: 0,
+      height: 0,
+      willPadToSquare: false,
+    };
+  }
+
+  const size = image.getSize();
+  const minSize = 256;
+  const isLargeEnough = size.width >= minSize && size.height >= minSize;
+  const willPadToSquare = size.width !== size.height;
+  if (!isLargeEnough) {
+    return {
+      isValid: false,
+      message: `Icon must be at least ${minSize}x${minSize}px. Current size is ${size.width}x${size.height}px.`,
+      width: size.width,
+      height: size.height,
+      willPadToSquare,
+    };
+  }
+
+  return {
+    isValid: true,
+    message: willPadToSquare
+      ? 'Valid PNG icon. It will be padded to a square during ICO conversion.'
+      : 'Valid PNG icon. Ready for the build icon pipeline.',
+    width: size.width,
+    height: size.height,
+    willPadToSquare,
+  };
+});
+
+ipcMain.handle('gallery:stage-dropped-app-icon', async (_event, payload: StageDroppedAppIconPayload): Promise<string> => {
+  const fileName = String(payload.fileName ?? '').trim();
+  const stagedBuffer = Buffer.from(payload.buffer ?? new ArrayBuffer(0));
+
+  if (!stagedBuffer.length) {
+    throw new Error('Dropped file data is empty. Try selecting the file with Choose PNG.');
+  }
+
+  const hasPngExtension = path.extname(fileName).toLowerCase() === '.png';
+  const hasPngSignature = isPngBuffer(stagedBuffer);
+  if (!hasPngExtension && !hasPngSignature) {
+    throw new Error('Dropped file must be a PNG image.');
+  }
+
+  const iconsDir = path.join(app.getPath('userData'), 'icons');
+  const stagedPath = path.join(iconsDir, 'custom-app-icon.png');
+  await mkdir(iconsDir, { recursive: true });
+  await writeFile(stagedPath, stagedBuffer);
+  return stagedPath;
+});
+
+ipcMain.handle('gallery:apply-runtime-app-icon', async (_event, payload: ApplyRuntimeAppIconPayload): Promise<ApplyRuntimeAppIconResult> => {
+  const filePath = String(payload.filePath ?? '').trim();
+  if (!filePath) {
+    return {
+      applied: false,
+      message: 'Select an icon first.',
+    };
+  }
+
+  if (!(await fileExists(filePath))) {
+    return {
+      applied: false,
+      message: 'Selected icon file was not found.',
+    };
+  }
+
+  const image = nativeImage.createFromPath(filePath);
+  if (image.isEmpty()) {
+    return {
+      applied: false,
+      message: 'Could not load icon image for runtime apply.',
+    };
+  }
+
+  const window = BrowserWindow.getFocusedWindow() ?? mainWindow;
+  if (!window) {
+    return {
+      applied: false,
+      message: 'App window is not available right now.',
+    };
+  }
+
+  window.setIcon(image);
+  return {
+    applied: true,
+    message: 'Runtime icon applied for current app session.',
+  };
 });
 
 ipcMain.handle('gallery:scan-games', async () => {

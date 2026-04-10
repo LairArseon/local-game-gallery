@@ -14,7 +14,7 @@ export class RenderErrorBoundary extends React.Component<React.PropsWithChildren
     errorMessage: '',
   };
 
-  static override getDerivedStateFromError(error: unknown): RenderErrorBoundaryState {
+  static getDerivedStateFromError(error: unknown): RenderErrorBoundaryState {
     const message = error instanceof Error ? error.message : 'Unknown renderer error';
     return {
       hasError: true,

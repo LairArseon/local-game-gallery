@@ -54,6 +54,7 @@ const defaultConfig: GalleryConfig = {
   uiMetadataGapScale: 1,
   uiDynamicGridScaling: false,
   uiGlobalZoom: 1,
+  appIconPngPath: '',
   showSystemMenuBar: true,
   statusChoices: ['Backlog', 'Playing', 'Completed', 'On Hold', 'Dropped'],
   tagPool: [],
@@ -94,6 +95,7 @@ export async function saveConfig(config: GalleryConfig) {
     uiMetadataGapScale: normalizeMetadataGapScale(config.uiMetadataGapScale, defaultConfig.uiMetadataGapScale),
     uiDynamicGridScaling: Boolean(config.uiDynamicGridScaling),
     uiGlobalZoom: normalizeGlobalZoom(config.uiGlobalZoom, defaultConfig.uiGlobalZoom),
+    appIconPngPath: String(config.appIconPngPath ?? '').trim(),
     filterPresets: (config.filterPresets ?? [])
       .map((preset) => ({
         ...preset,

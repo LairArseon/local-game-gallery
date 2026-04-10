@@ -21,9 +21,9 @@ Status options:
 ## Feature Index
 
 - [1. App Vault (Password-Protected Hidden Games)](#1-app-vault-password-protected-hidden-games) - `idea`
-- [2. In-App App Icon Customization (Drop PNG)](#2-in-app-app-icon-customization-drop-png) - `planned`
+- [2. In-App App Icon Customization (Drop PNG)](#2-in-app-app-icon-customization-drop-png) - `done`
 - [3. New Version Notifications and Mismatch Badges](#3-new-version-notifications-and-mismatch-badges) - `planned`
-- [4. Quick Folder Navigation from Game and Version Menus](#4-quick-folder-navigation-from-game-and-version-menus) - `in-progress`
+- [4. Quick Folder Navigation from Game and Version Menus](#4-quick-folder-navigation-from-game-and-version-menus) - `done`
 - [5. Filter Pane Redesign (Tag Bubbles + Condensed Layout)](#5-filter-pane-redesign-tag-bubbles--condensed-layout) - `done`
 - [6. Top Bar Action Prioritization + F5 Rescan Shortcut](#6-top-bar-action-prioritization--f5-rescan-shortcut) - `done`
 - [7. Consistent Open/Play Actions in Focused Views](#7-consistent-openplay-actions-in-focused-views) - `done`
@@ -73,9 +73,14 @@ Add a vault mode where specific games are not visible in normal browsing/search/
 
 ## 2. In-App App Icon Customization (Drop PNG)
 
-- Status: `planned`
+- Status: `done`
 - Priority: `medium`
 - Goal: Let users replace the app icon from inside the app by dropping a new PNG image.
+
+### Work note
+
+- Started on 2026-04-10.
+- Completed on 2026-04-10.
 
 ### Summary
 
@@ -155,7 +160,7 @@ During startup or manual rescans, detect games whose detected latest version doe
 
 ## 4. Quick Folder Navigation from Game and Version Menus
 
-- Status: `in-progress`
+- Status: `done`
 - Priority: `medium`
 - Goal: Improve folder access by adding direct "open folder" actions from game and version context menus.
 

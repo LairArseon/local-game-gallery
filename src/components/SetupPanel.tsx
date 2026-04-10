@@ -1,10 +1,19 @@
 /**
  * Setup sidebar for library paths, layout settings, and app preferences.
  */
-import type { FormEvent } from 'react';
-import { FolderOpen } from 'lucide-react';
+import type { DragEvent, FocusEvent, FormEvent, MouseEvent } from 'react';
+import { useState } from 'react';
+import { AlertTriangle, FolderOpen } from 'lucide-react';
 import type { GalleryConfig } from '../types';
 import { clamp } from '../utils/app-helpers';
+
+type AppIconSummary = {
+  isValid: boolean;
+  message: string;
+  width: number;
+  height: number;
+  willPadToSquare: boolean;
+};
 
 type SetupPanelProps = {
   config: GalleryConfig;
@@ -17,6 +26,16 @@ type SetupPanelProps = {
   onToggleSystemMenuBar: (visible: boolean) => void;
   onOpenLogViewer: () => void;
   onOpenLogFolder: () => void;
+  appIconPreviewSrc: string | null;
+  appIconSummary: AppIconSummary | null;
+  appIconPath: string;
+  onPickAppIcon: () => void;
+  onDropAppIconFile: (event: DragEvent<HTMLDivElement>) => void;
+  onAppIconDragEnter: (event: DragEvent<HTMLDivElement>) => void;
+  onAppIconDragLeave: (event: DragEvent<HTMLDivElement>) => void;
+  isAppIconDragActive: boolean;
+  onApplyAppIconNow: () => void;
+  onResetAppIcon: () => void;
 };
 
 export function SetupPanel({
@@ -30,10 +49,37 @@ export function SetupPanel({
   onToggleSystemMenuBar,
   onOpenLogViewer,
   onOpenLogFolder,
+  appIconPreviewSrc,
+  appIconSummary,
+  appIconPath,
+  onPickAppIcon,
+  onDropAppIconFile,
+  onAppIconDragEnter,
+  onAppIconDragLeave,
+  isAppIconDragActive,
+  onApplyAppIconNow,
+  onResetAppIcon,
 }: SetupPanelProps) {
+  const [isIconWarningOpen, setIsIconWarningOpen] = useState(false);
+  const [iconWarningPosition, setIconWarningPosition] = useState<{ left: number; top: number } | null>(null);
+
+  const openIconWarning = (event: MouseEvent<HTMLSpanElement> | FocusEvent<HTMLSpanElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    setIconWarningPosition({
+      left: bounds.right + 10,
+      top: bounds.top + bounds.height / 2,
+    });
+    setIsIconWarningOpen(true);
+  };
+
+  const closeIconWarning = () => {
+    setIsIconWarningOpen(false);
+  };
+
   return (
-    <aside className={`panel settings ${isSidebarOpen ? 'settings--open' : 'settings--closed'}`}>
-      <form onSubmit={onSaveConfig}>
+    <>
+      <aside className={`panel settings ${isSidebarOpen ? 'settings--open' : 'settings--closed'}`}>
+        <form onSubmit={onSaveConfig}>
         <div className="panel-heading">
           <h2>Setup</h2>
           <p>Configuration is saved between app launches.</p>
@@ -102,6 +148,78 @@ export function SetupPanel({
             onChange={(event) => onConfigChange({ ...config, picturesFolderName: event.target.value })}
           />
         </label>
+
+        <section className="field field--app-icon">
+          <div className="field__label-row">
+            <span>App icon (PNG)</span>
+            <span
+              className="app-icon-warning"
+              tabIndex={0}
+              aria-label="Icon behavior details"
+              onMouseEnter={openIconWarning}
+              onMouseLeave={closeIconWarning}
+              onFocus={openIconWarning}
+              onBlur={closeIconWarning}
+            >
+              <AlertTriangle size={14} aria-hidden="true" />
+            </span>
+          </div>
+          <div
+            className={`app-icon-dropzone ${isAppIconDragActive ? 'app-icon-dropzone--dragover' : ''}`}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              event.dataTransfer.dropEffect = 'copy';
+            }}
+            onDragEnter={onAppIconDragEnter}
+            onDragLeave={onAppIconDragLeave}
+            onDrop={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onDropAppIconFile(event);
+            }}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onPickAppIcon();
+              }
+            }}
+            onClick={onPickAppIcon}
+            aria-label="Drop PNG icon here or click to select"
+            title="Drop PNG icon here or click to select"
+          >
+            {appIconPreviewSrc ? (
+              <img src={appIconPreviewSrc} alt="Selected app icon preview" className="app-icon-preview" />
+            ) : (
+              <div className="app-icon-preview app-icon-preview--placeholder" aria-hidden="true">PNG</div>
+            )}
+            <div className="app-icon-dropzone__meta">
+              <strong>{appIconPath ? 'Custom icon selected' : 'Default icon in use'}</strong>
+              <p>
+                {appIconPath
+                  ? appIconPath
+                  : 'Drop a PNG file or click to choose one for future installer builds.'}
+              </p>
+            </div>
+          </div>
+          {appIconSummary ? (
+            <small className={`field__hint ${appIconSummary.isValid ? '' : 'field__hint--error'}`}>
+              {appIconSummary.message} {appIconSummary.width > 0 && appIconSummary.height > 0 ? `(${appIconSummary.width}x${appIconSummary.height}px)` : ''}
+            </small>
+          ) : (
+            <small className="field__hint">Use at least 256x256 PNG. Non-square icons are padded to square automatically.</small>
+          )}
+          <div className="app-icon-actions">
+            <button className="button button--icon" type="button" onClick={onApplyAppIconNow} disabled={!appIconPath}>
+              Apply now
+            </button>
+            <button className="button button--icon" type="button" onClick={onResetAppIcon} disabled={!appIconPath}>
+              Reset to default
+            </button>
+          </div>
+        </section>
 
         <label className="field">
           <span>Status choices</span>
@@ -266,7 +384,18 @@ export function SetupPanel({
         <button className="button button--primary" type="submit" disabled={isSaving}>
           {isSaving ? 'Saving...' : 'Save setup'}
         </button>
-      </form>
-    </aside>
+        </form>
+      </aside>
+      {isIconWarningOpen && iconWarningPosition ? (
+        <div
+          className="app-icon-warning-layer"
+          role="tooltip"
+          style={{ left: `${iconWarningPosition.left}px`, top: `${iconWarningPosition.top}px` }}
+        >
+          Custom PNG icons update preview immediately, can be applied for the current session, and are used on next app startup.
+          Packaged executable and installer icons are build-time assets on Windows, so true installed identity changes still require rebuilding.
+        </div>
+      ) : null}
+    </>
   );
 }

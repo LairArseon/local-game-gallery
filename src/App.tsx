@@ -4,9 +4,9 @@
  * This component owns application-level state, IPC interactions,
  * and delegates most UI rendering to focused child components.
  */
-import { FormEvent, Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { FormEvent, Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from 'react';
 import { ArrowRight, RefreshCw, Settings, SlidersHorizontal, Tag } from 'lucide-react';
-import type { FilterOrderByMode, FilterPreset, GalleryConfig, GalleryViewMode, GameMetadata, GameSummary, ScanResult } from './types';
+import type { AppIconInspectResult, FilterOrderByMode, FilterPreset, GalleryConfig, GalleryViewMode, GameMetadata, GameSummary, ScanResult } from './types';
 import { DetailPage } from './components/DetailPage';
 import { FilterPanel } from './components/FilterPanel';
 import { FocusCard } from './components/FocusCard';
@@ -115,6 +115,9 @@ function App() {
   const [isLogClearing, setIsLogClearing] = useState(false);
   const [logLevelFilter, setLogLevelFilter] = useState<'all' | 'info' | 'warn' | 'error'>('all');
   const [logDateFilter, setLogDateFilter] = useState('');
+  const [appIconSummary, setAppIconSummary] = useState<AppIconInspectResult | null>(null);
+  const [appIconPreviewVersion, setAppIconPreviewVersion] = useState(0);
+  const [isAppIconDragActive, setIsAppIconDragActive] = useState(false);
   const [focusCarouselIndexByGamePath, setFocusCarouselIndexByGamePath] = useState<Record<string, number>>({});
   const [metadataDraft, setMetadataDraft] = useState<GameMetadata | null>(null);
   const [isMetadataSaving, setIsMetadataSaving] = useState(false);
@@ -134,6 +137,7 @@ function App() {
   const cardsContainerRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const didRunStartupTagPoolSyncRef = useRef(false);
+  const appIconDragDepthRef = useRef(0);
 
   function toErrorMessage(error: unknown, fallback: string) {
     return error instanceof Error ? error.message : fallback;
@@ -247,6 +251,35 @@ function App() {
     void startupTagPoolSync();
   }, [config, scanResult.scannedAt, scanResult.games]);
 
+  useEffect(() => {
+    if (!config) {
+      return;
+    }
+
+    const iconPath = config.appIconPngPath.trim();
+    if (!iconPath) {
+      setAppIconSummary(null);
+      return;
+    }
+
+    const inspectCurrentIcon = async () => {
+      try {
+        const inspection = await window.gallery.inspectAppIconFile({ filePath: iconPath });
+        setAppIconSummary(inspection);
+      } catch {
+        setAppIconSummary({
+          isValid: false,
+          message: 'Could not validate current app icon path.',
+          width: 0,
+          height: 0,
+          willPadToSquare: false,
+        });
+      }
+    };
+
+    void inspectCurrentIcon();
+  }, [config?.appIconPngPath, config]);
+
   async function initialize() {
     try {
       const loadedConfig = await window.gallery.getConfig();
@@ -313,6 +346,146 @@ function App() {
       void logAppEvent(message, 'error', 'save-config');
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function setAppIconPath(candidatePath: string) {
+    const iconPath = candidatePath.trim();
+    if (!iconPath || !config) {
+      return;
+    }
+
+    try {
+      const inspection = await window.gallery.inspectAppIconFile({ filePath: iconPath });
+      setAppIconSummary(inspection);
+      if (!inspection.isValid) {
+        setStatus(inspection.message);
+        return;
+      }
+
+      setConfig({
+        ...config,
+        appIconPngPath: iconPath,
+      });
+      setAppIconPreviewVersion((current) => current + 1);
+      setStatus('App icon selected. Save setup to persist it.');
+    } catch (error) {
+      const message = toErrorMessage(error, 'Failed to inspect app icon file.');
+      setStatus(message);
+      void logAppEvent(message, 'error', 'select-app-icon');
+    }
+  }
+
+  async function pickAppIconPng() {
+    try {
+      const selectedPath = await window.gallery.pickAppIconPng();
+      if (!selectedPath) {
+        return;
+      }
+
+      await setAppIconPath(selectedPath);
+    } catch (error) {
+      const message = toErrorMessage(error, 'Failed to pick app icon file.');
+      setStatus(message);
+      void logAppEvent(message, 'error', 'pick-app-icon');
+    }
+  }
+
+  async function handleDropAppIconFile(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    appIconDragDepthRef.current = 0;
+    setIsAppIconDragActive(false);
+
+    const droppedFile = event.dataTransfer.files?.[0] as (File & { path?: string }) | undefined;
+    let droppedPath = String(droppedFile?.path ?? '').trim();
+
+    if (!droppedPath) {
+      const uriList = event.dataTransfer.getData('text/uri-list').trim();
+      const plainText = event.dataTransfer.getData('text/plain').trim();
+      const firstCandidate = (uriList || plainText).split(/\r?\n/).find(Boolean) ?? '';
+      if (firstCandidate) {
+        const decoded = decodeURI(firstCandidate.trim());
+        if (decoded.toLowerCase().startsWith('file:///')) {
+          droppedPath = decoded.replace(/^file:\/\//i, '');
+        } else if (/^[a-zA-Z]:[\\/]/.test(decoded)) {
+          droppedPath = decoded;
+        }
+      }
+    }
+
+    if (droppedPath.startsWith('/') && /^[a-zA-Z]:[\\/]/.test(droppedPath.slice(1))) {
+      droppedPath = droppedPath.slice(1);
+    }
+
+    droppedPath = droppedPath.replace(/\//g, '\\');
+    if (!droppedPath) {
+      if (droppedFile) {
+        try {
+          const stagedPath = await window.gallery.stageDroppedAppIcon({
+            fileName: droppedFile.name,
+            buffer: await droppedFile.arrayBuffer(),
+          });
+          await setAppIconPath(stagedPath);
+          return;
+        } catch (error) {
+          const message = toErrorMessage(error, 'Could not process dropped icon file.');
+          setStatus(message);
+          void logAppEvent(message, 'error', 'drop-app-icon-stage');
+          return;
+        }
+      }
+
+      setStatus('Could not read dropped file path. Use the picker button instead.');
+      return;
+    }
+
+    await setAppIconPath(droppedPath);
+  }
+
+  function handleAppIconDragEnter(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    appIconDragDepthRef.current += 1;
+    setIsAppIconDragActive(true);
+  }
+
+  function handleAppIconDragLeave(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    appIconDragDepthRef.current = Math.max(0, appIconDragDepthRef.current - 1);
+    if (appIconDragDepthRef.current === 0) {
+      setIsAppIconDragActive(false);
+    }
+  }
+
+  function resetAppIcon() {
+    if (!config) {
+      return;
+    }
+
+    setConfig({
+      ...config,
+      appIconPngPath: '',
+    });
+    setAppIconSummary(null);
+    setAppIconPreviewVersion((current) => current + 1);
+    setStatus('App icon reset to default. Save setup to persist it.');
+  }
+
+  async function applyAppIconNow() {
+    if (!config?.appIconPngPath) {
+      setStatus('Select an icon first.');
+      return;
+    }
+
+    try {
+      const result = await window.gallery.applyRuntimeAppIcon({ filePath: config.appIconPngPath });
+      setStatus(result.message);
+    } catch (error) {
+      const message = toErrorMessage(error, 'Failed to apply runtime icon.');
+      setStatus(message);
+      void logAppEvent(message, 'error', 'apply-runtime-icon');
     }
   }
 
@@ -1417,6 +1590,9 @@ function App() {
   }
 
   const detailBackgroundSrc = detailGame ? filePathToSrc(detailGame.media.background) : null;
+  const appIconPreviewSrc = config.appIconPngPath
+    ? `${encodeURI(`file:///${config.appIconPngPath.replace(/\\/g, '/')}`)}?v=${appIconPreviewVersion}`
+    : null;
 
   return (
     <main className="shell">
@@ -1640,6 +1816,22 @@ function App() {
           onOpenLogFolder={() => {
             void openLogFolderFromSetup();
           }}
+          appIconPreviewSrc={appIconPreviewSrc}
+          appIconSummary={appIconSummary}
+          appIconPath={config.appIconPngPath}
+          onPickAppIcon={() => {
+            void pickAppIconPng();
+          }}
+          onDropAppIconFile={(event) => {
+            void handleDropAppIconFile(event);
+          }}
+          onAppIconDragEnter={handleAppIconDragEnter}
+          onAppIconDragLeave={handleAppIconDragLeave}
+          isAppIconDragActive={isAppIconDragActive}
+          onApplyAppIconNow={() => {
+            void applyAppIconNow();
+          }}
+          onResetAppIcon={resetAppIcon}
         />
 
         <section
