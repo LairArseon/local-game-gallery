@@ -99,6 +99,30 @@
   margin-top: calc(10px * var(--content-spacing-scale));
 }
 
+.game-card__actions--stacked {
+  flex-direction: column;
+  align-items: stretch;
+  margin-top: 0;
+  margin-left: calc(12px * var(--content-spacing-scale));
+  align-self: start;
+}
+
+.game-card__actions--stacked .button {
+  min-width: calc(92px * var(--content-spacing-scale));
+}
+
+.game-card__actions--stacked .button--icon-only {
+  min-width: 2.3rem;
+}
+
+.game-card__actions--floating {
+  position: absolute;
+  right: calc(14px * var(--content-spacing-scale));
+  bottom: calc(14px * var(--content-spacing-scale));
+  margin-top: 0;
+  z-index: 3;
+}
+
 .button--icon {
   padding: 0.4rem 0.75rem;
   font-size: 0.82rem;

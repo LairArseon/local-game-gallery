@@ -126,7 +126,9 @@
 }
 
 .focus-card__content {
+  position: relative;
   padding: calc(18px * var(--content-spacing-scale));
+  padding-bottom: calc(72px * var(--content-spacing-scale));
 }
 
 .focus-card__content h3 {

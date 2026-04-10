@@ -5,6 +5,7 @@
 .game-card--card {
   display: grid;
   grid-template-columns: 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .game-card--card .game-card__art {
@@ -16,4 +17,13 @@
 
 .game-card--card .media-preview--cover {
   object-fit: contain;
+}
+
+.game-card--card .game-card__body {
+  display: flex;
+  flex-direction: column;
+}
+
+.game-card--card .game-card__actions {
+  margin-top: auto;
 }

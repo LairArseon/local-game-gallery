@@ -25,6 +25,12 @@
   margin-top: 8px;
 }
 
+.game-card__compact-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
 .game-card__compact-meta p {
   margin: 0;
   color: rgba(247, 246, 242, 0.78);

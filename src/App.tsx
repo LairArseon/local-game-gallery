@@ -1,4 +1,5 @@
 ﻿import { FormEvent, Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { ArrowLeft, ArrowRight, Play, RefreshCw, Settings, SlidersHorizontal } from 'lucide-react';
 import type { FilterOrderByMode, FilterPreset, GalleryConfig, GalleryViewMode, GameMetadata, GameSummary, ScanResult } from './types';
 
 const emptyScan: ScanResult = {
@@ -47,6 +48,20 @@ const orderByModeLabels: Record<FilterOrderByMode, string> = {
   'score-asc': 'Score up',
   'score-desc': 'Score down',
 };
+
+const actionLabels = {
+  play: 'Play',
+  open: 'Open',
+  back: 'Back',
+  rescan: 'Rescan',
+  scanning: 'Scanning...',
+  showFilters: 'Show filters',
+  hideFilters: 'Hide filters',
+  showSetup: 'Show setup',
+  hideSetup: 'Hide setup',
+  chooseLibraryFolder: 'Choose library folder',
+  saving: 'Saving...',
+} as const;
 
 function App() {
   const [config, setConfig] = useState<GalleryConfig | null>(null);
@@ -910,7 +925,7 @@ function App() {
     return <main className="shell"><section className="panel panel--loading">{status}</section></main>;
   }
 
-  function renderFocusCard(game: GameSummary, isVertical: boolean) {
+  function renderFocusCard(game: GameSummary, isVertical: boolean, showActions = true) {
     const hasScreenshotCarousel = game.media.screenshots.length > 0;
     const carouselIndex = hasScreenshotCarousel
       ? focusCarouselIndexByGamePath[game.path] ?? 0
@@ -997,6 +1012,28 @@ function App() {
             <p key={note}>Note: {note}</p>
           ))}
           {game.metadata.tags.length ? <p>Tags: {game.metadata.tags.join(', ')}</p> : null}
+          {showActions ? (
+            <div className="game-card__actions game-card__actions--floating">
+              <button
+                className="button button--play button--icon button--icon-only"
+                type="button"
+                onClick={(event) => handlePlayClick(game, event)}
+                aria-label={actionLabels.play}
+                title={actionLabels.play}
+              >
+                <Play size={16} aria-hidden="true" />
+              </button>
+              <button
+                className="button button--icon button--icon-only"
+                type="button"
+                onClick={(event) => handleOpenDetail(game, event)}
+                aria-label={actionLabels.open}
+                title={actionLabels.open}
+              >
+                <ArrowRight size={16} aria-hidden="true" />
+              </button>
+            </div>
+          ) : null}
         </div>
       </article>
     );
@@ -1019,11 +1056,23 @@ function App() {
 
     const commonActions = (
       <div className="game-card__actions">
-        <button className="button button--icon" type="button" onClick={(event) => handlePlayClick(game, event)}>
-          Play
+        <button
+          className="button button--play button--icon button--icon-only"
+          type="button"
+          onClick={(event) => handlePlayClick(game, event)}
+          aria-label={actionLabels.play}
+          title={actionLabels.play}
+        >
+          <Play size={16} aria-hidden="true" />
         </button>
-        <button className="button button--icon" type="button" onClick={(event) => handleOpenDetail(game, event)}>
-          Open
+        <button
+          className="button button--icon button--icon-only"
+          type="button"
+          onClick={(event) => handleOpenDetail(game, event)}
+          aria-label={actionLabels.open}
+          title={actionLabels.open}
+        >
+          <ArrowRight size={16} aria-hidden="true" />
         </button>
       </div>
     );
@@ -1050,13 +1099,34 @@ function App() {
             <h3>{game.name}</h3>
             <p>{game.versionCount} versions</p>
           </div>
-          <div className="game-card__compact-meta">
-            <p><strong>Status:</strong> {game.metadata.status || 'Not set'}</p>
-            <p><strong>Score:</strong> {game.metadata.score || 'Not set'}</p>
-            <p className="game-card__compact-description"><strong>Description:</strong> {compactDescription || 'No description yet.'}</p>
-            <p><strong>Tags:</strong> {compactTags.length ? compactTags.join(', ') : 'None'}</p>
+          <div className="game-card__compact-main">
+            <div className="game-card__compact-meta">
+              <p><strong>Status:</strong> {game.metadata.status || 'Not set'}</p>
+              <p><strong>Score:</strong> {game.metadata.score || 'Not set'}</p>
+              <p className="game-card__compact-description"><strong>Description:</strong> {compactDescription || 'No description yet.'}</p>
+              <p><strong>Tags:</strong> {compactTags.length ? compactTags.join(', ') : 'None'}</p>
+            </div>
+            <div className="game-card__actions game-card__actions--stacked">
+              <button
+                className="button button--play button--icon button--icon-only"
+                type="button"
+                onClick={(event) => handlePlayClick(game, event)}
+                aria-label={actionLabels.play}
+                title={actionLabels.play}
+              >
+                <Play size={16} aria-hidden="true" />
+              </button>
+              <button
+                className="button button--icon button--icon-only"
+                type="button"
+                onClick={(event) => handleOpenDetail(game, event)}
+                aria-label={actionLabels.open}
+                title={actionLabels.open}
+              >
+                <ArrowRight size={16} aria-hidden="true" />
+              </button>
+            </div>
           </div>
-          {commonActions}
         </article>
       );
     }
@@ -1092,25 +1162,46 @@ function App() {
           onContextMenu={onGameContextMenu}
         >
           {art}
-          <div className="game-card__body">
-            <h3>{game.name}</h3>
-            <p>Status: {game.metadata.status || 'Not set'}</p>
-            <p>Score: {game.metadata.score || 'Not set'}</p>
-            <p>Tags: {game.metadata.tags.length ? game.metadata.tags.join(', ') : 'None'}</p>
-            <p>{game.metadata.description || 'No description yet.'}</p>
-            {game.metadata.notes.filter(Boolean).slice(0, 2).map((note) => (
-              <p key={note}>Note: {note}</p>
-            ))}
-            {bootstrapText ? <p>Bootstrapped: {bootstrapText}</p> : null}
-            {commonActions}
-            <ul className="version-list">
-              {game.versions.map((version) => (
-                <li key={version.path}>
-                  <span>{version.name}</span>
-                  <span>{version.hasNfo ? 'nfo' : 'no nfo'}</span>
-                </li>
+          <div className="game-card__body game-card__body--expanded">
+            <div>
+              <h3>{game.name}</h3>
+              <p>Status: {game.metadata.status || 'Not set'}</p>
+              <p>Score: {game.metadata.score || 'Not set'}</p>
+              <p>Tags: {game.metadata.tags.length ? game.metadata.tags.join(', ') : 'None'}</p>
+              <p>{game.metadata.description || 'No description yet.'}</p>
+              {game.metadata.notes.filter(Boolean).slice(0, 2).map((note) => (
+                <p key={note}>Note: {note}</p>
               ))}
-            </ul>
+              {bootstrapText ? <p>Bootstrapped: {bootstrapText}</p> : null}
+              <ul className="version-list">
+                {game.versions.map((version) => (
+                  <li key={version.path}>
+                    <span>{version.name}</span>
+                    <span>{version.hasNfo ? 'nfo' : 'no nfo'}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="game-card__actions game-card__actions--stacked">
+              <button
+                className="button button--play button--icon button--icon-only"
+                type="button"
+                onClick={(event) => handlePlayClick(game, event)}
+                aria-label={actionLabels.play}
+                title={actionLabels.play}
+              >
+                <Play size={16} aria-hidden="true" />
+              </button>
+              <button
+                className="button button--icon button--icon-only"
+                type="button"
+                onClick={(event) => handleOpenDetail(game, event)}
+                aria-label={actionLabels.open}
+                title={actionLabels.open}
+              >
+                <ArrowRight size={16} aria-hidden="true" />
+              </button>
+            </div>
           </div>
         </article>
       );
@@ -1172,18 +1263,39 @@ function App() {
                 onChange={(event) => setSearchQuery(event.target.value)}
               />
             </label>
-            <button className="button" type="button" onClick={() => setIsFilterPanelOpen((current) => !current)}>
-              {isFilterPanelOpen ? 'Hide filters' : 'Show filters'}
-            </button>
           </div>
-          <button className="button" type="button" onClick={() => setIsSidebarOpen((current) => !current)}>
-            {isSidebarOpen ? 'Hide setup' : 'Show setup'}
+          <button
+            className={`button button--icon-only ${isFilterPanelOpen ? 'is-active' : ''}`}
+            type="button"
+            onClick={() => setIsFilterPanelOpen((current) => !current)}
+            aria-pressed={isFilterPanelOpen}
+            aria-label={isFilterPanelOpen ? actionLabels.hideFilters : actionLabels.showFilters}
+            title={isFilterPanelOpen ? actionLabels.hideFilters : actionLabels.showFilters}
+          >
+            <SlidersHorizontal size={16} aria-hidden="true" />
           </button>
-          <button className="button" type="button" onClick={() => void refreshScan()} disabled={isScanning}>
-            {isScanning ? 'Scanning...' : 'Rescan'}
+          <button
+            className={`button button--icon-only ${isSidebarOpen ? 'is-active' : ''}`}
+            type="button"
+            onClick={() => setIsSidebarOpen((current) => !current)}
+            aria-pressed={isSidebarOpen}
+            aria-label={isSidebarOpen ? actionLabels.hideSetup : actionLabels.showSetup}
+            title={isSidebarOpen ? actionLabels.hideSetup : actionLabels.showSetup}
+          >
+            <Settings size={16} aria-hidden="true" />
+          </button>
+          <button
+            className={`button button--icon-only ${isScanning ? 'is-busy' : ''}`}
+            type="button"
+            onClick={() => void refreshScan()}
+            disabled={isScanning}
+            aria-label={isScanning ? actionLabels.scanning : actionLabels.rescan}
+            title={isScanning ? actionLabels.scanning : actionLabels.rescan}
+          >
+            <RefreshCw size={16} aria-hidden="true" className={isScanning ? 'icon-spin' : undefined} />
           </button>
           <button className="button button--primary" type="button" onClick={pickRoot} disabled={isSaving}>
-            {isSaving ? 'Saving...' : 'Choose library folder'}
+            {isSaving ? actionLabels.saving : actionLabels.chooseLibraryFolder}
           </button>
         </div>
         {isFilterPanelOpen ? (
@@ -1553,15 +1665,27 @@ function App() {
           {detailGame ? (
             <section className="detail-page" style={contentScaleStyle}>
               <header className="detail-page__header">
-                <button className="button" type="button" onClick={() => setDetailGamePath(null)}>
-                  Back
+                <button
+                  className="button button--icon-only"
+                  type="button"
+                  onClick={() => setDetailGamePath(null)}
+                  aria-label={actionLabels.back}
+                  title={actionLabels.back}
+                >
+                  <ArrowLeft size={16} aria-hidden="true" />
                 </button>
                 <h2>{detailGame.name}</h2>
-                <button className="button button--primary" type="button" onClick={(event) => handlePlayClick(detailGame, event)}>
-                  Play
+                <button
+                  className="button button--play button--icon-only"
+                  type="button"
+                  onClick={(event) => handlePlayClick(detailGame, event)}
+                  aria-label={actionLabels.play}
+                  title={actionLabels.play}
+                >
+                  <Play size={16} aria-hidden="true" />
                 </button>
               </header>
-              {renderFocusCard(detailGame, true)}
+              {renderFocusCard(detailGame, true, false)}
               <section className="detail-section panel">
                 <div className="detail-section__header">
                   <h3>All metadata</h3>

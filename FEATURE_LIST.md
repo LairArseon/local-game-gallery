@@ -26,9 +26,9 @@ Status options:
 - [4. Quick Folder Navigation from Game and Version Menus](#4-quick-folder-navigation-from-game-and-version-menus) - `planned`
 - [5. Filter Pane Redesign (Tag Bubbles + Condensed Layout)](#5-filter-pane-redesign-tag-bubbles--condensed-layout) - `planned`
 - [6. Top Bar Action Prioritization + F5 Rescan Shortcut](#6-top-bar-action-prioritization--f5-rescan-shortcut) - `planned`
-- [7. Consistent Open/Play Actions in Focused Views](#7-consistent-openplay-actions-in-focused-views) - `idea`
+- [7. Consistent Open/Play Actions in Focused Views](#7-consistent-openplay-actions-in-focused-views) - `done`
 - [8. Adjustable Text and Padding Scaling Across Views](#8-adjustable-text-and-padding-scaling-across-views) - `done`
-- [9. Action Label Wording Refresh (Top Bar + Game Actions)](#9-action-label-wording-refresh-top-bar--game-actions) - `in-progress`
+- [9. Action Label Wording Refresh (Top Bar + Game Actions)](#9-action-label-wording-refresh-top-bar--game-actions) - `done`
 
 ---
 
@@ -284,9 +284,14 @@ Adjust top-bar button priorities:
 
 ## 7. Consistent Open/Play Actions in Focused Views
 
-- Status: `idea`
+- Status: `done`
 - Priority: `medium`
 - Goal: Keep game actions consistent by ensuring both `Open` and `Play` are available in focused game views.
+
+### Work note
+
+- Promoted to in-progress on 2026-04-10 as next implementation target after Feature 9.
+- Completed on 2026-04-10 with `Play` and `Open` actions available in focused panels and open/detail-focused layouts.
 
 ### Summary
 
@@ -381,7 +386,7 @@ When users increase grid density (for example, adding more columns in card view)
 
 ## 9. Action Label Wording Refresh (Top Bar + Game Actions)
 
-- Status: `in-progress`
+- Status: `done`
 - Priority: `medium`
 - Goal: Replace current action wording with clearer labels across top-bar and game-level actions while keeping behavior unchanged.
 
@@ -389,6 +394,11 @@ When users increase grid density (for example, adding more columns in card view)
 
 - Started on 2026-04-10 as next recommended task after Feature 8 completion.
 - Initial implementation pass will centralize action label strings before applying revised wording values.
+- Centralized core action labels in renderer so top-bar/detail/game actions share one label source.
+- Updated action placement: list views (compact/expanded) now stack actions on the right side, while poster/card keep bottom action placement.
+- Added focus-card action placement in bottom-right area with `Play` and `Open` actions.
+- Replaced agreed action wording with Lucide icon buttons for `Rescan`, `Show/Hide setup`, `Show/Hide filters`, `Play`, `Open`, and `Back`.
+- Marked complete on 2026-04-10 after implementation and build validation.
 
 ### Summary
 

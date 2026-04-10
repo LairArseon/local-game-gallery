@@ -13,3 +13,9 @@
 .game-card--expanded .media-preview--cover {
   object-fit: contain;
 }
+
+.game-card__body--expanded {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
