@@ -1,6 +1,31 @@
-﻿import { FormEvent, Fragment, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { ArrowLeft, ArrowRight, ChevronDown, FolderOpen, Play, RefreshCw, Settings, SlidersHorizontal, Tag } from 'lucide-react';
+﻿/**
+ * App shell and state orchestration for Local Game Gallery.
+ *
+ * This component owns application-level state, IPC interactions,
+ * and delegates most UI rendering to focused child components.
+ */
+import { FormEvent, Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { ArrowRight, RefreshCw, Settings, SlidersHorizontal, Tag } from 'lucide-react';
 import type { FilterOrderByMode, FilterPreset, GalleryConfig, GalleryViewMode, GameMetadata, GameSummary, ScanResult } from './types';
+import { DetailPage } from './components/DetailPage';
+import { FilterPanel } from './components/FilterPanel';
+import { FocusCard } from './components/FocusCard';
+import { GameCard } from './components/GameCard';
+import { LogViewerModal } from './components/LogViewerModal';
+import { MediaModal } from './components/MediaModal';
+import { MetadataModal } from './components/MetadataModal';
+import { SetupPanel } from './components/SetupPanel';
+import { TagPoolPanel } from './components/TagPoolPanel';
+import {
+  clamp,
+  computeTagPoolUsage,
+  formatLastPlayed,
+  isTypingTarget,
+  normalizeMetadataTags,
+  normalizeTagPool,
+  normalizeTagRules,
+  normalizedScore,
+} from './utils/app-helpers';
 
 const emptyScan: ScanResult = {
   rootPath: '',
@@ -29,19 +54,6 @@ const dynamicScaleBaselineColumns: Record<'poster' | 'card', number> = {
   card: 4,
 };
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function isTypingTarget(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-
-  const tagName = target.tagName.toLowerCase();
-  return target.isContentEditable || tagName === 'input' || tagName === 'textarea' || tagName === 'select';
-}
-
 const orderByModeLabels: Record<FilterOrderByMode, string> = {
   'alpha-asc': 'Alphabetically up',
   'alpha-desc': 'Alphabetically down',
@@ -64,228 +76,6 @@ const actionLabels = {
   chooseLibraryFolder: 'Choose library folder',
   saving: 'Saving...',
 } as const;
-
-type CustomSelectOption = {
-  value: string;
-  label: string;
-};
-
-type CustomSelectProps = {
-  value: string;
-  options: CustomSelectOption[];
-  ariaLabel: string;
-  onChange: (value: string) => void;
-  className?: string;
-};
-
-function CustomSelect({ value, options, ariaLabel, onChange, className }: CustomSelectProps) {
-  const menuId = useId();
-  const [isOpen, setIsOpen] = useState(false);
-  const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
-
-  const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
-
-  useEffect(() => {
-    setHighlightedIndex(selectedIndex);
-  }, [selectedIndex, isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    const handlePointerDown = (event: MouseEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) {
-        return;
-      }
-
-      if (rootRef.current?.contains(target)) {
-        return;
-      }
-
-      setIsOpen(false);
-    };
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsOpen(false);
-      }
-    };
-
-    window.addEventListener('mousedown', handlePointerDown);
-    window.addEventListener('keydown', handleEscape);
-    return () => {
-      window.removeEventListener('mousedown', handlePointerDown);
-      window.removeEventListener('keydown', handleEscape);
-    };
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    optionRefs.current[highlightedIndex]?.focus();
-  }, [highlightedIndex, isOpen]);
-
-  function moveHighlight(delta: number) {
-    setHighlightedIndex((current) => {
-      if (!options.length) {
-        return 0;
-      }
-
-      return (current + delta + options.length) % options.length;
-    });
-  }
-
-  function commitHighlightedOption() {
-    const nextOption = options[highlightedIndex];
-    if (!nextOption) {
-      return;
-    }
-
-    onChange(nextOption.value);
-    setIsOpen(false);
-    triggerRef.current?.focus();
-  }
-
-  function handleTriggerKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      if (!isOpen) {
-        setHighlightedIndex(selectedIndex);
-        setIsOpen(true);
-        return;
-      }
-
-      moveHighlight(1);
-      return;
-    }
-
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      if (!isOpen) {
-        setHighlightedIndex(selectedIndex);
-        setIsOpen(true);
-        return;
-      }
-
-      moveHighlight(-1);
-      return;
-    }
-
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      if (!isOpen) {
-        setIsOpen(true);
-        return;
-      }
-
-      commitHighlightedOption();
-      return;
-    }
-
-    if (event.key === 'Escape' && isOpen) {
-      event.preventDefault();
-      setIsOpen(false);
-    }
-  }
-
-  function handleMenuKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      moveHighlight(1);
-      return;
-    }
-
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      moveHighlight(-1);
-      return;
-    }
-
-    if (event.key === 'Home') {
-      event.preventDefault();
-      setHighlightedIndex(0);
-      return;
-    }
-
-    if (event.key === 'End') {
-      event.preventDefault();
-      setHighlightedIndex(Math.max(0, options.length - 1));
-      return;
-    }
-
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      commitHighlightedOption();
-      return;
-    }
-
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      setIsOpen(false);
-      triggerRef.current?.focus();
-      return;
-    }
-
-    if (event.key === 'Tab') {
-      setIsOpen(false);
-    }
-  }
-
-  const selectedOption = options.find((option) => option.value === value) ?? options[0];
-
-  return (
-    <div className={`custom-select ${className ?? ''}`.trim()} ref={rootRef}>
-      <button
-        ref={triggerRef}
-        type="button"
-        className="custom-select__trigger"
-        aria-haspopup="listbox"
-        aria-label={ariaLabel}
-        aria-expanded={isOpen}
-        aria-controls={menuId}
-        aria-activedescendant={isOpen ? `${menuId}-option-${highlightedIndex}` : undefined}
-        onClick={() => setIsOpen((current) => !current)}
-        onKeyDown={handleTriggerKeyDown}
-      >
-        <span>{selectedOption?.label ?? ''}</span>
-        <ChevronDown size={15} aria-hidden="true" />
-      </button>
-      {isOpen ? (
-        <div className="custom-select__menu" id={menuId} role="listbox" aria-label={ariaLabel} onKeyDown={handleMenuKeyDown}>
-          {options.map((option, index) => (
-            <button
-              key={option.value || '__empty__'}
-              ref={(element) => {
-                optionRefs.current[index] = element;
-              }}
-              id={`${menuId}-option-${index}`}
-              type="button"
-              role="option"
-              aria-selected={value === option.value}
-              tabIndex={index === highlightedIndex ? 0 : -1}
-              className={`custom-select__option ${value === option.value ? 'custom-select__option--selected' : ''}`}
-              onClick={() => {
-                onChange(option.value);
-                setIsOpen(false);
-                triggerRef.current?.focus();
-              }}
-              onMouseEnter={() => setHighlightedIndex(index)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
 function App() {
   const [config, setConfig] = useState<GalleryConfig | null>(null);
@@ -700,22 +490,6 @@ function App() {
     setMediaModalGamePath(gamePath);
   }
 
-  function extractDroppedFilePaths(event: React.DragEvent<HTMLElement>) {
-    return Array.from(event.dataTransfer.files)
-      .map((file) => (file as File & { path?: string }).path)
-      .filter((value): value is string => Boolean(value));
-  }
-
-  function extractDraggedScreenshotPath(event: React.DragEvent<HTMLElement>) {
-    const pathFromTransfer = event.dataTransfer.getData('application/x-local-gallery-screenshot').trim();
-    if (pathFromTransfer) {
-      return pathFromTransfer;
-    }
-
-    const fallbackText = event.dataTransfer.getData('text/plain').trim();
-    return fallbackText || null;
-  }
-
   async function saveMetadataChanges() {
     const game = scanResult.games.find((candidate) => candidate.path === metadataModalGamePath);
     if (!game || !metadataDraft) {
@@ -852,79 +626,8 @@ function App() {
     return `${base}?v=${mediaRenderVersion}`;
   }
 
-  function formatLastPlayed(value: string | null) {
-    if (!value) {
-      return 'Never';
-    }
-
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) {
-      return value;
-    }
-
-    return parsed.toLocaleString(undefined, {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  }
-
   function toggleGameSelection(path: string) {
     setSelectedGamePath((current) => (current === path ? null : path));
-  }
-
-  function normalizeTagRules(rules: string[]) {
-    return rules.map((entry) => entry.trim()).filter(Boolean);
-  }
-
-  function normalizeTagPool(pool: string[]) {
-    const uniqueTags = new Map<string, string>();
-    for (const tag of pool) {
-      const normalized = tag.trim();
-      if (!normalized) {
-        continue;
-      }
-
-      const key = normalized.toLowerCase();
-      if (!uniqueTags.has(key)) {
-        uniqueTags.set(key, normalized);
-      }
-    }
-
-    return [...uniqueTags.values()].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
-  }
-
-  function normalizeMetadataTags(tags: string[]) {
-    const uniqueTags = new Map<string, string>();
-    for (const tag of tags) {
-      const normalized = tag.trim();
-      if (!normalized) {
-        continue;
-      }
-
-      const key = normalized.toLowerCase();
-      if (!uniqueTags.has(key)) {
-        uniqueTags.set(key, normalized);
-      }
-    }
-
-    return [...uniqueTags.values()];
-  }
-
-  function computeTagPoolUsage(pool: string[], games: GameSummary[]) {
-    return Object.fromEntries(
-      normalizeTagPool(pool).map((tag) => {
-        const normalizedTag = tag.toLowerCase();
-        const usage = games.reduce((count, game) => {
-          const gameHasTag = game.metadata.tags.some((entry) => entry.trim().toLowerCase() === normalizedTag);
-          return gameHasTag ? count + 1 : count;
-        }, 0);
-
-        return [tag, usage];
-      }),
-    );
   }
 
   function tagExistsInAnyGame(tag: string) {
@@ -1316,11 +1019,6 @@ function App() {
     setAppliedOrderBy(draftOrderBy);
   }
 
-  function normalizedScore(value: string) {
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
-  }
-
   const filteredGames = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     const includeTags = appliedTagRules
@@ -1634,26 +1332,18 @@ function App() {
     };
   }, [screenshotModalPath]);
 
+  const mediaModalGame = useMemo(
+    () => scanResult.games.find((candidate) => candidate.path === mediaModalGamePath) ?? null,
+    [scanResult.games, mediaModalGamePath],
+  );
+
   if (!config) {
     return <main className="shell"><section className="panel panel--loading">{status}</section></main>;
   }
 
   function renderFocusCard(game: GameSummary, isVertical: boolean, showActions = true) {
     const hasScreenshotCarousel = game.media.screenshots.length > 0;
-    const carouselIndex = hasScreenshotCarousel
-      ? focusCarouselIndexByGamePath[game.path] ?? 0
-      : 0;
-    const normalizedCarouselIndex = hasScreenshotCarousel
-      ? ((carouselIndex % game.media.screenshots.length) + game.media.screenshots.length) % game.media.screenshots.length
-      : 0;
-    const focusImgSrc = hasScreenshotCarousel
-      ? filePathToSrc(game.media.screenshots[normalizedCarouselIndex] ?? null)
-      : isVertical
-        ? filePathToSrc(game.media.poster ?? game.media.card)
-        : filePathToSrc(game.media.card ?? game.media.poster);
-    const currentCarouselImagePath = hasScreenshotCarousel
-      ? game.media.screenshots[normalizedCarouselIndex] ?? null
-      : null;
+    const carouselIndex = hasScreenshotCarousel ? (focusCarouselIndexByGamePath[game.path] ?? 0) : 0;
 
     const moveFocusCarousel = (delta: number) => {
       if (!hasScreenshotCarousel) {
@@ -1670,270 +1360,41 @@ function App() {
     };
 
     return (
-      <article className={`focus-card panel ${isVertical ? 'focus-card--vertical' : 'focus-card--wide'}`}>
-        <div className={`game-card__art ${game.usesPlaceholderArt ? 'game-card__art--placeholder' : ''}`}>
-          {hasScreenshotCarousel && focusImgSrc && currentCarouselImagePath ? (
-            <button
-              type="button"
-              className="focus-carousel-image-button"
-              onClick={(event) => {
-                event.stopPropagation();
-                setScreenshotModalPath(currentCarouselImagePath);
-              }}
-            >
-              <img src={focusImgSrc} alt={game.name} className="media-preview media-preview--cover" />
-            </button>
-          ) : focusImgSrc ? (
-            <img src={focusImgSrc} alt={game.name} className="media-preview media-preview--cover" />
-          ) : null}
-          {hasScreenshotCarousel && game.media.screenshots.length > 1 ? (
-            <div className="focus-carousel-controls">
-              <button
-                className="button button--icon"
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  moveFocusCarousel(-1);
-                }}
-                aria-label="Previous screenshot"
-              >
-                Prev
-              </button>
-              <span>{normalizedCarouselIndex + 1}/{game.media.screenshots.length}</span>
-              <button
-                className="button button--icon"
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  moveFocusCarousel(1);
-                }}
-                aria-label="Next screenshot"
-              >
-                Next
-              </button>
-            </div>
-          ) : null}
-          <span>{game.usesPlaceholderArt ? 'Using placeholder art' : `${game.imageCount} images`}</span>
-        </div>
-        <div className="focus-card__content">
-          <h3>{game.name}</h3>
-          <p>Latest version: {game.metadata.latestVersion || 'Unknown'}</p>
-          <p>Status: {game.metadata.status || 'Not set'}</p>
-          <p>Score: {game.metadata.score || 'Not set'}</p>
-          <p>Last date played: {formatLastPlayed(game.lastPlayedAt)}</p>
-          <p>{game.metadata.description || 'No description yet.'}</p>
-          {game.metadata.notes.filter(Boolean).slice(0, 2).map((note) => (
-            <p key={note}>Note: {note}</p>
-          ))}
-          {game.metadata.tags.length ? <p>Tags: {game.metadata.tags.join(', ')}</p> : null}
-          {showActions ? (
-            <div className="game-card__actions game-card__actions--floating">
-              <button
-                className="button button--play button--icon button--icon-only"
-                type="button"
-                onClick={(event) => handlePlayClick(game, event)}
-                aria-label={actionLabels.play}
-                title={actionLabels.play}
-              >
-                <Play size={16} aria-hidden="true" />
-              </button>
-              <button
-                className="button button--icon button--icon-only"
-                type="button"
-                onClick={(event) => handleOpenDetail(game, event)}
-                aria-label={actionLabels.open}
-                title={actionLabels.open}
-              >
-                <ArrowRight size={16} aria-hidden="true" />
-              </button>
-            </div>
-          ) : null}
-        </div>
-      </article>
+      <FocusCard
+        game={game}
+        isVertical={isVertical}
+        showActions={showActions}
+        carouselIndex={carouselIndex}
+        getImageSrc={filePathToSrc}
+        onMoveCarousel={moveFocusCarousel}
+        onOpenScreenshot={setScreenshotModalPath}
+        onPlayClick={handlePlayClick}
+        onOpenDetail={handleOpenDetail}
+        actionLabels={actionLabels}
+      />
     );
   }
 
   function renderGame(game: GameSummary) {
-    const artImgSrc = filePathToSrc(viewMode === 'poster' ? game.media.poster : game.media.card);
-    const art = (
-      <div className={`game-card__art ${game.usesPlaceholderArt ? 'game-card__art--placeholder' : ''}`}>
-        {artImgSrc ? (
-          <img src={artImgSrc} alt={game.name} className="media-preview media-preview--cover" />
-        ) : null}
-        <span>{game.usesPlaceholderArt ? 'Using placeholder art' : `${game.imageCount} images`}</span>
-      </div>
-    );
-
-    const bootstrapText = `${game.createdPicturesFolder ? 'pictures folder ' : ''}${game.createdGameNfo ? 'game.nfo ' : ''}${
-      game.createdVersionNfoCount > 0 ? `${game.createdVersionNfoCount} version nfo files` : ''
-    }`.trim();
-
-    const commonActions = (
-      <div className="game-card__actions">
-        <button
-          className="button button--play button--icon button--icon-only"
-          type="button"
-          onClick={(event) => handlePlayClick(game, event)}
-          aria-label={actionLabels.play}
-          title={actionLabels.play}
-        >
-          <Play size={16} aria-hidden="true" />
-        </button>
-        <button
-          className="button button--icon button--icon-only"
-          type="button"
-          onClick={(event) => handleOpenDetail(game, event)}
-          aria-label={actionLabels.open}
-          title={actionLabels.open}
-        >
-          <ArrowRight size={16} aria-hidden="true" />
-        </button>
-      </div>
-    );
-
-    const onGameContextMenu = (event: React.MouseEvent<HTMLElement>) => {
-      event.preventDefault();
-      void window.gallery.showGameContextMenu({
-        gamePath: game.path,
-        gameName: game.name,
-      });
-    };
-
-    if (viewMode === 'compact') {
-      const compactDescription = game.metadata.description.trim();
-      const compactTags = game.metadata.tags.map((tag) => tag.trim()).filter(Boolean);
-      return (
-        <article
-          className={`game-card game-card--compact ${selectedGamePath === game.path ? 'game-card--selected' : ''}`}
-          key={game.path}
-          onClick={() => toggleGameSelection(game.path)}
-          onContextMenu={onGameContextMenu}
-        >
-          <div className="game-card__row">
-            <h3>{game.name}</h3>
-          </div>
-          <div className="game-card__compact-main">
-            <div className="game-card__compact-meta">
-              <p><strong>Status:</strong> {game.metadata.status || 'Not set'}</p>
-              <p><strong>Score:</strong> {game.metadata.score || 'Not set'}</p>
-              <p className="game-card__compact-description"><strong>Description:</strong> {compactDescription || 'No description yet.'}</p>
-              <p><strong>Tags:</strong> {compactTags.length ? compactTags.join(', ') : 'None'}</p>
-            </div>
-            <div className="game-card__actions game-card__actions--stacked">
-              <button
-                className="button button--play button--icon button--icon-only"
-                type="button"
-                onClick={(event) => handlePlayClick(game, event)}
-                aria-label={actionLabels.play}
-                title={actionLabels.play}
-              >
-                <Play size={16} aria-hidden="true" />
-              </button>
-              <button
-                className="button button--icon button--icon-only"
-                type="button"
-                onClick={(event) => handleOpenDetail(game, event)}
-                aria-label={actionLabels.open}
-                title={actionLabels.open}
-              >
-                <ArrowRight size={16} aria-hidden="true" />
-              </button>
-            </div>
-          </div>
-        </article>
-      );
-    }
-
-    if (viewMode === 'card') {
-      return (
-        <article
-          className={`game-card game-card--card ${selectedGamePath === game.path ? 'game-card--selected' : ''}`}
-          key={game.path}
-          onClick={() => toggleGameSelection(game.path)}
-          onContextMenu={onGameContextMenu}
-        >
-          {art}
-          <div className="game-card__body">
-            <h3>{game.name}</h3>
-            <p>Latest version: {game.metadata.latestVersion || 'Unknown'}</p>
-            <p>Status: {game.metadata.status || 'Not set'}</p>
-            <p>Score: {game.metadata.score || 'Not set'}</p>
-            <p>Tags: {game.metadata.tags.length ? game.metadata.tags.join(', ') : 'None'}</p>
-            {commonActions}
-          </div>
-        </article>
-      );
-    }
-
-    if (viewMode === 'expanded') {
-      return (
-        <article
-          className={`game-card game-card--expanded ${selectedGamePath === game.path ? 'game-card--selected' : ''}`}
-          key={game.path}
-          onClick={() => toggleGameSelection(game.path)}
-          onContextMenu={onGameContextMenu}
-        >
-          {art}
-          <div className="game-card__body game-card__body--expanded">
-            <div>
-              <h3>{game.name}</h3>
-              <p>Status: {game.metadata.status || 'Not set'}</p>
-              <p>Score: {game.metadata.score || 'Not set'}</p>
-              <p>Tags: {game.metadata.tags.length ? game.metadata.tags.join(', ') : 'None'}</p>
-              <p>{game.metadata.description || 'No description yet.'}</p>
-              {game.metadata.notes.filter(Boolean).slice(0, 2).map((note) => (
-                <p key={note}>Note: {note}</p>
-              ))}
-              {bootstrapText ? <p>Bootstrapped: {bootstrapText}</p> : null}
-              <ul className="version-list">
-                {game.versions.map((version) => (
-                  <li key={version.path}>
-                    <span>{version.name}</span>
-                    <span>{version.hasNfo ? 'nfo' : 'no nfo'}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="game-card__actions game-card__actions--stacked">
-              <button
-                className="button button--play button--icon button--icon-only"
-                type="button"
-                onClick={(event) => handlePlayClick(game, event)}
-                aria-label={actionLabels.play}
-                title={actionLabels.play}
-              >
-                <Play size={16} aria-hidden="true" />
-              </button>
-              <button
-                className="button button--icon button--icon-only"
-                type="button"
-                onClick={(event) => handleOpenDetail(game, event)}
-                aria-label={actionLabels.open}
-                title={actionLabels.open}
-              >
-                <ArrowRight size={16} aria-hidden="true" />
-              </button>
-            </div>
-          </div>
-        </article>
-      );
-    }
-
     return (
-      <article
-        className={`game-card game-card--poster ${selectedGamePath === game.path ? 'game-card--selected' : ''}`}
+      <GameCard
         key={game.path}
-        onClick={() => toggleGameSelection(game.path)}
-        onContextMenu={onGameContextMenu}
-      >
-        {art}
-        <div className="game-card__body">
-          <h3>{game.name}</h3>
-          <p>Status: {game.metadata.status || 'Not set'}</p>
-          <p>Score: {game.metadata.score || 'Not set'}</p>
-          {commonActions}
-        </div>
-      </article>
+        game={game}
+        viewMode={viewMode}
+        isSelected={selectedGamePath === game.path}
+        actionLabels={actionLabels}
+        getImageSrc={filePathToSrc}
+        onToggleSelection={toggleGameSelection}
+        onPlayClick={handlePlayClick}
+        onOpenDetail={handleOpenDetail}
+        onContextMenu={(targetGame, event) => {
+          event.preventDefault();
+          void window.gallery.showGameContextMenu({
+            gamePath: targetGame.path,
+            gameName: targetGame.name,
+          });
+        }}
+      />
     );
   }
 
@@ -2018,739 +1479,198 @@ function App() {
           </button>
         </div>
         {isTagPoolPanelOpen ? (
-          <section className="topbar-filters topbar-tag-pool">
-            <div className="topbar-filters__heading">
-              <strong>Tag pool</strong>
-            </div>
-            <p className="topbar-filters__hint">Click a bubble to edit. Right-click to remove only when unused by all games.</p>
-            <div className="tag-bubbles">
-              {config.tagPool.map((tag, index) => {
-                const isEditing = activeTagPoolEditorIndex === index;
-                const bubbleLabel = tag.trim() || 'Empty tag';
-                const usageCount = Number.isFinite(config.tagPoolUsage?.[tag]) ? config.tagPoolUsage[tag] : 0;
-
-                if (isEditing) {
-                  return (
-                    <div className="tag-bubble tag-bubble--editing" key={`pool-tag-${index}`}>
-                      <div className="tag-autocomplete">
-                        <input
-                          type="text"
-                          autoFocus
-                          value={tag}
-                          placeholder="example: roguelike"
-                          onFocus={() => setActiveTagAutocomplete({ scope: 'pool', index, highlighted: 0 })}
-                          onBlur={() => {
-                            window.setTimeout(() => {
-                              void finalizeTagPoolEdit(index);
-                            }, 100);
-                          }}
-                          onKeyDown={(event) => {
-                            handleTagAutocompleteKeyDown(event, 'pool', index);
-                            if (event.key === 'Enter' || event.key === 'Escape') {
-                              event.preventDefault();
-                              void finalizeTagPoolEdit(index);
-                            }
-                          }}
-                          onChange={(event) => {
-                            setConfig((current) => {
-                              if (!current) {
-                                return current;
-                              }
-
-                              return {
-                                ...current,
-                                tagPool: current.tagPool.map((entry, tagIndex) => (tagIndex === index ? event.target.value : entry)),
-                              };
-                            });
-                            setActiveTagAutocomplete({ scope: 'pool', index, highlighted: 0 });
-                          }}
-                        />
-                        {activeTagAutocomplete?.scope === 'pool' && activeTagAutocomplete.index === index && activeTagSuggestions.length ? (
-                          <div className="tag-autocomplete__menu">
-                            {activeTagSuggestions.map((suggestion, suggestionIndex) => (
-                              <button
-                                key={`${suggestion}-${suggestionIndex}`}
-                                className={`tag-autocomplete__item ${activeTagAutocomplete.highlighted === suggestionIndex ? 'tag-autocomplete__item--active' : ''}`}
-                                type="button"
-                                onMouseDown={(event) => {
-                                  event.preventDefault();
-                                  applyTagSuggestion('pool', index, suggestion);
-                                }}
-                              >
-                                {suggestion}
-                              </button>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  );
+          <TagPoolPanel
+            tagPool={config.tagPool}
+            tagPoolUsage={config.tagPoolUsage}
+            activeTagPoolEditorIndex={activeTagPoolEditorIndex}
+            activeTagAutocomplete={activeTagAutocomplete}
+            activeTagSuggestions={activeTagSuggestions}
+            onStartEdit={(index) => {
+              setTagPoolEditorOriginalValue(config.tagPool[index] ?? '');
+              setActiveTagPoolEditorIndex(index);
+              setActiveTagAutocomplete({ scope: 'pool', index, highlighted: 0 });
+            }}
+            onRemoveTag={(index) => {
+              void removeTagFromPoolByIndex(index);
+              setActiveTagPoolEditorIndex(null);
+              setActiveTagAutocomplete(null);
+            }}
+            onFinalizeEdit={(index) => {
+              void finalizeTagPoolEdit(index);
+            }}
+            onEditorValueChange={(index, value) => {
+              setConfig((current) => {
+                if (!current) {
+                  return current;
                 }
 
-                return (
-                  <button
-                    key={`pool-tag-${index}`}
-                    className="tag-bubble tag-bubble--suggested"
-                    type="button"
-                    title={`${bubbleLabel} (${usageCount} game${usageCount === 1 ? '' : 's'})`}
-                    onClick={() => {
-                      setTagPoolEditorOriginalValue(config.tagPool[index] ?? '');
-                      setActiveTagPoolEditorIndex(index);
-                      setActiveTagAutocomplete({ scope: 'pool', index, highlighted: 0 });
-                    }}
-                    onContextMenu={(event) => {
-                      event.preventDefault();
-                      void removeTagFromPoolByIndex(index);
-                      setActiveTagPoolEditorIndex(null);
-                      setActiveTagAutocomplete(null);
-                    }}
-                  >
-                    <span>{bubbleLabel}</span>
-                    <span className="tag-bubble__metric">{usageCount}</span>
-                  </button>
-                );
-              })}
-              <button
-                className="tag-bubble tag-bubble--add"
-                type="button"
-                onClick={() => {
-                  const nextIndex = config.tagPool.length;
-                  const nextPool = [...config.tagPool, ''];
-                  setConfig({ ...config, tagPool: nextPool });
-                  setTagPoolEditorOriginalValue('');
-                  setActiveTagPoolEditorIndex(nextIndex);
-                  setActiveTagAutocomplete({ scope: 'pool', index: nextIndex, highlighted: 0 });
-                }}
-                title="Add pool tag"
-              >
-                +
-              </button>
-            </div>
-          </section>
+                return {
+                  ...current,
+                  tagPool: current.tagPool.map((entry, tagIndex) => (tagIndex === index ? value : entry)),
+                };
+              });
+            }}
+            onSetAutocomplete={setActiveTagAutocomplete}
+            onEditorKeyDown={(event, index) => {
+              handleTagAutocompleteKeyDown(event, 'pool', index);
+              if (event.key === 'Enter' || event.key === 'Escape') {
+                event.preventDefault();
+                void finalizeTagPoolEdit(index);
+              }
+            }}
+            onApplySuggestion={(index, suggestion) => {
+              applyTagSuggestion('pool', index, suggestion);
+            }}
+            onAddTag={() => {
+              const nextIndex = config.tagPool.length;
+              const nextPool = [...config.tagPool, ''];
+              setConfig({ ...config, tagPool: nextPool });
+              setTagPoolEditorOriginalValue('');
+              setActiveTagPoolEditorIndex(nextIndex);
+              setActiveTagAutocomplete({ scope: 'pool', index: nextIndex, highlighted: 0 });
+            }}
+          />
         ) : null}
         {isFilterPanelOpen ? (
-          <section className="topbar-filters">
-            <div className="topbar-filters__grid">
-              <div className="topbar-filters__group">
-                <div className="topbar-filters__heading">
-                  <strong>Tag rules</strong>
-                </div>
-                <p className="topbar-filters__hint">Click a bubble to edit. Right-click a bubble to remove. Prefix with - to exclude.</p>
-                <div className="tag-bubbles">
-                  {draftTagRules.map((rule, index) => {
-                    const isEditing = activeFilterRuleEditorIndex === index;
-                    const normalizedRule = rule.trim();
-                    const isExclude = normalizedRule.startsWith('-');
-                    const bubbleLabel = normalizedRule || 'Empty tag';
+          <FilterPanel
+            draftTagRules={draftTagRules}
+            activeFilterRuleEditorIndex={activeFilterRuleEditorIndex}
+            activeTagAutocomplete={activeTagAutocomplete}
+            activeTagSuggestions={activeTagSuggestions}
+            topUsedFilterSuggestions={topUsedFilterSuggestions}
+            draftMinScore={draftMinScore}
+            draftOrderBy={draftOrderBy}
+            draftStatus={draftStatus}
+            orderByModeLabels={orderByModeLabels}
+            statusChoices={config.statusChoices}
+            isPresetNamingOpen={isPresetNamingOpen}
+            draftPresetName={draftPresetName}
+            isPresetSaving={isPresetSaving}
+            filterPresets={config.filterPresets}
+            onSetActiveTagAutocomplete={setActiveTagAutocomplete}
+            onStartEditRule={(index) => {
+              setActiveFilterRuleEditorIndex(index);
+              setActiveTagAutocomplete({ scope: 'filter', index, highlighted: 0 });
+            }}
+            onRemoveRule={(index) => {
+              setDraftTagRules((current) => current.filter((_, ruleIndex) => ruleIndex !== index));
+              setActiveFilterRuleEditorIndex(null);
+              setActiveTagAutocomplete(null);
+            }}
+            onFinalizeRuleBlur={(index) => {
+              setDraftTagRules((current) => {
+                const nextValue = (current[index] ?? '').trim();
+                if (nextValue) {
+                  return current;
+                }
 
-                    if (isEditing) {
-                      return (
-                        <div className="tag-bubble tag-bubble--editing" key={`filter-rule-${index}`}>
-                          <div className="tag-autocomplete">
-                            <input
-                              type="text"
-                              autoFocus
-                              value={rule}
-                              placeholder="example: roguelike or -horror"
-                              onFocus={() => setActiveTagAutocomplete({ scope: 'filter', index, highlighted: 0 })}
-                              onBlur={() => {
-                                window.setTimeout(() => {
-                                  setDraftTagRules((current) => {
-                                    const nextValue = (current[index] ?? '').trim();
-                                    if (nextValue) {
-                                      return current;
-                                    }
+                return current.filter((_, ruleIndex) => ruleIndex !== index);
+              });
+              setActiveFilterRuleEditorIndex((current) => (current === index ? null : current));
+              setActiveTagAutocomplete((current) => {
+                if (!current || current.scope !== 'filter' || current.index !== index) {
+                  return current;
+                }
 
-                                    return current.filter((_, ruleIndex) => ruleIndex !== index);
-                                  });
-                                  setActiveFilterRuleEditorIndex((current) => (current === index ? null : current));
-                                  setActiveTagAutocomplete((current) => {
-                                    if (!current || current.scope !== 'filter' || current.index !== index) {
-                                      return current;
-                                    }
-
-                                    return null;
-                                  });
-                                }, 100);
-                              }}
-                              onKeyDown={(event) => {
-                                handleTagAutocompleteKeyDown(event, 'filter', index);
-                                if (event.key === 'Enter' || event.key === 'Escape') {
-                                  setActiveFilterRuleEditorIndex(null);
-                                  setActiveTagAutocomplete(null);
-                                }
-                              }}
-                              onChange={(event) => {
-                                setDraftTagRules((current) => current.map((entry, ruleIndex) => (ruleIndex === index ? event.target.value : entry)));
-                                setActiveTagAutocomplete({ scope: 'filter', index, highlighted: 0 });
-                              }}
-                            />
-                            {activeTagAutocomplete?.scope === 'filter' && activeTagAutocomplete.index === index && activeTagSuggestions.length ? (
-                              <div className="tag-autocomplete__menu">
-                                {activeTagSuggestions.map((suggestion, suggestionIndex) => (
-                                  <button
-                                    key={`${suggestion}-${suggestionIndex}`}
-                                    className={`tag-autocomplete__item ${activeTagAutocomplete.highlighted === suggestionIndex ? 'tag-autocomplete__item--active' : ''}`}
-                                    type="button"
-                                    onMouseDown={(event) => {
-                                      event.preventDefault();
-                                      applyTagSuggestion('filter', index, suggestion);
-                                    }}
-                                  >
-                                    {suggestion}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <button
-                        key={`filter-rule-${index}`}
-                        className={`tag-bubble ${isExclude ? 'tag-bubble--exclude' : ''}`}
-                        type="button"
-                        title={bubbleLabel}
-                        onClick={() => {
-                          setActiveFilterRuleEditorIndex(index);
-                          setActiveTagAutocomplete({ scope: 'filter', index, highlighted: 0 });
-                        }}
-                        onContextMenu={(event) => {
-                          event.preventDefault();
-                          setDraftTagRules((current) => current.filter((_, ruleIndex) => ruleIndex !== index));
-                          setActiveFilterRuleEditorIndex(null);
-                          setActiveTagAutocomplete(null);
-                        }}
-                      >
-                        {bubbleLabel}
-                      </button>
-                    );
-                  })}
-                  <button
-                    className="tag-bubble tag-bubble--add"
-                    type="button"
-                    onClick={() => {
-                      const nextIndex = draftTagRules.length;
-                      setDraftTagRules((current) => [...current, '']);
-                      setActiveFilterRuleEditorIndex(nextIndex);
-                      setActiveTagAutocomplete({ scope: 'filter', index: nextIndex, highlighted: 0 });
-                    }}
-                    title="Add tag rule"
-                  >
-                    +
-                  </button>
-                </div>
-                <div className="topbar-filters__suggestions">
-                  <p className="topbar-filters__hint">Top used tags right now. Click to add as a filter.</p>
-                  <div className="tag-bubbles">
-                    {topUsedFilterSuggestions.map((entry) => (
-                      <button
-                        key={`suggestion-${entry.tag}`}
-                        className="tag-bubble tag-bubble--suggested"
-                        type="button"
-                        onClick={() => {
-                          setDraftTagRules((current) => [...current, entry.tag]);
-                          setActiveFilterRuleEditorIndex(null);
-                          setActiveTagAutocomplete(null);
-                        }}
-                        title={`Used in ${entry.count} game${entry.count === 1 ? '' : 's'}`}
-                      >
-                        <span>{entry.tag}</span>
-                        <span className="tag-bubble__metric">{entry.count}</span>
-                      </button>
-                    ))}
-                    {!topUsedFilterSuggestions.length ? (
-                      <p className="topbar-filters__hint topbar-filters__hint--inline">No available suggestions.</p>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-
-              <div className="topbar-filters__group">
-                <div className="topbar-filters__quick">
-                <label className="field topbar-filters__field">
-                  <span>Minimum score</span>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    value={draftMinScore}
-                    onChange={(event) => setDraftMinScore(event.target.value)}
-                    placeholder="Leave empty to ignore"
-                  />
-                </label>
-
-                <label className="field topbar-filters__field">
-                  <span>Order by</span>
-                  <CustomSelect
-                    className="custom-select--order"
-                    ariaLabel="Order by"
-                    value={draftOrderBy}
-                    options={(Object.keys(orderByModeLabels) as FilterOrderByMode[]).map((mode) => ({
-                      value: mode,
-                      label: orderByModeLabels[mode],
-                    }))}
-                    onChange={(nextValue) => setDraftOrderBy(nextValue as FilterOrderByMode)}
-                  />
-                </label>
-
-                <label className="field topbar-filters__field topbar-filters__field--full">
-                  <span>Status</span>
-                  <CustomSelect
-                    ariaLabel="Filter status"
-                    value={draftStatus}
-                    options={[
-                      { value: '', label: 'Any status' },
-                      ...config.statusChoices.map((statusOption) => ({ value: statusOption, label: statusOption })),
-                    ]}
-                    onChange={setDraftStatus}
-                  />
-                </label>
-                </div>
-
-              </div>
-
-              <div className="topbar-filters__group topbar-filters__group--presets">
-                <section className="topbar-presets">
-                  <div className="topbar-filters__heading">
-                    <strong>Presets</strong>
-                    {!isPresetNamingOpen ? (
-                      <button className="button button--icon" type="button" onClick={beginSavePreset}>
-                        Save preset
-                      </button>
-                    ) : null}
-                  </div>
-                  {isPresetNamingOpen ? (
-                    <div className="topbar-presets__create">
-                      <input
-                        type="text"
-                        value={draftPresetName}
-                        autoFocus
-                        placeholder="Preset name"
-                        onChange={(event) => setDraftPresetName(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault();
-                            void saveCurrentFilterPreset();
-                          }
-                        }}
-                      />
-                      <div className="topbar-presets__create-actions">
-                        <button className="button button--icon" type="button" disabled={isPresetSaving} onClick={() => void saveCurrentFilterPreset()}>
-                          {isPresetSaving ? 'Saving...' : 'Save'}
-                        </button>
-                        <button
-                          className="button button--icon"
-                          type="button"
-                          onClick={() => {
-                            setIsPresetNamingOpen(false);
-                            setDraftPresetName('');
-                          }}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-                  {config.filterPresets.length ? (
-                    <div className="topbar-presets__list">
-                      {config.filterPresets.map((preset) => (
-                        <div className="topbar-presets__item" key={preset.name}>
-                          <p>{preset.name}</p>
-                          <div className="topbar-presets__item-actions">
-                            <button className="button button--icon" type="button" onClick={() => loadFilterPresetToDraft(preset)}>
-                              Load
-                            </button>
-                            <button className="button button--icon" type="button" onClick={() => void deleteFilterPreset(preset.name)}>
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="topbar-filters__hint">No saved presets yet.</p>
-                  )}
-                </section>
-              </div>
-            </div>
-
-            <div className="topbar-filters__actions">
-              <button className="button" type="button" onClick={resetStagedFilters}>
-                Reset staged
-              </button>
-              <button className="button button--primary" type="button" onClick={applyFiltersAndOrdering}>
-                Apply
-              </button>
-            </div>
-          </section>
+                return null;
+              });
+            }}
+            onHandleRuleKeyDown={(event, index) => {
+              handleTagAutocompleteKeyDown(event, 'filter', index);
+              if (event.key === 'Enter' || event.key === 'Escape') {
+                setActiveFilterRuleEditorIndex(null);
+                setActiveTagAutocomplete(null);
+              }
+            }}
+            onUpdateRule={(index, value) => {
+              setDraftTagRules((current) => current.map((entry, ruleIndex) => (ruleIndex === index ? value : entry)));
+            }}
+            onApplyRuleSuggestion={(index, suggestion) => {
+              applyTagSuggestion('filter', index, suggestion);
+            }}
+            onAddRule={() => {
+              const nextIndex = draftTagRules.length;
+              setDraftTagRules((current) => [...current, '']);
+              setActiveFilterRuleEditorIndex(nextIndex);
+              setActiveTagAutocomplete({ scope: 'filter', index: nextIndex, highlighted: 0 });
+            }}
+            onAddSuggestionTag={(tag) => {
+              setDraftTagRules((current) => [...current, tag]);
+              setActiveFilterRuleEditorIndex(null);
+              setActiveTagAutocomplete(null);
+            }}
+            onChangeDraftMinScore={setDraftMinScore}
+            onChangeDraftOrderBy={setDraftOrderBy}
+            onChangeDraftStatus={setDraftStatus}
+            onBeginSavePreset={beginSavePreset}
+            onChangeDraftPresetName={setDraftPresetName}
+            onSaveCurrentFilterPreset={() => {
+              void saveCurrentFilterPreset();
+            }}
+            onCancelPresetNaming={() => {
+              setIsPresetNamingOpen(false);
+              setDraftPresetName('');
+            }}
+            onLoadFilterPreset={loadFilterPresetToDraft}
+            onDeleteFilterPreset={(name) => {
+              void deleteFilterPreset(name);
+            }}
+            onResetStagedFilters={resetStagedFilters}
+            onApplyFiltersAndOrdering={applyFiltersAndOrdering}
+          />
         ) : null}
       </header>
 
       <section className={`layout ${detailGame ? 'layout--detail' : ''}`}>
-        <aside className={`panel settings ${isSidebarOpen ? 'settings--open' : 'settings--closed'}`}>
-          <form onSubmit={saveConfig}>
-            <div className="panel-heading">
-              <h2>Setup</h2>
-              <p>Configuration is saved between app launches.</p>
-            </div>
-
-            <label className="field">
-              <span>Games root</span>
-              <div className="field__input-with-action">
-                <input
-                  type="text"
-                  value={config.gamesRoot}
-                  onChange={(event) => setConfig({ ...config, gamesRoot: event.target.value })}
-                  placeholder="D:\\Games or /home/you/Games"
-                />
-                <button
-                  className="button button--icon-only field__picker-button"
-                  type="button"
-                  onClick={pickRoot}
-                  disabled={isSaving}
-                  aria-label={actionLabels.chooseLibraryFolder}
-                  title={actionLabels.chooseLibraryFolder}
-                >
-                  <FolderOpen size={16} aria-hidden="true" />
-                </button>
-              </div>
-            </label>
-
-            <label className="field">
-              <span>Exclude patterns</span>
-              <textarea
-                rows={4}
-                value={config.excludePatterns.join('\n')}
-                onChange={(event) =>
-                  setConfig({
-                    ...config,
-                    excludePatterns: event.target.value.split('\n').map((value) => value.trim()),
-                  })
-                }
-                placeholder=".git&#10;Thumbs.db"
-              />
-            </label>
-
-            <label className="field field--toggle">
-              <span>Hide dot-prefixed files and folders</span>
-              <input
-                type="checkbox"
-                checked={config.hideDotEntries}
-                onChange={(event) => setConfig({ ...config, hideDotEntries: event.target.checked })}
-              />
-            </label>
-
-            <label className="field">
-              <span>Version folder pattern</span>
-              <input
-                type="text"
-                value={config.versionFolderPattern}
-                onChange={(event) => setConfig({ ...config, versionFolderPattern: event.target.value })}
-              />
-            </label>
-
-            <label className="field">
-              <span>Pictures folder name</span>
-              <input
-                type="text"
-                value={config.picturesFolderName}
-                onChange={(event) => setConfig({ ...config, picturesFolderName: event.target.value })}
-              />
-            </label>
-
-            <label className="field">
-              <span>Status choices</span>
-              <textarea
-                rows={5}
-                value={config.statusChoices.join('\n')}
-                onChange={(event) =>
-                  setConfig({
-                    ...config,
-                    statusChoices: event.target.value.split('\n').map((value) => value.trim()),
-                  })
-                }
-                placeholder="Backlog&#10;Playing&#10;Completed"
-              />
-            </label>
-
-            <label className="field">
-              <span>Poster view columns</span>
-              <input
-                type="number"
-                min={0}
-                max={12}
-                value={config.posterColumns}
-                onChange={(event) =>
-                  setConfig({
-                    ...config,
-                    posterColumns: Math.max(0, Number.parseInt(event.target.value || '0', 10) || 0),
-                  })
-                }
-              />
-              <small className="field__hint">Use 0 to auto-fit columns based on current element size.</small>
-            </label>
-
-            <label className="field">
-              <span>Card view columns</span>
-              <input
-                type="number"
-                min={0}
-                max={12}
-                value={config.cardColumns}
-                onChange={(event) =>
-                  setConfig({
-                    ...config,
-                    cardColumns: Math.max(0, Number.parseInt(event.target.value || '0', 10) || 0),
-                  })
-                }
-              />
-              <small className="field__hint">Use 0 to auto-fit columns based on current element size.</small>
-            </label>
-
-            <label className="field">
-              <span>Base font scale</span>
-              <input
-                type="number"
-                min={0.75}
-                max={1.5}
-                step={0.05}
-                value={config.uiBaseFontScale ?? 1}
-                onChange={(event) =>
-                  setConfig({
-                    ...config,
-                    uiBaseFontScale: clamp(Number.parseFloat(event.target.value || '1') || 1, 0.75, 1.5),
-                  })
-                }
-              />
-              <small className="field__hint">Affects only game content cards/lists/detail, not setup or top menus.</small>
-            </label>
-
-            <label className="field">
-              <span>Base spacing scale</span>
-              <input
-                type="number"
-                min={0.75}
-                max={1.5}
-                step={0.05}
-                value={config.uiBaseSpacingScale ?? 1}
-                onChange={(event) =>
-                  setConfig({
-                    ...config,
-                    uiBaseSpacingScale: clamp(Number.parseFloat(event.target.value || '1') || 1, 0.75, 1.5),
-                  })
-                }
-              />
-              <small className="field__hint">Affects only game content spacing.</small>
-            </label>
-
-            <label className="field">
-              <span>Metadata line spacing scale</span>
-              <input
-                type="number"
-                min={0.5}
-                max={4}
-                step={0.05}
-                value={config.uiMetadataGapScale ?? 1}
-                onChange={(event) =>
-                  setConfig({
-                    ...config,
-                    uiMetadataGapScale: clamp(Number.parseFloat(event.target.value || '1') || 1, 0.5, 4),
-                  })
-                }
-              />
-              <small className="field__hint">Controls spacing between metadata lines in poster/card/expanded views and scales with font size.</small>
-            </label>
-
-            <label className="field field--toggle">
-              <span>Dynamic scaling from grid density</span>
-              <input
-                type="checkbox"
-                checked={Boolean(config.uiDynamicGridScaling)}
-                onChange={(event) =>
-                  setConfig({
-                    ...config,
-                    uiDynamicGridScaling: event.target.checked,
-                  })
-                }
-              />
-            </label>
-
-            <label className="field field--toggle">
-              <span>Show system menu bar</span>
-              <input
-                type="checkbox"
-                checked={Boolean(config.showSystemMenuBar)}
-                onChange={(event) => {
-                  const nextVisible = event.target.checked;
-                  setConfig({
-                    ...config,
-                    showSystemMenuBar: nextVisible,
-                  });
-                  void window.gallery.setMenuBarVisibility(nextVisible);
-                  void logAppEvent(`System menu bar ${nextVisible ? 'shown' : 'hidden'} from setup toggle.`, 'info', 'menu-bar');
-                }}
-              />
-            </label>
-
-            <label className="field">
-              <span>Global zoom</span>
-              <input
-                type="number"
-                min={0.75}
-                max={2}
-                step={0.05}
-                value={config.uiGlobalZoom ?? 1}
-                onChange={(event) =>
-                  setConfig({
-                    ...config,
-                    uiGlobalZoom: clamp(Number.parseFloat(event.target.value || '1') || 1, 0.75, 2),
-                  })
-                }
-              />
-              <small className="field__hint">Also works with Ctrl + mouse wheel and +/- keys. Ctrl+0 resets to 100%.</small>
-            </label>
-
-            <div className="setup-log-actions">
-              <button className="button button--icon" type="button" onClick={() => void openLogViewer()}>
-                View logs
-              </button>
-              <button className="button button--icon" type="button" onClick={() => void openLogFolderFromSetup()}>
-                Open logs folder
-              </button>
-            </div>
-
-            <button className="button button--primary" type="submit" disabled={isSaving}>
-              {isSaving ? 'Saving...' : 'Save setup'}
-            </button>
-          </form>
-        </aside>
+        <SetupPanel
+          config={config}
+          isSidebarOpen={isSidebarOpen}
+          isSaving={isSaving}
+          chooseLibraryFolderLabel={actionLabels.chooseLibraryFolder}
+          onSaveConfig={saveConfig}
+          onPickRoot={pickRoot}
+          onConfigChange={setConfig}
+          onToggleSystemMenuBar={(nextVisible) => {
+            void window.gallery.setMenuBarVisibility(nextVisible);
+            void logAppEvent(`System menu bar ${nextVisible ? 'shown' : 'hidden'} from setup toggle.`, 'info', 'menu-bar');
+          }}
+          onOpenLogViewer={() => {
+            void openLogViewer();
+          }}
+          onOpenLogFolder={() => {
+            void openLogFolderFromSetup();
+          }}
+        />
 
         <section
           className={`panel library ${detailGame ? 'library--detail' : ''} ${detailBackgroundSrc ? 'library--detail-bg' : ''}`}
           style={detailBackgroundSrc ? ({ ['--detail-bg-image' as string]: `url("${detailBackgroundSrc}")` } as CSSProperties) : undefined}
         >
           {detailGame ? (
-            <section className="detail-page" style={contentScaleStyle}>
-              <header className="detail-page__header">
-                <button
-                  className="button button--icon-only"
-                  type="button"
-                  onClick={() => setDetailGamePath(null)}
-                  aria-label={actionLabels.back}
-                  title={actionLabels.back}
-                >
-                  <ArrowLeft size={16} aria-hidden="true" />
-                </button>
-                <h2>{detailGame.name}</h2>
-                <button
-                  className="button button--play button--icon-only"
-                  type="button"
-                  onClick={(event) => handlePlayClick(detailGame, event)}
-                  aria-label={actionLabels.play}
-                  title={actionLabels.play}
-                >
-                  <Play size={16} aria-hidden="true" />
-                </button>
-              </header>
-              {renderFocusCard(detailGame, true, false)}
-              <section className="detail-section panel">
-                <div className="detail-section__header">
-                  <h3>All metadata</h3>
-                  <button className="button button--icon" type="button" onClick={() => openMetadataModal(detailGame.path)}>
-                    Edit metadata
-                  </button>
-                </div>
-                <div className="detail-metadata-grid">
-                  <div>
-                    <p>Latest version: {detailGame.metadata.latestVersion || 'Unknown'}</p>
-                    <p>Status: {detailGame.metadata.status || 'Not set'}</p>
-                    <p>Score: {detailGame.metadata.score || 'Not set'}</p>
-                    <p>Description: {detailGame.metadata.description || 'No description yet.'}</p>
-                    <div className="detail-tags">
-                      <strong>Notes</strong>
-                      {detailGame.metadata.notes.filter(Boolean).map((note) => (
-                        <p key={note}>{note}</p>
-                      ))}
-                    </div>
-                    {detailGame.metadata.tags.length ? (
-                      <div className="detail-tags">
-                        <strong>Tags</strong>
-                        <p>{detailGame.metadata.tags.join(', ')}</p>
-                      </div>
-                    ) : null}
-                    {detailGame.metadata.customTags.length ? (
-                      <div className="detail-tags">
-                        <strong>Additional tags</strong>
-                        {detailGame.metadata.customTags.map((tag) => (
-                          <p key={tag.key}>{tag.key}: {tag.value}</p>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                  <aside className="detail-versions">
-                    <div className="detail-versions__header">
-                      <strong>Versions</strong>
-                      <button className="button button--icon" type="button" onClick={() => void openFolderInExplorer(detailGame.path)}>
-                        Open game folder
-                      </button>
-                    </div>
-                    {detailGame.versions.length ? (
-                      <ul className="detail-versions__list">
-                        {detailGame.versions.map((version) => (
-                          <li key={version.path}>
-                            <button
-                              className="detail-versions__item"
-                              type="button"
-                              onContextMenu={(event) => {
-                                event.preventDefault();
-                                void window.gallery.showVersionContextMenu({
-                                  versionPath: version.path,
-                                  versionName: version.name,
-                                });
-                              }}
-                              onClick={() => void openFolderInExplorer(version.path)}
-                              title="Right-click for version folder actions"
-                            >
-                              <span>{version.name}</span>
-                              <span>{version.hasNfo ? 'nfo' : 'no nfo'}</span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p>No versions detected.</p>
-                    )}
-                  </aside>
-                </div>
-              </section>
-              <section className="detail-section panel">
-                <div className="detail-section__header">
-                  <h3>Screenshots</h3>
-                  <button className="button button--icon" type="button" onClick={() => openPicturesModal(detailGame.path)}>
-                    Add images
-                  </button>
-                </div>
-                {detailGame.media.screenshots.length ? (
-                  <div className="screenshot-grid">
-                    {detailGame.media.screenshots.map((imagePath) => (
-                      <button
-                        key={imagePath}
-                        type="button"
-                        className="screenshot-grid__item"
-                        onClick={() => setScreenshotModalPath(imagePath)}
-                      >
-                        <img src={filePathToSrc(imagePath) ?? undefined} alt="Screenshot" className="media-preview" />
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p>No screenshots yet. Placeholder visuals are being used.</p>
-                )}
-              </section>
-            </section>
+            <DetailPage
+              game={detailGame}
+              contentScaleStyle={contentScaleStyle}
+              actionLabels={actionLabels}
+              focusCard={renderFocusCard(detailGame, true, false)}
+              getImageSrc={filePathToSrc}
+              onBack={() => setDetailGamePath(null)}
+              onPlay={handlePlayClick}
+              onOpenMetadata={openMetadataModal}
+              onOpenGameFolder={(gamePath) => {
+                void openFolderInExplorer(gamePath);
+              }}
+              onOpenVersionFolder={(versionPath) => {
+                void openFolderInExplorer(versionPath);
+              }}
+              onOpenVersionContextMenu={(versionPath, versionName) => {
+                void window.gallery.showVersionContextMenu({
+                  versionPath,
+                  versionName,
+                });
+              }}
+              onOpenPictures={openPicturesModal}
+              onOpenScreenshot={setScreenshotModalPath}
+            />
           ) : null}
 
           {!detailGame ? (
@@ -2820,448 +1740,70 @@ function App() {
       </section>
 
       {metadataModalGamePath && metadataDraft ? (
-        <div className="modal-backdrop" onClick={closeMetadataModal}>
-          <section className="modal-panel modal-panel--metadata" onClick={(event) => event.stopPropagation()}>
-            <header className="modal-panel__header">
-              <h2>Edit Metadata</h2>
-              <button className="button" type="button" onClick={closeMetadataModal}>Close</button>
-            </header>
-            <div className="modal-panel__body modal-panel__body--metadata">
-              <div className="modal-panel__column">
-                <label className="field">
-                  <span>Latest version</span>
-                  <input type="text" value={metadataDraft.latestVersion} onChange={(event) => setMetadataDraft({ ...metadataDraft, latestVersion: event.target.value })} />
-                </label>
-                <label className="field">
-                  <span>Score</span>
-                  <input type="text" value={metadataDraft.score} onChange={(event) => setMetadataDraft({ ...metadataDraft, score: event.target.value })} />
-                </label>
-                <label className="field">
-                  <span>Status</span>
-                  <CustomSelect
-                    ariaLabel="Metadata status"
-                    value={metadataDraft.status}
-                    options={[
-                      { value: '', label: 'Not set' },
-                      ...config.statusChoices.map((statusOption) => ({ value: statusOption, label: statusOption })),
-                    ]}
-                    onChange={(nextValue) => setMetadataDraft({ ...metadataDraft, status: nextValue })}
-                  />
-                </label>
-                <label className="field">
-                  <span>Description</span>
-                  <textarea rows={4} value={metadataDraft.description} onChange={(event) => setMetadataDraft({ ...metadataDraft, description: event.target.value })} />
-                </label>
-                <div className="modal-group">
-                  <div className="modal-group__header">
-                    <strong>Notes</strong>
-                    <button className="button button--icon" type="button" onClick={() => setMetadataDraft({ ...metadataDraft, notes: [...metadataDraft.notes, ''] })}>Add note</button>
-                  </div>
-                  {metadataDraft.notes.map((note, index) => (
-                    <div className="tag-row" key={`note-${index}`}>
-                      <textarea rows={2} value={note} onChange={(event) => setMetadataDraft({ ...metadataDraft, notes: metadataDraft.notes.map((entry, noteIndex) => noteIndex === index ? event.target.value : entry) })} />
-                      <button className="button button--icon" type="button" onClick={() => setMetadataDraft({ ...metadataDraft, notes: metadataDraft.notes.filter((_, noteIndex) => noteIndex !== index) || [''] })}>Remove</button>
-                    </div>
-                  ))}
-                </div>
-              </div>
+        <MetadataModal
+          metadataDraft={metadataDraft}
+          statusChoices={config.statusChoices}
+          activeMetadataTagEditorIndex={activeMetadataTagEditorIndex}
+          activeTagAutocomplete={activeTagAutocomplete}
+          activeTagSuggestions={activeTagSuggestions}
+          isMetadataSaving={isMetadataSaving}
+          onClose={closeMetadataModal}
+          onSave={() => {
+            void saveMetadataChanges();
+          }}
+          onSetMetadataDraft={(updater) => {
+            setMetadataDraft((current) => {
+              if (!current) {
+                return current;
+              }
 
-              <div className="modal-panel__column modal-panel__column--tags">
-                <div className="modal-group modal-group--tight">
-                  <div className="modal-group__header">
-                    <strong>Tags</strong>
-                  </div>
-                  <p className="topbar-filters__hint">Click a bubble to edit. Right-click a bubble to remove.</p>
-                  <div className="tag-bubbles">
-                    {metadataDraft.tags.map((tag, index) => {
-                      const isEditing = activeMetadataTagEditorIndex === index;
-                      const bubbleLabel = tag.trim() || 'Empty tag';
-
-                      if (isEditing) {
-                        return (
-                          <div className="tag-bubble tag-bubble--editing" key={`core-tag-${index}`}>
-                            <div className="tag-autocomplete">
-                              <input
-                                type="text"
-                                autoFocus
-                                value={tag}
-                                placeholder="example: roguelike"
-                                onFocus={() => setActiveTagAutocomplete({ scope: 'metadata', index, highlighted: 0 })}
-                                onBlur={() => {
-                                  window.setTimeout(() => {
-                                    setMetadataDraft((current) => {
-                                      if (!current) {
-                                        return current;
-                                      }
-
-                                      const nextValue = (current.tags[index] ?? '').trim();
-                                      if (nextValue) {
-                                        return current;
-                                      }
-
-                                      return {
-                                        ...current,
-                                        tags: current.tags.filter((_, tagIndex) => tagIndex !== index),
-                                      };
-                                    });
-                                    setActiveMetadataTagEditorIndex((current) => (current === index ? null : current));
-                                    setActiveTagAutocomplete((current) => {
-                                      if (!current || current.scope !== 'metadata' || current.index !== index) {
-                                        return current;
-                                      }
-
-                                      return null;
-                                    });
-                                  }, 100);
-                                }}
-                                onKeyDown={(event) => {
-                                  handleTagAutocompleteKeyDown(event, 'metadata', index);
-                                  if (event.key === 'Enter' || event.key === 'Escape') {
-                                    setActiveMetadataTagEditorIndex(null);
-                                    setActiveTagAutocomplete(null);
-                                  }
-                                }}
-                                onChange={(event) => {
-                                  setMetadataDraft({
-                                    ...metadataDraft,
-                                    tags: metadataDraft.tags.map((entry, tagIndex) => (tagIndex === index ? event.target.value : entry)),
-                                  });
-                                  setActiveTagAutocomplete({ scope: 'metadata', index, highlighted: 0 });
-                                }}
-                              />
-                              {activeTagAutocomplete?.scope === 'metadata' && activeTagAutocomplete.index === index && activeTagSuggestions.length ? (
-                                <div className="tag-autocomplete__menu">
-                                  {activeTagSuggestions.map((suggestion, suggestionIndex) => (
-                                    <button
-                                      key={`${suggestion}-${suggestionIndex}`}
-                                      className={`tag-autocomplete__item ${activeTagAutocomplete.highlighted === suggestionIndex ? 'tag-autocomplete__item--active' : ''}`}
-                                      type="button"
-                                      onMouseDown={(event) => {
-                                        event.preventDefault();
-                                        applyTagSuggestion('metadata', index, suggestion);
-                                      }}
-                                    >
-                                      {suggestion}
-                                    </button>
-                                  ))}
-                                </div>
-                              ) : null}
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <button
-                          key={`core-tag-${index}`}
-                          className="tag-bubble"
-                          type="button"
-                          title={bubbleLabel}
-                          onClick={() => {
-                            setActiveMetadataTagEditorIndex(index);
-                            setActiveTagAutocomplete({ scope: 'metadata', index, highlighted: 0 });
-                          }}
-                          onContextMenu={(event) => {
-                            event.preventDefault();
-                            setMetadataDraft({
-                              ...metadataDraft,
-                              tags: metadataDraft.tags.filter((_, tagIndex) => tagIndex !== index),
-                            });
-                            setActiveMetadataTagEditorIndex(null);
-                            setActiveTagAutocomplete(null);
-                          }}
-                        >
-                          {bubbleLabel}
-                        </button>
-                      );
-                    })}
-                    <button
-                      className="tag-bubble tag-bubble--add"
-                      type="button"
-                      onClick={() => {
-                        const nextIndex = metadataDraft.tags.length;
-                        setMetadataDraft({ ...metadataDraft, tags: [...metadataDraft.tags, ''] });
-                        setActiveMetadataTagEditorIndex(nextIndex);
-                        setActiveTagAutocomplete({ scope: 'metadata', index: nextIndex, highlighted: 0 });
-                      }}
-                      title="Add tag"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <footer className="modal-panel__footer">
-              <button className="button" type="button" onClick={closeMetadataModal}>Cancel</button>
-              <button className="button button--primary" type="button" disabled={isMetadataSaving} onClick={() => void saveMetadataChanges()}>
-                {isMetadataSaving ? 'Saving...' : 'Save metadata'}
-              </button>
-            </footer>
-          </section>
-        </div>
+              return typeof updater === 'function'
+                ? (updater as (entry: typeof current) => typeof current)(current)
+                : updater;
+            });
+          }}
+          onSetActiveMetadataTagEditorIndex={setActiveMetadataTagEditorIndex}
+          onSetActiveTagAutocomplete={setActiveTagAutocomplete}
+          onHandleTagAutocompleteKeyDown={handleTagAutocompleteKeyDown}
+          onApplyTagSuggestion={applyTagSuggestion}
+        />
       ) : null}
 
-      {mediaModalGamePath ? (
-        <div className="modal-backdrop" onClick={() => setMediaModalGamePath(null)}>
-          <section className="modal-panel modal-panel--wide" onClick={(event) => event.stopPropagation()}>
-            <header className="modal-panel__header">
-              <h2>Manage Pictures</h2>
-              <button className="button" type="button" onClick={() => setMediaModalGamePath(null)}>Close</button>
-            </header>
-            <div className="modal-panel__body">
-              {(() => {
-                const game = scanResult.games.find((candidate) => candidate.path === mediaModalGamePath);
-                if (!game) {
-                  return null;
-                }
-
-                return (
-                  <>
-                    <section
-                      className={`media-section ${dragSection === 'featured' ? 'media-section--drag' : ''}`}
-                      onDragOver={(event) => {
-                        event.preventDefault();
-                        setDragSection('featured');
-                      }}
-                      onDragLeave={() => setDragSection((current) => current === 'featured' ? null : current)}
-                      onDrop={(event) => {
-                        event.preventDefault();
-                        setDragSection(null);
-                        setPendingFeaturedDropPaths(extractDroppedFilePaths(event));
-                        setFeaturedImportTarget('poster');
-                      }}
-                    >
-                      <div className="modal-group__header">
-                        <strong>Miniature and background media</strong>
-                        <button className="button button--icon" type="button" onClick={() => setFeaturedImportTarget('poster')}>Add media</button>
-                      </div>
-                      {featuredImportTarget ? (
-                        <div className="choice-row">
-                          <button className="button button--icon" type="button" disabled={isMediaSaving} onClick={() => void importMedia('poster', pendingFeaturedDropPaths.length ? pendingFeaturedDropPaths : undefined)}>Poster</button>
-                          <button className="button button--icon" type="button" disabled={isMediaSaving} onClick={() => void importMedia('card', pendingFeaturedDropPaths.length ? pendingFeaturedDropPaths : undefined)}>Card</button>
-                          <button className="button button--icon" type="button" disabled={isMediaSaving} onClick={() => void importMedia('background', pendingFeaturedDropPaths.length ? pendingFeaturedDropPaths : undefined)}>Background</button>
-                          <button className="button button--icon" type="button" onClick={() => { setFeaturedImportTarget(null); setPendingFeaturedDropPaths([]); }}>Cancel</button>
-                        </div>
-                      ) : null}
-                      <div className="media-grid media-grid--featured">
-                        {(['poster', 'card', 'background'] as const).map((key) => (
-                          <div className="media-tile" key={key}>
-                            <strong>{key}</strong>
-                            {game.media[key] ? <img src={filePathToSrc(game.media[key]) ?? undefined} alt={key} className="media-preview" /> : <p>No image</p>}
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-
-                    <hr className="media-separator" />
-
-                    <section
-                      className={`media-section ${dragSection === 'gallery' ? 'media-section--drag' : ''}`}
-                      onDragOver={(event) => {
-                        if (draggedScreenshotPath) {
-                          event.preventDefault();
-                          return;
-                        }
-
-                        const dragTypes = Array.from(event.dataTransfer.types);
-                        if (!dragTypes.includes('Files')) {
-                          return;
-                        }
-
-                        event.preventDefault();
-                        setDragSection('gallery');
-                      }}
-                      onDragLeave={() => setDragSection((current) => current === 'gallery' ? null : current)}
-                      onDrop={(event) => {
-                        event.preventDefault();
-                        setDragSection(null);
-                        if (draggedScreenshotPath) {
-                          setDraggedScreenshotPath(null);
-                          setDragOverScreenshotPath(null);
-                          return;
-                        }
-
-                        void importMedia('screenshot', extractDroppedFilePaths(event));
-                      }}
-                    >
-                      <div className="modal-group__header">
-                        <strong>Gallery media</strong>
-                        <button className="button button--icon" type="button" disabled={isMediaSaving} onClick={() => void importMedia('screenshot')}>Add screenshot</button>
-                      </div>
-                      <div className="media-grid">
-                        {game.media.screenshots.length ? game.media.screenshots.map((imagePath, index) => (
-                          <div
-                            key={imagePath}
-                            className={`media-grid__item ${draggedScreenshotPath === imagePath ? 'media-grid__item--dragging' : ''} ${dragOverScreenshotPath === imagePath ? 'media-grid__item--drop-target' : ''}`}
-                            draggable={!isMediaSaving}
-                            onDragStart={(event) => {
-                              setScreenshotContextMenu(null);
-                              setDragSection(null);
-                              setDraggedScreenshotPath(imagePath);
-                              setDragOverScreenshotPath(null);
-                              event.dataTransfer.effectAllowed = 'move';
-                              event.dataTransfer.setData('application/x-local-gallery-screenshot', imagePath);
-                              event.dataTransfer.setData('text/plain', imagePath);
-                            }}
-                            onDragEnd={() => {
-                              setDraggedScreenshotPath(null);
-                              setDragOverScreenshotPath(null);
-                            }}
-                            onDragOver={(event) => {
-                              if (!draggedScreenshotPath || draggedScreenshotPath === imagePath) {
-                                return;
-                              }
-
-                              event.preventDefault();
-                              event.dataTransfer.dropEffect = 'move';
-                            }}
-                            onDragEnter={() => {
-                              if (!draggedScreenshotPath || draggedScreenshotPath === imagePath) {
-                                return;
-                              }
-
-                              setDragOverScreenshotPath(imagePath);
-                            }}
-                            onDragLeave={() => {
-                              setDragOverScreenshotPath((current) => current === imagePath ? null : current);
-                            }}
-                            onDrop={(event) => {
-                              const fromPath = draggedScreenshotPath || extractDraggedScreenshotPath(event);
-                              event.preventDefault();
-                              event.stopPropagation();
-                              setDraggedScreenshotPath(null);
-                              setDragOverScreenshotPath(null);
-                              if (!fromPath || fromPath === imagePath) {
-                                return;
-                              }
-
-                              void reorderScreenshots(fromPath, imagePath);
-                            }}
-                          >
-                            <button
-                              type="button"
-                              className="media-grid__drag-handle"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                if (isMediaSaving) {
-                                  return;
-                                }
-
-                                const rect = event.currentTarget.getBoundingClientRect();
-                                setScreenshotContextMenu({
-                                  x: Math.round(rect.left),
-                                  y: Math.round(rect.bottom + 6),
-                                  imagePath,
-                                });
-                              }}
-                              onContextMenu={(event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                if (isMediaSaving) {
-                                  return;
-                                }
-
-                                setScreenshotContextMenu({
-                                  x: event.clientX,
-                                  y: event.clientY,
-                                  imagePath,
-                                });
-                              }}
-                              title="Screenshot actions"
-                            >
-                              ...
-                            </button>
-                            <img src={filePathToSrc(imagePath) ?? undefined} alt="Screenshot" className="media-preview" draggable={false} />
-                            <div className="media-grid__reorder">
-                              <button
-                                className="button button--icon"
-                                type="button"
-                                disabled={isMediaSaving || index === 0}
-                                onClick={() => {
-                                  const prev = game.media.screenshots[index - 1];
-                                  if (prev) void reorderScreenshots(imagePath, prev);
-                                }}
-                                aria-label="Move left"
-                              >{'◀'}</button>
-                              <button
-                                className="button button--icon"
-                                type="button"
-                                disabled={isMediaSaving || index === game.media.screenshots.length - 1}
-                                onClick={() => {
-                                  const next = game.media.screenshots[index + 1];
-                                  if (next) void reorderScreenshots(imagePath, next);
-                                }}
-                                aria-label="Move right"
-                              >{'▶'}</button>
-                            </div>
-                          </div>
-                        )) : <p>No screenshots</p>}
-                      </div>
-                    </section>
-                  </>
-                );
-              })()}
-            </div>
-          </section>
-          {screenshotContextMenu ? (
-            <div
-              className="context-menu"
-              style={{ left: screenshotContextMenu.x, top: screenshotContextMenu.y }}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <button
-                className="context-menu__item context-menu__item--danger"
-                type="button"
-                onClick={() => {
-                  void removeScreenshot(screenshotContextMenu.imagePath);
-                }}
-              >
-                Remove screenshot
-              </button>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+      <MediaModal
+        game={mediaModalGame}
+        isOpen={Boolean(mediaModalGamePath && mediaModalGame)}
+        isMediaSaving={isMediaSaving}
+        featuredImportTarget={featuredImportTarget}
+        pendingFeaturedDropPaths={pendingFeaturedDropPaths}
+        dragSection={dragSection}
+        draggedScreenshotPath={draggedScreenshotPath}
+        dragOverScreenshotPath={dragOverScreenshotPath}
+        screenshotContextMenu={screenshotContextMenu}
+        getImageSrc={filePathToSrc}
+        setFeaturedImportTarget={setFeaturedImportTarget}
+        setPendingFeaturedDropPaths={setPendingFeaturedDropPaths}
+        setDragSection={setDragSection}
+        setDraggedScreenshotPath={setDraggedScreenshotPath}
+        setDragOverScreenshotPath={setDragOverScreenshotPath}
+        setScreenshotContextMenu={setScreenshotContextMenu}
+        onClose={() => setMediaModalGamePath(null)}
+        onImportMedia={importMedia}
+        onReorderScreenshots={reorderScreenshots}
+        onRemoveScreenshot={removeScreenshot}
+      />
 
       {isLogModalOpen ? (
-        <div className="modal-backdrop" onClick={() => setIsLogModalOpen(false)}>
-          <section className="modal-panel modal-panel--wide" onClick={(event) => event.stopPropagation()}>
-            <header className="modal-panel__header">
-              <h2>Event logs</h2>
-              <button className="button" type="button" onClick={() => setIsLogModalOpen(false)}>Close</button>
-            </header>
-            <div className="modal-panel__body">
-              <div className="log-viewer__filters">
-                <label className="field">
-                  <span>Level</span>
-                  <CustomSelect
-                    ariaLabel="Log level filter"
-                    value={logLevelFilter}
-                    options={[
-                      { value: 'all', label: 'All' },
-                      { value: 'info', label: 'Info' },
-                      { value: 'warn', label: 'Warn' },
-                      { value: 'error', label: 'Error' },
-                    ]}
-                    onChange={(nextValue) => setLogLevelFilter(nextValue as 'all' | 'info' | 'warn' | 'error')}
-                  />
-                </label>
-                <label className="field">
-                  <span>Date</span>
-                  <input type="date" value={logDateFilter} onChange={(event) => setLogDateFilter(event.target.value)} />
-                </label>
-              </div>
-              <pre className="log-viewer">{isLogLoading ? 'Loading logs...' : (filteredLogContents || 'No logs found for current filters.')}</pre>
-            </div>
-            <footer className="modal-panel__footer">
-              <button className="button" type="button" disabled={isLogClearing} onClick={() => void clearLogsFromViewer()}>
-                {isLogClearing ? 'Clearing...' : 'Clear logs'}
-              </button>
-              <button className="button" type="button" onClick={() => setIsLogModalOpen(false)}>Close</button>
-            </footer>
-          </section>
-        </div>
+        <LogViewerModal
+          isLogLoading={isLogLoading}
+          isLogClearing={isLogClearing}
+          filteredLogContents={filteredLogContents}
+          logLevelFilter={logLevelFilter}
+          logDateFilter={logDateFilter}
+          onClose={() => setIsLogModalOpen(false)}
+          onChangeLogLevel={(nextValue) => setLogLevelFilter(nextValue)}
+          onChangeDateFilter={(nextValue) => setLogDateFilter(nextValue)}
+          onClearLogs={() => void clearLogsFromViewer()}
+        />
       ) : null}
 
       {screenshotModalPath ? (

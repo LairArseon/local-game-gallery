@@ -1,4 +1,7 @@
-﻿import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
+﻿/**
+ * Electron main process bootstrap, IPC wiring, and desktop integrations.
+ */
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
 import type { OpenDialogOptions } from 'electron';
 import { access, appendFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -103,7 +106,7 @@ async function createWindow() {
     minHeight: 720,
     backgroundColor: '#10131b',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    autoHideMenuBar: process.platform === 'darwin' ? false : !config.showSystemMenuBar,
+    autoHideMenuBar: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -111,7 +114,17 @@ async function createWindow() {
     },
   });
 
-  applyMenuBarVisibility(mainWindow, config.showSystemMenuBar);
+  applyMenuBarVisibility(mainWindow, true);
+
+  mainWindow.webContents.on('before-input-event', (_event, input) => {
+    const key = input.key.toLowerCase();
+    const isToggleDevtools = key === 'f12' || ((input.control || input.meta) && input.shift && key === 'i');
+    if (!isToggleDevtools) {
+      return;
+    }
+
+    mainWindow?.webContents.toggleDevTools();
+  });
 
   const devServerUrl = process.env.VITE_DEV_SERVER_URL;
   if (devServerUrl) {

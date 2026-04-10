@@ -1,3 +1,6 @@
+/**
+ * Persistent configuration load/save and normalization helpers.
+ */
 import { app } from 'electron';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
