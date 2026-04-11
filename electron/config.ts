@@ -41,6 +41,7 @@ function normalizeMetadataGapScale(value: number | string | undefined, fallback 
 }
 
 const defaultConfig: GalleryConfig = {
+  language: 'en',
   gamesRoot: '',
   excludePatterns: ['.git', 'Thumbs.db'],
   hideDotEntries: true,
@@ -78,9 +79,12 @@ export async function loadConfig() {
 }
 
 export async function saveConfig(config: GalleryConfig) {
+  const normalizedLanguage = config.language === 'es' ? 'es' : 'en';
+
   const normalizedConfig: GalleryConfig = {
     ...defaultConfig,
     ...config,
+    language: normalizedLanguage,
     excludePatterns: [...new Set(config.excludePatterns.map((pattern) => pattern.trim()).filter(Boolean))],
     statusChoices: [...new Set((config.statusChoices ?? []).map((value) => value.trim()).filter(Boolean))],
     tagPool: [...new Set((config.tagPool ?? []).map((value) => value.trim()).filter(Boolean))],

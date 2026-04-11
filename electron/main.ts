@@ -169,6 +169,8 @@ async function createWindow() {
 
 ipcMain.handle('gallery:get-config', async () => loadConfig());
 
+ipcMain.handle('gallery:get-app-version', async () => app.getVersion());
+
 ipcMain.handle('gallery:save-config', async (_event, config: GalleryConfig) => saveConfig(config));
 
 ipcMain.handle('gallery:pick-games-root', async () => {

@@ -1,9 +1,18 @@
 /**
- * Staged filter editor UI for tag rules, ordering, status, and presets.
+ * Staged filter editor for rules, ordering, status constraints, and presets.
+ *
+ * The panel separates draft filter edits from applied gallery state so users can
+ * experiment before committing changes. It supports tag autocomplete, exclusion
+ * syntax (prefix with '-'), quick suggestions, and preset persistence actions.
+ * All state mutations are delegated via callbacks, keeping this component purely
+ * presentational and easy to evolve without touching business logic.
  */
 import type { KeyboardEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CustomSelect } from './CustomSelect';
 import type { FilterOrderByMode, FilterPreset } from '../types';
+
+const filterOrderByModes: FilterOrderByMode[] = ['alpha-asc', 'alpha-desc', 'score-asc', 'score-desc'];
 
 type TagAutocompleteState = {
   scope: 'pool' | 'filter' | 'metadata';
@@ -89,20 +98,22 @@ export function FilterPanel({
   onResetStagedFilters,
   onApplyFiltersAndOrdering,
 }: FilterPanelProps) {
+  const { t } = useTranslation();
+
   return (
     <section className="topbar-filters">
       <div className="topbar-filters__grid">
         <div className="topbar-filters__group">
           <div className="topbar-filters__heading">
-            <strong>Tag rules</strong>
+            <strong>{t('filters.tagRules')}</strong>
           </div>
-          <p className="topbar-filters__hint">Click a bubble to edit. Right-click a bubble to remove. Prefix with - to exclude.</p>
+          <p className="topbar-filters__hint">{t('filters.tagRulesHint')}</p>
           <div className="tag-bubbles">
             {draftTagRules.map((rule, index) => {
               const isEditing = activeFilterRuleEditorIndex === index;
               const normalizedRule = rule.trim();
               const isExclude = normalizedRule.startsWith('-');
-              const bubbleLabel = normalizedRule || 'Empty tag';
+              const bubbleLabel = normalizedRule || t('filters.emptyTag');
 
               if (isEditing) {
                 return (
@@ -112,9 +123,10 @@ export function FilterPanel({
                         type="text"
                         autoFocus
                         value={rule}
-                        placeholder="example: roguelike or -horror"
+                        placeholder={t('filters.rulePlaceholder')}
                         onFocus={() => onSetActiveTagAutocomplete({ scope: 'filter', index, highlighted: 0 })}
                         onBlur={() => {
+                          // Delay cleanup so suggestion clicks (mousedown) can commit first.
                           window.setTimeout(() => {
                             onFinalizeRuleBlur(index);
                           }, 100);
@@ -156,6 +168,7 @@ export function FilterPanel({
                   onClick={() => onStartEditRule(index)}
                   onContextMenu={(event) => {
                     event.preventDefault();
+                    // Right-click is the quick-remove affordance for staged rule bubbles.
                     onRemoveRule(index);
                   }}
                 >
@@ -163,12 +176,12 @@ export function FilterPanel({
                 </button>
               );
             })}
-            <button className="tag-bubble tag-bubble--add" type="button" onClick={onAddRule} title="Add tag rule">
+            <button className="tag-bubble tag-bubble--add" type="button" onClick={onAddRule} title={t('filters.addTagRule')}>
               +
             </button>
           </div>
           <div className="topbar-filters__suggestions">
-            <p className="topbar-filters__hint">Top used tags right now. Click to add as a filter.</p>
+            <p className="topbar-filters__hint">{t('filters.topUsedHint')}</p>
             <div className="tag-bubbles">
               {topUsedFilterSuggestions.map((entry) => (
                 <button
@@ -176,14 +189,14 @@ export function FilterPanel({
                   className="tag-bubble tag-bubble--suggested"
                   type="button"
                   onClick={() => onAddSuggestionTag(entry.tag)}
-                  title={`Used in ${entry.count} game${entry.count === 1 ? '' : 's'}`}
+                  title={t('filters.usedInGames', { count: entry.count })}
                 >
                   <span>{entry.tag}</span>
                   <span className="tag-bubble__metric">{entry.count}</span>
                 </button>
               ))}
               {!topUsedFilterSuggestions.length ? (
-                <p className="topbar-filters__hint topbar-filters__hint--inline">No available suggestions.</p>
+                <p className="topbar-filters__hint topbar-filters__hint--inline">{t('filters.noSuggestions')}</p>
               ) : null}
             </div>
           </div>
@@ -192,24 +205,24 @@ export function FilterPanel({
         <div className="topbar-filters__group">
           <div className="topbar-filters__quick">
             <label className="field topbar-filters__field">
-              <span>Minimum score</span>
+              <span>{t('filters.minimumScore')}</span>
               <input
                 type="number"
                 step="0.1"
                 min="0"
                 value={draftMinScore}
                 onChange={(event) => onChangeDraftMinScore(event.target.value)}
-                placeholder="Leave empty to ignore"
+                placeholder={t('filters.minimumScorePlaceholder')}
               />
             </label>
 
             <label className="field topbar-filters__field">
-              <span>Order by</span>
+              <span>{t('filters.orderBy')}</span>
               <CustomSelect
                 className="custom-select--order"
-                ariaLabel="Order by"
+                ariaLabel={t('filters.orderBy')}
                 value={draftOrderBy}
-                options={(Object.keys(orderByModeLabels) as FilterOrderByMode[]).map((mode) => ({
+                options={filterOrderByModes.map((mode) => ({
                   value: mode,
                   label: orderByModeLabels[mode],
                 }))}
@@ -218,12 +231,12 @@ export function FilterPanel({
             </label>
 
             <label className="field topbar-filters__field topbar-filters__field--full">
-              <span>Status</span>
+              <span>{t('filters.status')}</span>
               <CustomSelect
-                ariaLabel="Filter status"
+                ariaLabel={t('filters.filterStatusAria')}
                 value={draftStatus}
                 options={[
-                  { value: '', label: 'Any status' },
+                  { value: '', label: t('filters.anyStatus') },
                   ...statusChoices.map((statusOption) => ({ value: statusOption, label: statusOption })),
                 ]}
                 onChange={onChangeDraftStatus}
@@ -235,10 +248,10 @@ export function FilterPanel({
         <div className="topbar-filters__group topbar-filters__group--presets">
           <section className="topbar-presets">
             <div className="topbar-filters__heading">
-              <strong>Presets</strong>
+              <strong>{t('filters.presets')}</strong>
               {!isPresetNamingOpen ? (
                 <button className="button button--icon" type="button" onClick={onBeginSavePreset}>
-                  Save preset
+                  {t('filters.savePreset')}
                 </button>
               ) : null}
             </div>
@@ -248,7 +261,7 @@ export function FilterPanel({
                   type="text"
                   value={draftPresetName}
                   autoFocus
-                  placeholder="Preset name"
+                  placeholder={t('filters.presetNamePlaceholder')}
                   onChange={(event) => onChangeDraftPresetName(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') {
@@ -259,10 +272,10 @@ export function FilterPanel({
                 />
                 <div className="topbar-presets__create-actions">
                   <button className="button button--icon" type="button" disabled={isPresetSaving} onClick={onSaveCurrentFilterPreset}>
-                    {isPresetSaving ? 'Saving...' : 'Save'}
+                    {isPresetSaving ? t('actions.saving') : t('filters.save')}
                   </button>
                   <button className="button button--icon" type="button" onClick={onCancelPresetNaming}>
-                    Cancel
+                    {t('filters.cancel')}
                   </button>
                 </div>
               </div>
@@ -274,17 +287,17 @@ export function FilterPanel({
                     <p>{preset.name}</p>
                     <div className="topbar-presets__item-actions">
                       <button className="button button--icon" type="button" onClick={() => onLoadFilterPreset(preset)}>
-                        Load
+                        {t('filters.load')}
                       </button>
                       <button className="button button--icon" type="button" onClick={() => onDeleteFilterPreset(preset.name)}>
-                        Delete
+                        {t('filters.delete')}
                       </button>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="topbar-filters__hint">No saved presets yet.</p>
+              <p className="topbar-filters__hint">{t('filters.noPresets')}</p>
             )}
           </section>
         </div>
@@ -292,10 +305,10 @@ export function FilterPanel({
 
       <div className="topbar-filters__actions">
         <button className="button" type="button" onClick={onResetStagedFilters}>
-          Reset staged
+          {t('filters.resetStaged')}
         </button>
         <button className="button button--primary" type="button" onClick={onApplyFiltersAndOrdering}>
-          Apply
+          {t('filters.apply')}
         </button>
       </div>
     </section>

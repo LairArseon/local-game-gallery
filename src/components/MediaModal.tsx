@@ -1,7 +1,13 @@
 /**
- * Modal for importing, reordering, and deleting game media assets.
+ * Media management modal for featured art and screenshot gallery operations.
+ *
+ * This overlay coordinates several high-friction workflows in one place:
+ * importing via dialog or drop, drag-reordering screenshots, and quick delete
+ * actions through a contextual menu. It also preserves local drag intent state
+ * so interactions feel predictable while async media updates are pending.
  */
 import type { Dispatch, DragEvent, SetStateAction } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { GameSummary } from '../types';
 
 type FeaturedTarget = 'poster' | 'card' | 'background' | null;
@@ -32,6 +38,7 @@ type MediaModalProps = {
 };
 
 function extractDroppedFilePaths(event: DragEvent<HTMLElement>) {
+  // Electron exposes absolute paths on dropped files; keep only valid path entries.
   return Array.from(event.dataTransfer.files)
     .map((file) => file.path)
     .filter(Boolean);
@@ -63,6 +70,8 @@ export function MediaModal({
   onReorderScreenshots,
   onRemoveScreenshot,
 }: MediaModalProps) {
+  const { t } = useTranslation();
+
   if (!isOpen || !game) {
     return null;
   }
@@ -71,8 +80,8 @@ export function MediaModal({
     <div className="modal-backdrop" onClick={onClose}>
       <section className="modal-panel modal-panel--wide" onClick={(event) => event.stopPropagation()}>
         <header className="modal-panel__header">
-          <h2>Manage Pictures</h2>
-          <button className="button" type="button" onClick={onClose}>Close</button>
+          <h2>{t('media.managePictures')}</h2>
+          <button className="button" type="button" onClick={onClose}>{t('common.close')}</button>
         </header>
         <div className="modal-panel__body">
           <>
@@ -86,27 +95,28 @@ export function MediaModal({
                 onDrop={(event) => {
                   event.preventDefault();
                   setDragSection(null);
+                  // Drop in featured area stages files and asks user to choose poster/card/background target.
                   setPendingFeaturedDropPaths(extractDroppedFilePaths(event));
                   setFeaturedImportTarget('poster');
                 }}
               >
                 <div className="modal-group__header">
-                  <strong>Miniature and background media</strong>
-                  <button className="button button--icon" type="button" onClick={() => setFeaturedImportTarget('poster')}>Add media</button>
+                  <strong>{t('media.featuredMedia')}</strong>
+                  <button className="button button--icon" type="button" onClick={() => setFeaturedImportTarget('poster')}>{t('media.addMedia')}</button>
                 </div>
                 {featuredImportTarget ? (
                   <div className="choice-row">
-                    <button className="button button--icon" type="button" disabled={isMediaSaving} onClick={() => void onImportMedia('poster', pendingFeaturedDropPaths.length ? pendingFeaturedDropPaths : undefined)}>Poster</button>
-                    <button className="button button--icon" type="button" disabled={isMediaSaving} onClick={() => void onImportMedia('card', pendingFeaturedDropPaths.length ? pendingFeaturedDropPaths : undefined)}>Card</button>
-                    <button className="button button--icon" type="button" disabled={isMediaSaving} onClick={() => void onImportMedia('background', pendingFeaturedDropPaths.length ? pendingFeaturedDropPaths : undefined)}>Background</button>
-                    <button className="button button--icon" type="button" onClick={() => { setFeaturedImportTarget(null); setPendingFeaturedDropPaths([]); }}>Cancel</button>
+                    <button className="button button--icon" type="button" disabled={isMediaSaving} onClick={() => void onImportMedia('poster', pendingFeaturedDropPaths.length ? pendingFeaturedDropPaths : undefined)}>{t('viewMode.poster')}</button>
+                    <button className="button button--icon" type="button" disabled={isMediaSaving} onClick={() => void onImportMedia('card', pendingFeaturedDropPaths.length ? pendingFeaturedDropPaths : undefined)}>{t('viewMode.card')}</button>
+                    <button className="button button--icon" type="button" disabled={isMediaSaving} onClick={() => void onImportMedia('background', pendingFeaturedDropPaths.length ? pendingFeaturedDropPaths : undefined)}>{t('media.background')}</button>
+                    <button className="button button--icon" type="button" onClick={() => { setFeaturedImportTarget(null); setPendingFeaturedDropPaths([]); }}>{t('common.cancel')}</button>
                   </div>
                 ) : null}
                 <div className="media-grid media-grid--featured">
                   {(['poster', 'card', 'background'] as const).map((key) => (
                     <div className="media-tile" key={key}>
-                      <strong>{key}</strong>
-                      {game.media[key] ? <img src={getImageSrc(game.media[key]) ?? undefined} alt={key} className="media-preview" /> : <p>No image</p>}
+                      <strong>{key === 'background' ? t('media.background') : t(`viewMode.${key}`)}</strong>
+                      {game.media[key] ? <img src={getImageSrc(game.media[key]) ?? undefined} alt={key === 'background' ? t('media.background') : t(`viewMode.${key}`)} className="media-preview" /> : <p>{t('media.noImage')}</p>}
                     </div>
                   ))}
                 </div>
@@ -135,6 +145,7 @@ export function MediaModal({
                   event.preventDefault();
                   setDragSection(null);
                   if (draggedScreenshotPath) {
+                    // This drop is part of reorder flow, not file import.
                     setDraggedScreenshotPath(null);
                     setDragOverScreenshotPath(null);
                     return;
@@ -144,8 +155,8 @@ export function MediaModal({
                 }}
               >
                 <div className="modal-group__header">
-                  <strong>Gallery media</strong>
-                  <button className="button button--icon" type="button" disabled={isMediaSaving} onClick={() => void onImportMedia('screenshot')}>Add screenshot</button>
+                  <strong>{t('media.galleryMedia')}</strong>
+                  <button className="button button--icon" type="button" disabled={isMediaSaving} onClick={() => void onImportMedia('screenshot')}>{t('media.addScreenshot')}</button>
                 </div>
                 <div className="media-grid">
                   {game.media.screenshots.length ? game.media.screenshots.map((imagePath, index) => (
@@ -190,6 +201,7 @@ export function MediaModal({
                         event.stopPropagation();
                         setDraggedScreenshotPath(null);
                         setDragOverScreenshotPath(null);
+                        // Ignore no-op drops (same source/target) to avoid redundant reorder IPC calls.
                         if (!fromPath || fromPath === imagePath) {
                           return;
                         }
@@ -226,11 +238,11 @@ export function MediaModal({
                             imagePath,
                           });
                         }}
-                        title="Screenshot actions"
+                        title={t('media.screenshotActions')}
                       >
                         ...
                       </button>
-                      <img src={getImageSrc(imagePath) ?? undefined} alt="Screenshot" className="media-preview" draggable={false} />
+                      <img src={getImageSrc(imagePath) ?? undefined} alt={t('media.screenshotAlt')} className="media-preview" draggable={false} />
                       <div className="media-grid__reorder">
                         <button
                           className="button button--icon"
@@ -240,7 +252,7 @@ export function MediaModal({
                             const prev = game.media.screenshots[index - 1];
                             if (prev) void onReorderScreenshots(imagePath, prev);
                           }}
-                          aria-label="Move left"
+                          aria-label={t('media.moveLeft')}
                         >{'◀'}</button>
                         <button
                           className="button button--icon"
@@ -250,11 +262,11 @@ export function MediaModal({
                             const next = game.media.screenshots[index + 1];
                             if (next) void onReorderScreenshots(imagePath, next);
                           }}
-                          aria-label="Move right"
+                          aria-label={t('media.moveRight')}
                         >{'▶'}</button>
                       </div>
                     </div>
-                  )) : <p>No screenshots</p>}
+                  )) : <p>{t('media.noScreenshots')}</p>}
                 </div>
               </section>
           </>
@@ -273,7 +285,7 @@ export function MediaModal({
               void onRemoveScreenshot(screenshotContextMenu.imagePath);
             }}
           >
-            Remove screenshot
+            {t('media.removeScreenshot')}
           </button>
         </div>
       ) : null}

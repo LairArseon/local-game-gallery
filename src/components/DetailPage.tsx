@@ -1,8 +1,15 @@
 /**
- * Detail view for a selected game, including metadata and screenshots.
+ * Full detail workspace for a selected game.
+ *
+ * This view composes metadata, version actions, media shortcuts, and the focus
+ * card into a single drill-down surface. It is intentionally action-heavy so
+ * users can play, edit, browse folders, and inspect screenshots without leaving
+ * the current context. Callback props keep side effects in hooks/App while this
+ * file remains focused on rendering and interaction layout.
  */
 import type { CSSProperties, MouseEvent, ReactNode } from 'react';
 import { ArrowLeft, Play } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { GameSummary } from '../types';
 
 type DetailPageProps = {
@@ -39,6 +46,8 @@ export function DetailPage({
   onOpenPictures,
   onOpenScreenshot,
 }: DetailPageProps) {
+  const { t } = useTranslation();
+
   return (
     <section className="detail-page" style={contentScaleStyle}>
       <header className="detail-page__header">
@@ -65,32 +74,32 @@ export function DetailPage({
       {focusCard}
       <section className="detail-section panel">
         <div className="detail-section__header">
-          <h3>All metadata</h3>
+          <h3>{t('detail.allMetadata')}</h3>
           <button className="button button--icon" type="button" onClick={() => onOpenMetadata(game.path)}>
-            Edit metadata
+            {t('detail.editMetadata')}
           </button>
         </div>
         <div className="detail-metadata-grid">
           <div>
-            <p>Latest version: {game.metadata.latestVersion || 'Unknown'}</p>
-            <p>Status: {game.metadata.status || 'Not set'}</p>
-            <p>Score: {game.metadata.score || 'Not set'}</p>
-            <p>Description: {game.metadata.description || 'No description yet.'}</p>
+            <p>{t('detail.latestVersion')}: {game.metadata.latestVersion || t('detail.unknown')}</p>
+            <p>{t('detail.status')}: {game.metadata.status || t('detail.notSet')}</p>
+            <p>{t('detail.score')}: {game.metadata.score || t('detail.notSet')}</p>
+            <p>{t('detail.description')}: {game.metadata.description || t('detail.noDescription')}</p>
             <div className="detail-tags">
-              <strong>Notes</strong>
+              <strong>{t('detail.notes')}</strong>
               {game.metadata.notes.filter(Boolean).map((note) => (
                 <p key={note}>{note}</p>
               ))}
             </div>
             {game.metadata.tags.length ? (
               <div className="detail-tags">
-                <strong>Tags</strong>
+                <strong>{t('detail.tags')}</strong>
                 <p>{game.metadata.tags.join(', ')}</p>
               </div>
             ) : null}
             {game.metadata.customTags.length ? (
               <div className="detail-tags">
-                <strong>Additional tags</strong>
+                <strong>{t('detail.additionalTags')}</strong>
                 {game.metadata.customTags.map((tag) => (
                   <p key={tag.key}>{tag.key}: {tag.value}</p>
                 ))}
@@ -99,9 +108,9 @@ export function DetailPage({
           </div>
           <aside className="detail-versions">
             <div className="detail-versions__header">
-              <strong>Versions</strong>
+              <strong>{t('detail.versions')}</strong>
               <button className="button button--icon" type="button" onClick={() => onOpenGameFolder(game.path)}>
-                Open game folder
+                {t('detail.openGameFolder')}
               </button>
             </div>
             {game.versions.length ? (
@@ -113,28 +122,29 @@ export function DetailPage({
                       type="button"
                       onContextMenu={(event) => {
                         event.preventDefault();
+                        // Right-click opens Electron menu with version-specific actions.
                         onOpenVersionContextMenu(version.path, version.name);
                       }}
                       onClick={() => onOpenVersionFolder(version.path)}
-                      title="Right-click for version folder actions"
+                      title={t('detail.versionActionsHint')}
                     >
                       <span>{version.name}</span>
-                      <span>{version.hasNfo ? 'nfo' : 'no nfo'}</span>
+                      <span>{version.hasNfo ? t('detail.hasNfo') : t('detail.noNfo')}</span>
                     </button>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p>No versions detected.</p>
+              <p>{t('detail.noVersions')}</p>
             )}
           </aside>
         </div>
       </section>
       <section className="detail-section panel">
         <div className="detail-section__header">
-          <h3>Screenshots</h3>
+          <h3>{t('detail.screenshots')}</h3>
           <button className="button button--icon" type="button" onClick={() => onOpenPictures(game.path)}>
-            Add images
+            {t('detail.addImages')}
           </button>
         </div>
         {game.media.screenshots.length ? (
@@ -151,7 +161,7 @@ export function DetailPage({
             ))}
           </div>
         ) : (
-          <p>No screenshots yet. Placeholder visuals are being used.</p>
+          <p>{t('detail.noScreenshots')}</p>
         )}
       </section>
     </section>

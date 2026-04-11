@@ -22,6 +22,7 @@ import type {
 } from '../src/types';
 
 const api: GalleryApi = {
+  getAppVersion: (): Promise<string> => ipcRenderer.invoke('gallery:get-app-version'),
   getConfig: () => ipcRenderer.invoke('gallery:get-config'),
   saveConfig: (config: GalleryConfig) => ipcRenderer.invoke('gallery:save-config', config),
   pickGamesRoot: () => ipcRenderer.invoke('gallery:pick-games-root'),

@@ -19,9 +19,11 @@
     "dist:win": "npm run build && npm run build:icon && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win nsis"
   },
   "dependencies": {
+    "i18next": "^26.0.4",
     "lucide-react": "^1.8.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "react-i18next": "^17.0.2"
   },
   "devDependencies": {
     "@types/node": "^24.6.0",

@@ -1,8 +1,15 @@
 /**
- * Polymorphic game card renderer for poster/card/compact/expanded modes.
+ * Polymorphic game tile renderer for all gallery view variants.
+ *
+ * A single card implementation powers poster, card, compact, and expanded
+ * layouts to avoid behavior drift between view modes. The component centralizes
+ * selection, context menu entry points, and action affordances while adapting
+ * its markup density per mode. This keeps interaction contracts stable even as
+ * visual presentation changes.
  */
 import type { MouseEvent, ReactNode } from 'react';
 import { ArrowRight, Play } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { GalleryViewMode, GameSummary } from '../types';
 
 type GameCardProps = {
@@ -31,13 +38,15 @@ export function GameCard({
   onOpenDetail,
   onContextMenu,
 }: GameCardProps) {
+  const { t } = useTranslation();
+
   const artImgSrc = getImageSrc(viewMode === 'poster' ? game.media.poster : game.media.card);
   const art = (
     <div className={`game-card__art ${game.usesPlaceholderArt ? 'game-card__art--placeholder' : ''}`}>
       {artImgSrc ? (
         <img src={artImgSrc} alt={game.name} className="media-preview media-preview--cover" />
       ) : null}
-      <span>{game.usesPlaceholderArt ? 'Using placeholder art' : `${game.imageCount} images`}</span>
+      <span>{game.usesPlaceholderArt ? t('gameView.usingPlaceholderArt') : t('gameView.imageCount', { count: game.imageCount })}</span>
     </div>
   );
 
@@ -84,10 +93,10 @@ export function GameCard({
         </div>
         <div className="game-card__compact-main">
           <div className="game-card__compact-meta">
-            <p><strong>Status:</strong> {game.metadata.status || 'Not set'}</p>
-            <p><strong>Score:</strong> {game.metadata.score || 'Not set'}</p>
-            <p className="game-card__compact-description"><strong>Description:</strong> {compactDescription || 'No description yet.'}</p>
-            <p><strong>Tags:</strong> {compactTags.length ? compactTags.join(', ') : 'None'}</p>
+            <p><strong>{t('detail.status')}:</strong> {game.metadata.status || t('detail.notSet')}</p>
+            <p><strong>{t('detail.score')}:</strong> {game.metadata.score || t('detail.notSet')}</p>
+            <p className="game-card__compact-description"><strong>{t('detail.description')}:</strong> {compactDescription || t('detail.noDescription')}</p>
+            <p><strong>{t('detail.tags')}:</strong> {compactTags.length ? compactTags.join(', ') : t('gameView.none')}</p>
           </div>
           <div className="game-card__actions game-card__actions--stacked">
             <button
@@ -120,10 +129,10 @@ export function GameCard({
         {art}
         <div className="game-card__body">
           <h3>{game.name}</h3>
-          <p>Latest version: {game.metadata.latestVersion || 'Unknown'}</p>
-          <p>Status: {game.metadata.status || 'Not set'}</p>
-          <p>Score: {game.metadata.score || 'Not set'}</p>
-          <p>Tags: {game.metadata.tags.length ? game.metadata.tags.join(', ') : 'None'}</p>
+          <p>{t('detail.latestVersion')}: {game.metadata.latestVersion || t('detail.unknown')}</p>
+          <p>{t('detail.status')}: {game.metadata.status || t('detail.notSet')}</p>
+          <p>{t('detail.score')}: {game.metadata.score || t('detail.notSet')}</p>
+          <p>{t('detail.tags')}: {game.metadata.tags.length ? game.metadata.tags.join(', ') : t('gameView.none')}</p>
           {commonActions}
         </div>
       </article>
@@ -137,19 +146,19 @@ export function GameCard({
         <div className="game-card__body game-card__body--expanded">
           <div>
             <h3>{game.name}</h3>
-            <p>Status: {game.metadata.status || 'Not set'}</p>
-            <p>Score: {game.metadata.score || 'Not set'}</p>
-            <p>Tags: {game.metadata.tags.length ? game.metadata.tags.join(', ') : 'None'}</p>
-            <p>{game.metadata.description || 'No description yet.'}</p>
+            <p>{t('detail.status')}: {game.metadata.status || t('detail.notSet')}</p>
+            <p>{t('detail.score')}: {game.metadata.score || t('detail.notSet')}</p>
+            <p>{t('detail.tags')}: {game.metadata.tags.length ? game.metadata.tags.join(', ') : t('gameView.none')}</p>
+            <p>{game.metadata.description || t('detail.noDescription')}</p>
             {game.metadata.notes.filter(Boolean).slice(0, 2).map((note) => (
-              <p key={note}>Note: {note}</p>
+              <p key={note}>{t('gameView.note')}: {note}</p>
             ))}
-            {bootstrapText ? <p>Bootstrapped: {bootstrapText}</p> : null}
+            {bootstrapText ? <p>{t('gameView.bootstrapped')}: {bootstrapText}</p> : null}
             <ul className="version-list">
               {game.versions.map((version) => (
                 <li key={version.path}>
                   <span>{version.name}</span>
-                  <span>{version.hasNfo ? 'nfo' : 'no nfo'}</span>
+                  <span>{version.hasNfo ? t('detail.hasNfo') : t('detail.noNfo')}</span>
                 </li>
               ))}
             </ul>
@@ -184,8 +193,8 @@ export function GameCard({
       {art}
       <div className="game-card__body">
         <h3>{game.name}</h3>
-        <p>Status: {game.metadata.status || 'Not set'}</p>
-        <p>Score: {game.metadata.score || 'Not set'}</p>
+        <p>{t('detail.status')}: {game.metadata.status || t('detail.notSet')}</p>
+        <p>{t('detail.score')}: {game.metadata.score || t('detail.notSet')}</p>
         {commonActions}
       </div>
     </article>

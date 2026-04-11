@@ -1,5 +1,10 @@
 /**
- * Tag pool management panel used from the top bar.
+ * Topbar panel for maintaining the global tag pool.
+ *
+ * Users can add, rename, and remove canonical tags while seeing live usage
+ * counts from the current library. Editing uses bubble interactions paired with
+ * autocomplete so tag normalization is fast and consistent. Removal behavior is
+ * intentionally strict to prevent deleting tags still referenced by games.
  */
 import type { KeyboardEvent } from 'react';
 
@@ -63,6 +68,7 @@ export function TagPoolPanel({
                     placeholder="example: roguelike"
                     onFocus={() => onSetAutocomplete({ scope: 'pool', index, highlighted: 0 })}
                     onBlur={() => {
+                      // Delay finalize so autocomplete item mousedown can apply before blur clears editor.
                       window.setTimeout(() => {
                         onFinalizeEdit(index);
                       }, 100);
@@ -104,6 +110,7 @@ export function TagPoolPanel({
               onClick={() => onStartEdit(index)}
               onContextMenu={(event) => {
                 event.preventDefault();
+                // Removal guards live in hook logic; UI always routes right-click intent.
                 onRemoveTag(index);
               }}
             >

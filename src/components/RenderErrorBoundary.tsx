@@ -1,5 +1,10 @@
 /**
- * Top-level error boundary that prevents silent renderer blank screens.
+ * Defensive top-level render boundary for runtime UI failures.
+ *
+ * Instead of allowing crashes to blank the renderer, this boundary catches
+ * render-time errors and presents recoverable feedback to the user. It acts as
+ * a safety net for unexpected exceptions in deeply nested component trees and
+ * provides a stable fallback surface during refactors.
  */
 import React from 'react';
 

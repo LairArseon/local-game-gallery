@@ -1,5 +1,10 @@
 /**
- * Modal for viewing, filtering, and clearing rolling app logs.
+ * Modal window for inspecting runtime logs with lightweight filtering tools.
+ *
+ * The viewer supports level/date filters, empty-state messaging, and guarded
+ * clear-log actions while async operations are in progress. It is designed for
+ * fast diagnostics without leaving the app, and keeps controls intentionally
+ * small so large log payloads remain readable.
  */
 import { CustomSelect } from './CustomSelect';
 

@@ -1,6 +1,11 @@
-export type GalleryViewMode = 'poster' | 'card' | 'compact' | 'expanded';
+export const GALLERY_VIEW_MODES = ['poster', 'card', 'compact', 'expanded'] as const;
+export type GalleryViewMode = (typeof GALLERY_VIEW_MODES)[number];
 
-export type FilterOrderByMode = 'alpha-asc' | 'alpha-desc' | 'score-asc' | 'score-desc';
+export const FILTER_ORDER_BY_MODES = ['alpha-asc', 'alpha-desc', 'score-asc', 'score-desc'] as const;
+export type FilterOrderByMode = (typeof FILTER_ORDER_BY_MODES)[number];
+
+export const APP_LANGUAGES = ['en', 'es'] as const;
+export type AppLanguage = (typeof APP_LANGUAGES)[number];
 
 export type FilterPreset = {
   name: string;
@@ -11,6 +16,7 @@ export type FilterPreset = {
 };
 
 export type GalleryConfig = {
+  language: AppLanguage;
   gamesRoot: string;
   excludePatterns: string[];
   hideDotEntries: boolean;
@@ -188,6 +194,7 @@ export type RemoveScreenshotPayload = {
 };
 
 export type GalleryApi = {
+  getAppVersion: () => Promise<string>;
   getConfig: () => Promise<GalleryConfig>;
   saveConfig: (config: GalleryConfig) => Promise<GalleryConfig>;
   pickGamesRoot: () => Promise<string | null>;

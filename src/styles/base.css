@@ -697,6 +697,24 @@ button {
   margin: 8px 0 0;
 }
 
+.setup-heading__title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.setup-version-tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(247, 246, 242, 0.82);
+  font-size: 0.72rem;
+  line-height: 1;
+  padding: 0.24rem 0.48rem;
+}
+
 .field {
   display: grid;
   gap: 8px;

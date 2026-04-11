@@ -1,9 +1,15 @@
 /**
- * Setup sidebar for library paths, layout settings, and app preferences.
+ * Configuration sidebar for library paths, layout tuning, and app preferences.
+ *
+ * The panel exposes persistent settings with immediate form feedback, including
+ * folder selection, UI scale controls, status choices, and app icon controls.
+ * It also contains UX safeguards such as icon format warnings and drag/drop
+ * affordances so setup flows remain discoverable for new users.
  */
-import type { DragEvent, FocusEvent, FormEvent, MouseEvent } from 'react';
+import type { DragEvent, FocusEvent, MouseEvent, SubmitEventHandler } from 'react';
 import { useState } from 'react';
 import { AlertTriangle, FolderOpen } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { GalleryConfig } from '../types';
 import { clamp } from '../utils/app-helpers';
 
@@ -16,11 +22,12 @@ type AppIconSummary = {
 };
 
 type SetupPanelProps = {
+  appVersion: string;
   config: GalleryConfig;
   isSidebarOpen: boolean;
   isSaving: boolean;
   chooseLibraryFolderLabel: string;
-  onSaveConfig: (event: FormEvent<HTMLFormElement>) => void;
+  onSaveConfig: SubmitEventHandler<HTMLFormElement>;
   onPickRoot: () => void;
   onConfigChange: (nextConfig: GalleryConfig) => void;
   onToggleSystemMenuBar: (visible: boolean) => void;
@@ -39,6 +46,7 @@ type SetupPanelProps = {
 };
 
 export function SetupPanel({
+  appVersion,
   config,
   isSidebarOpen,
   isSaving,
@@ -60,11 +68,13 @@ export function SetupPanel({
   onApplyAppIconNow,
   onResetAppIcon,
 }: SetupPanelProps) {
+  const { t, i18n } = useTranslation();
   const [isIconWarningOpen, setIsIconWarningOpen] = useState(false);
   const [iconWarningPosition, setIconWarningPosition] = useState<{ left: number; top: number } | null>(null);
 
   const openIconWarning = (event: MouseEvent<HTMLSpanElement> | FocusEvent<HTMLSpanElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
+    // Anchor tooltip to icon trigger so pointer and keyboard focus share the same placement.
     setIconWarningPosition({
       left: bounds.right + 10,
       top: bounds.top + bounds.height / 2,
@@ -80,19 +90,51 @@ export function SetupPanel({
     <>
       <aside className={`panel settings ${isSidebarOpen ? 'settings--open' : 'settings--closed'}`}>
         <form onSubmit={onSaveConfig}>
-        <div className="panel-heading">
-          <h2>Setup</h2>
-          <p>Configuration is saved between app launches.</p>
-        </div>
+          <div className="panel-heading">
+            <div className="setup-heading__title-row">
+              <h2>{t('setup.title')}</h2>
+              {appVersion ? <span className="setup-version-tag">v{appVersion}</span> : null}
+            </div>
+            <p>{t('setup.savedBetweenLaunches')}</p>
+          </div>
+
+        <section className="field">
+          <span>{t('setup.languageTitle')}</span>
+          <div className="app-icon-actions">
+            <button
+              className="button button--icon"
+              type="button"
+              onClick={() => {
+                onConfigChange({ ...config, language: 'en' });
+                void i18n.changeLanguage('en');
+              }}
+              disabled={config.language === 'en'}
+            >
+              {t('setup.languageEnglish')}
+            </button>
+            <button
+              className="button button--icon"
+              type="button"
+              onClick={() => {
+                onConfigChange({ ...config, language: 'es' });
+                void i18n.changeLanguage('es');
+              }}
+              disabled={config.language === 'es'}
+            >
+              {t('setup.languageSpanish')}
+            </button>
+          </div>
+          <small className="field__hint">{t('setup.languageHint')}</small>
+        </section>
 
         <label className="field">
-          <span>Games root</span>
+          <span>{t('setup.gamesRoot')}</span>
           <div className="field__input-with-action">
             <input
               type="text"
               value={config.gamesRoot}
               onChange={(event) => onConfigChange({ ...config, gamesRoot: event.target.value })}
-              placeholder="D:\\Games or /home/you/Games"
+              placeholder={t('setup.gamesRootPlaceholder')}
             />
             <button
               className="button button--icon-only field__picker-button"
@@ -108,7 +150,7 @@ export function SetupPanel({
         </label>
 
         <label className="field">
-          <span>Exclude patterns</span>
+          <span>{t('setup.excludePatterns')}</span>
           <textarea
             rows={4}
             value={config.excludePatterns.join('\n')}
@@ -123,7 +165,7 @@ export function SetupPanel({
         </label>
 
         <label className="field field--toggle">
-          <span>Hide dot-prefixed files and folders</span>
+          <span>{t('setup.hideDotEntries')}</span>
           <input
             type="checkbox"
             checked={config.hideDotEntries}
@@ -132,7 +174,7 @@ export function SetupPanel({
         </label>
 
         <label className="field">
-          <span>Version folder pattern</span>
+          <span>{t('setup.versionFolderPattern')}</span>
           <input
             type="text"
             value={config.versionFolderPattern}
@@ -141,7 +183,7 @@ export function SetupPanel({
         </label>
 
         <label className="field">
-          <span>Pictures folder name</span>
+          <span>{t('setup.picturesFolderName')}</span>
           <input
             type="text"
             value={config.picturesFolderName}
@@ -151,11 +193,11 @@ export function SetupPanel({
 
         <section className="field field--app-icon">
           <div className="field__label-row">
-            <span>App icon (PNG)</span>
+            <span>{t('setup.appIconPng')}</span>
             <span
               className="app-icon-warning"
               tabIndex={0}
-              aria-label="Icon behavior details"
+              aria-label={t('setup.iconBehaviorDetailsAria')}
               onMouseEnter={openIconWarning}
               onMouseLeave={closeIconWarning}
               onFocus={openIconWarning}
@@ -167,6 +209,7 @@ export function SetupPanel({
           <div
             className={`app-icon-dropzone ${isAppIconDragActive ? 'app-icon-dropzone--dragover' : ''}`}
             onDragOver={(event) => {
+              // Prevent browser file-open navigation and expose copy intent feedback.
               event.preventDefault();
               event.stopPropagation();
               event.dataTransfer.dropEffect = 'copy';
@@ -187,20 +230,20 @@ export function SetupPanel({
               }
             }}
             onClick={onPickAppIcon}
-            aria-label="Drop PNG icon here or click to select"
-            title="Drop PNG icon here or click to select"
+            aria-label={t('setup.appIconDropAria')}
+            title={t('setup.appIconDropAria')}
           >
             {appIconPreviewSrc ? (
-              <img src={appIconPreviewSrc} alt="Selected app icon preview" className="app-icon-preview" />
+              <img src={appIconPreviewSrc} alt={t('setup.selectedAppIconPreviewAlt')} className="app-icon-preview" />
             ) : (
               <div className="app-icon-preview app-icon-preview--placeholder" aria-hidden="true">PNG</div>
             )}
             <div className="app-icon-dropzone__meta">
-              <strong>{appIconPath ? 'Custom icon selected' : 'Default icon in use'}</strong>
+              <strong>{appIconPath ? t('setup.customIconSelected') : t('setup.defaultIconInUse')}</strong>
               <p>
                 {appIconPath
                   ? appIconPath
-                  : 'Drop a PNG file or click to choose one for future installer builds.'}
+                  : t('setup.appIconDropHint')}
               </p>
             </div>
           </div>
@@ -209,20 +252,20 @@ export function SetupPanel({
               {appIconSummary.message} {appIconSummary.width > 0 && appIconSummary.height > 0 ? `(${appIconSummary.width}x${appIconSummary.height}px)` : ''}
             </small>
           ) : (
-            <small className="field__hint">Use at least 256x256 PNG. Non-square icons are padded to square automatically.</small>
+            <small className="field__hint">{t('setup.appIconSizeHint')}</small>
           )}
           <div className="app-icon-actions">
             <button className="button button--icon" type="button" onClick={onApplyAppIconNow} disabled={!appIconPath}>
-              Apply now
+              {t('setup.applyNow')}
             </button>
             <button className="button button--icon" type="button" onClick={onResetAppIcon} disabled={!appIconPath}>
-              Reset to default
+              {t('setup.resetToDefault')}
             </button>
           </div>
         </section>
 
         <label className="field">
-          <span>Status choices</span>
+          <span>{t('setup.statusChoices')}</span>
           <textarea
             rows={5}
             value={config.statusChoices.join('\n')}
@@ -237,7 +280,7 @@ export function SetupPanel({
         </label>
 
         <label className="field">
-          <span>Poster view columns</span>
+          <span>{t('setup.posterViewColumns')}</span>
           <input
             type="number"
             min={0}
@@ -250,11 +293,11 @@ export function SetupPanel({
               })
             }
           />
-          <small className="field__hint">Use 0 to auto-fit columns based on current element size.</small>
+          <small className="field__hint">{t('setup.columnsHint')}</small>
         </label>
 
         <label className="field">
-          <span>Card view columns</span>
+          <span>{t('setup.cardViewColumns')}</span>
           <input
             type="number"
             min={0}
@@ -267,11 +310,11 @@ export function SetupPanel({
               })
             }
           />
-          <small className="field__hint">Use 0 to auto-fit columns based on current element size.</small>
+          <small className="field__hint">{t('setup.columnsHint')}</small>
         </label>
 
         <label className="field">
-          <span>Base font scale</span>
+          <span>{t('setup.baseFontScale')}</span>
           <input
             type="number"
             min={0.75}
@@ -285,11 +328,11 @@ export function SetupPanel({
               })
             }
           />
-          <small className="field__hint">Affects only game content cards/lists/detail, not setup or top menus.</small>
+          <small className="field__hint">{t('setup.baseFontScaleHint')}</small>
         </label>
 
         <label className="field">
-          <span>Base spacing scale</span>
+          <span>{t('setup.baseSpacingScale')}</span>
           <input
             type="number"
             min={0.75}
@@ -303,11 +346,11 @@ export function SetupPanel({
               })
             }
           />
-          <small className="field__hint">Affects only game content spacing.</small>
+          <small className="field__hint">{t('setup.baseSpacingScaleHint')}</small>
         </label>
 
         <label className="field">
-          <span>Metadata line spacing scale</span>
+          <span>{t('setup.metadataLineSpacingScale')}</span>
           <input
             type="number"
             min={0.5}
@@ -321,11 +364,11 @@ export function SetupPanel({
               })
             }
           />
-          <small className="field__hint">Controls spacing between metadata lines in poster/card/expanded views and scales with font size.</small>
+          <small className="field__hint">{t('setup.metadataLineSpacingHint')}</small>
         </label>
 
         <label className="field field--toggle">
-          <span>Dynamic scaling from grid density</span>
+          <span>{t('setup.dynamicScalingFromGridDensity')}</span>
           <input
             type="checkbox"
             checked={Boolean(config.uiDynamicGridScaling)}
@@ -339,7 +382,7 @@ export function SetupPanel({
         </label>
 
         <label className="field field--toggle">
-          <span>Show system menu bar</span>
+          <span>{t('setup.showSystemMenuBar')}</span>
           <input
             type="checkbox"
             checked={Boolean(config.showSystemMenuBar)}
@@ -355,7 +398,7 @@ export function SetupPanel({
         </label>
 
         <label className="field">
-          <span>Global zoom</span>
+          <span>{t('setup.globalZoom')}</span>
           <input
             type="number"
             min={0.75}
@@ -369,20 +412,20 @@ export function SetupPanel({
               })
             }
           />
-          <small className="field__hint">Also works with Ctrl + mouse wheel and +/- keys. Ctrl+0 resets to 100%.</small>
+          <small className="field__hint">{t('setup.globalZoomHint')}</small>
         </label>
 
         <div className="setup-log-actions">
           <button className="button button--icon" type="button" onClick={onOpenLogViewer}>
-            View logs
+            {t('setup.viewLogs')}
           </button>
           <button className="button button--icon" type="button" onClick={onOpenLogFolder}>
-            Open logs folder
+            {t('setup.openLogsFolder')}
           </button>
         </div>
 
         <button className="button button--primary" type="submit" disabled={isSaving}>
-          {isSaving ? 'Saving...' : 'Save setup'}
+          {isSaving ? t('actions.saving') : t('setup.saveSetup')}
         </button>
         </form>
       </aside>
@@ -392,8 +435,7 @@ export function SetupPanel({
           role="tooltip"
           style={{ left: `${iconWarningPosition.left}px`, top: `${iconWarningPosition.top}px` }}
         >
-          Custom PNG icons update preview immediately, can be applied for the current session, and are used on next app startup.
-          Packaged executable and installer icons are build-time assets on Windows, so true installed identity changes still require rebuilding.
+          {t('setup.appIconWarningText')}
         </div>
       ) : null}
     </>

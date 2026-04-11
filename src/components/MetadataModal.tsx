@@ -1,7 +1,13 @@
 /**
- * Metadata editor modal, including tag bubble editing and autocomplete.
+ * Metadata editing modal for core fields, notes, and tag maintenance.
+ *
+ * The editor supports inline bubble-style tag editing with autocomplete and
+ * keyboard navigation while also handling multiline notes and status/score
+ * updates. Interactions are staged in a draft object passed from state hooks,
+ * allowing cancellation without side effects and save-on-demand behavior.
  */
 import type { KeyboardEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CustomSelect } from './CustomSelect';
 import type { GameMetadata } from '../types';
 
@@ -42,48 +48,50 @@ export function MetadataModal({
   onHandleTagAutocompleteKeyDown,
   onApplyTagSuggestion,
 }: MetadataModalProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <section className="modal-panel modal-panel--metadata" onClick={(event) => event.stopPropagation()}>
         <header className="modal-panel__header">
-          <h2>Edit Metadata</h2>
-          <button className="button" type="button" onClick={onClose}>Close</button>
+          <h2>{t('metadata.editMetadata')}</h2>
+          <button className="button" type="button" onClick={onClose}>{t('common.close')}</button>
         </header>
         <div className="modal-panel__body modal-panel__body--metadata">
           <div className="modal-panel__column">
             <label className="field">
-              <span>Latest version</span>
+              <span>{t('metadata.latestVersion')}</span>
               <input type="text" value={metadataDraft.latestVersion} onChange={(event) => onSetMetadataDraft({ ...metadataDraft, latestVersion: event.target.value })} />
             </label>
             <label className="field">
-              <span>Score</span>
+              <span>{t('metadata.score')}</span>
               <input type="text" value={metadataDraft.score} onChange={(event) => onSetMetadataDraft({ ...metadataDraft, score: event.target.value })} />
             </label>
             <label className="field">
-              <span>Status</span>
+              <span>{t('metadata.status')}</span>
               <CustomSelect
-                ariaLabel="Metadata status"
+                ariaLabel={t('metadata.statusAria')}
                 value={metadataDraft.status}
                 options={[
-                  { value: '', label: 'Not set' },
+                  { value: '', label: t('detail.notSet') },
                   ...statusChoices.map((statusOption) => ({ value: statusOption, label: statusOption })),
                 ]}
                 onChange={(nextValue) => onSetMetadataDraft({ ...metadataDraft, status: nextValue })}
               />
             </label>
             <label className="field">
-              <span>Description</span>
+              <span>{t('metadata.description')}</span>
               <textarea rows={4} value={metadataDraft.description} onChange={(event) => onSetMetadataDraft({ ...metadataDraft, description: event.target.value })} />
             </label>
             <div className="modal-group">
               <div className="modal-group__header">
-                <strong>Notes</strong>
-                <button className="button button--icon" type="button" onClick={() => onSetMetadataDraft({ ...metadataDraft, notes: [...metadataDraft.notes, ''] })}>Add note</button>
+                <strong>{t('metadata.notes')}</strong>
+                <button className="button button--icon" type="button" onClick={() => onSetMetadataDraft({ ...metadataDraft, notes: [...metadataDraft.notes, ''] })}>{t('metadata.addNote')}</button>
               </div>
               {metadataDraft.notes.map((note, index) => (
                 <div className="tag-row" key={`note-${index}`}>
                   <textarea rows={2} value={note} onChange={(event) => onSetMetadataDraft({ ...metadataDraft, notes: metadataDraft.notes.map((entry, noteIndex) => noteIndex === index ? event.target.value : entry) })} />
-                  <button className="button button--icon" type="button" onClick={() => onSetMetadataDraft({ ...metadataDraft, notes: metadataDraft.notes.filter((_, noteIndex) => noteIndex !== index) || [''] })}>Remove</button>
+                  <button className="button button--icon" type="button" onClick={() => onSetMetadataDraft({ ...metadataDraft, notes: metadataDraft.notes.filter((_, noteIndex) => noteIndex !== index) || [''] })}>{t('common.remove')}</button>
                 </div>
               ))}
             </div>
@@ -92,13 +100,13 @@ export function MetadataModal({
           <div className="modal-panel__column modal-panel__column--tags">
             <div className="modal-group modal-group--tight">
               <div className="modal-group__header">
-                <strong>Tags</strong>
+                <strong>{t('metadata.tags')}</strong>
               </div>
-              <p className="topbar-filters__hint">Click a bubble to edit. Right-click a bubble to remove.</p>
+              <p className="topbar-filters__hint">{t('metadata.tagsHint')}</p>
               <div className="tag-bubbles">
                 {metadataDraft.tags.map((tag, index) => {
                   const isEditing = activeMetadataTagEditorIndex === index;
-                  const bubbleLabel = tag.trim() || 'Empty tag';
+                  const bubbleLabel = tag.trim() || t('filters.emptyTag');
 
                   if (isEditing) {
                     return (
@@ -108,10 +116,11 @@ export function MetadataModal({
                             type="text"
                             autoFocus
                             value={tag}
-                            placeholder="example: roguelike"
+                            placeholder={t('metadata.tagPlaceholder')}
                             onFocus={() => onSetActiveTagAutocomplete({ scope: 'metadata', index, highlighted: 0 })}
                             onBlur={() => {
                               window.setTimeout(() => {
+                                // Defer blur cleanup so autocomplete mousedown can update the draft first.
                                 onSetMetadataDraft((current) => {
                                   const nextValue = (current.tags[index] ?? '').trim();
                                   if (nextValue) {
@@ -136,6 +145,7 @@ export function MetadataModal({
                             onKeyDown={(event) => {
                               onHandleTagAutocompleteKeyDown(event, 'metadata', index);
                               if (event.key === 'Enter' || event.key === 'Escape') {
+                                // Match panel editors: Enter/Escape exits inline edit mode.
                                 onSetActiveMetadataTagEditorIndex(null);
                                 onSetActiveTagAutocomplete(null);
                               }
@@ -212,9 +222,9 @@ export function MetadataModal({
           </div>
         </div>
         <footer className="modal-panel__footer">
-          <button className="button" type="button" onClick={onClose}>Cancel</button>
+          <button className="button" type="button" onClick={onClose}>{t('common.cancel')}</button>
           <button className="button button--primary" type="button" disabled={isMetadataSaving} onClick={onSave}>
-            {isMetadataSaving ? 'Saving...' : 'Save metadata'}
+            {isMetadataSaving ? t('actions.saving') : t('metadata.saveMetadata')}
           </button>
         </footer>
       </section>
