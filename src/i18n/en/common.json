@@ -16,6 +16,8 @@
     "hideFilters": "Hide filters",
     "showSetup": "Show setup",
     "hideSetup": "Hide setup",
+    "showVersionNotifications": "Show version notifications",
+    "hideVersionNotifications": "Hide version notifications",
     "chooseLibraryFolder": "Choose library folder",
     "saving": "Saving..."
   },
@@ -183,6 +185,21 @@
     "prev": "Prev",
     "next": "Next"
   },
+  "versionMismatch": {
+    "title": "Version notifications",
+    "count_one": "{{count}} game needs review",
+    "count_other": "{{count}} games need review",
+    "focusHint": "Click a game to focus it in the gallery.",
+    "focusGameAction": "Focus in gallery",
+    "openGameAria": "Focus {{game}} in gallery",
+    "itemSummary": "{{current}} -> {{detected}}",
+    "resolve": "Mark as latest",
+    "dismiss": "Dismiss",
+    "empty": "No pending version mismatch notifications.",
+    "badgeLabel": "New version: {{current}} -> {{detected}}",
+    "badgeAria": "Version mismatch. Current {{current}}. Detected {{detected}}.",
+    "resolveTooltip": "Update latest_version to detected version"
+  },
   "logs": {
     "clearConfirm": "Clear all logs? This cannot be undone."
   },
@@ -226,6 +243,8 @@
     "failedOpenLogsFolder": "Failed to open logs folder.",
     "foundGameFolders_one": "Found {{count}} game folder.",
     "foundGameFolders_other": "Found {{count}} game folders.",
+    "versionMismatchResolved": "Updated {{game}} latest version to {{version}}.",
+    "versionMismatchDismissed": "Dismissed version notification for {{game}}.",
     "scanCompletedNoMatches": "Scan completed. No games matched yet.",
     "failedScanGameFolders": "Failed to scan game folders."
   }

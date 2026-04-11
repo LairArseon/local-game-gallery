@@ -24,6 +24,7 @@ type GameCardProps = {
   onToggleSelection: (path: string) => void;
   onPlayClick: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
   onOpenDetail: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
+  onResolveVersionMismatch: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
   onContextMenu: (game: GameSummary, event: MouseEvent<HTMLElement>) => void;
 };
 
@@ -36,6 +37,7 @@ export function GameCard({
   onToggleSelection,
   onPlayClick,
   onOpenDetail,
+  onResolveVersionMismatch,
   onContextMenu,
 }: GameCardProps) {
   const { t } = useTranslation();
@@ -77,19 +79,39 @@ export function GameCard({
     </div>
   );
 
+  const mismatchBadge = game.hasVersionMismatch ? (
+    <button
+      className="version-mismatch-badge"
+      type="button"
+      onClick={(event) => onResolveVersionMismatch(game, event)}
+      title={t('versionMismatch.resolveTooltip')}
+      aria-label={t('versionMismatch.badgeAria', {
+        current: game.metadata.latestVersion || t('detail.unknown'),
+        detected: game.detectedLatestVersion || t('detail.unknown'),
+      })}
+    >
+      {t('versionMismatch.badgeLabel', {
+        current: game.metadata.latestVersion || t('detail.unknown'),
+        detected: game.detectedLatestVersion || t('detail.unknown'),
+      })}
+    </button>
+  ) : null;
+
   const commonProps = {
     className: '',
     onClick: () => onToggleSelection(game.path),
     onContextMenu: (event: MouseEvent<HTMLElement>) => onContextMenu(game, event),
   };
+  const versionMismatchClass = game.hasVersionMismatch ? 'game-card--version-mismatch' : '';
 
   if (viewMode === 'compact') {
     const compactDescription = game.metadata.description.trim();
     const compactTags = game.metadata.tags.map((tag) => tag.trim()).filter(Boolean);
     return (
-      <article className={`game-card game-card--compact ${isSelected ? 'game-card--selected' : ''}`} onClick={commonProps.onClick} onContextMenu={commonProps.onContextMenu}>
+      <article className={`game-card game-card--compact ${versionMismatchClass} ${isSelected ? 'game-card--selected' : ''}`} data-game-path={game.path} onClick={commonProps.onClick} onContextMenu={commonProps.onContextMenu}>
         <div className="game-card__row">
           <h3>{game.name}</h3>
+          {mismatchBadge}
         </div>
         <div className="game-card__compact-main">
           <div className="game-card__compact-meta">
@@ -125,10 +147,11 @@ export function GameCard({
 
   if (viewMode === 'card') {
     return (
-      <article className={`game-card game-card--card ${isSelected ? 'game-card--selected' : ''}`} onClick={commonProps.onClick} onContextMenu={commonProps.onContextMenu}>
+      <article className={`game-card game-card--card ${versionMismatchClass} ${isSelected ? 'game-card--selected' : ''}`} data-game-path={game.path} onClick={commonProps.onClick} onContextMenu={commonProps.onContextMenu}>
         {art}
         <div className="game-card__body">
           <h3>{game.name}</h3>
+          {mismatchBadge}
           <p>{t('detail.latestVersion')}: {game.metadata.latestVersion || t('detail.unknown')}</p>
           <p>{t('detail.status')}: {game.metadata.status || t('detail.notSet')}</p>
           <p>{t('detail.score')}: {game.metadata.score || t('detail.notSet')}</p>
@@ -141,11 +164,12 @@ export function GameCard({
 
   if (viewMode === 'expanded') {
     return (
-      <article className={`game-card game-card--expanded ${isSelected ? 'game-card--selected' : ''}`} onClick={commonProps.onClick} onContextMenu={commonProps.onContextMenu}>
+      <article className={`game-card game-card--expanded ${versionMismatchClass} ${isSelected ? 'game-card--selected' : ''}`} data-game-path={game.path} onClick={commonProps.onClick} onContextMenu={commonProps.onContextMenu}>
         {art}
         <div className="game-card__body game-card__body--expanded">
           <div>
             <h3>{game.name}</h3>
+            {mismatchBadge}
             <p>{t('detail.status')}: {game.metadata.status || t('detail.notSet')}</p>
             <p>{t('detail.score')}: {game.metadata.score || t('detail.notSet')}</p>
             <p>{t('detail.tags')}: {game.metadata.tags.length ? game.metadata.tags.join(', ') : t('gameView.none')}</p>
@@ -189,10 +213,11 @@ export function GameCard({
   }
 
   return (
-    <article className={`game-card game-card--poster ${isSelected ? 'game-card--selected' : ''}`} onClick={commonProps.onClick} onContextMenu={commonProps.onContextMenu}>
+    <article className={`game-card game-card--poster ${versionMismatchClass} ${isSelected ? 'game-card--selected' : ''}`} data-game-path={game.path} onClick={commonProps.onClick} onContextMenu={commonProps.onContextMenu}>
       {art}
       <div className="game-card__body">
         <h3>{game.name}</h3>
+        {mismatchBadge}
         <p>{t('detail.status')}: {game.metadata.status || t('detail.notSet')}</p>
         <p>{t('detail.score')}: {game.metadata.score || t('detail.notSet')}</p>
         {commonActions}

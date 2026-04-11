@@ -151,9 +151,17 @@ export async function scanGames(config: GalleryConfig): Promise<ScanResult> {
     const imageCount = picturesStats?.isDirectory() ? await countImages(picturesPath) : 0;
     const usesPlaceholderArt = imageCount === 0;
     const metadata = await readGameMetadata(gamePath, entry.name, versions);
+    const detectedLatestVersion = getLatestVersionName(versions);
     if (!metadata.latestVersion) {
-      metadata.latestVersion = getLatestVersionName(versions);
+      metadata.latestVersion = detectedLatestVersion;
     }
+    const hasVersionMismatch = Boolean(
+      detectedLatestVersion
+      && metadata.latestVersion
+      && detectedLatestVersion !== metadata.latestVersion,
+    );
+    const isVersionMismatchDismissed = hasVersionMismatch
+      && config.dismissedVersionMismatches?.[gamePath] === detectedLatestVersion;
     const media = picturesStats?.isDirectory()
       ? await scanGameMedia(picturesPath)
       : { poster: null, card: null, background: null, screenshots: [] };
@@ -171,6 +179,9 @@ export async function scanGames(config: GalleryConfig): Promise<ScanResult> {
       createdGameNfo,
       createdVersionNfoCount,
       metadata,
+      detectedLatestVersion,
+      hasVersionMismatch,
+      isVersionMismatchDismissed,
       media,
       versionCount: versions.length,
       versions,

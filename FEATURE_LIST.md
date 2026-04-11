@@ -22,7 +22,7 @@ Status options:
 
 - [1. App Vault (Password-Protected Hidden Games)](#1-app-vault-password-protected-hidden-games) - `idea`
 - [2. In-App App Icon Customization (Drop PNG)](#2-in-app-app-icon-customization-drop-png) - `done`
-- [3. New Version Notifications and Mismatch Badges](#3-new-version-notifications-and-mismatch-badges) - `planned`
+- [3. New Version Notifications and Mismatch Badges](#3-new-version-notifications-and-mismatch-badges) - `done`
 - [4. Quick Folder Navigation from Game and Version Menus](#4-quick-folder-navigation-from-game-and-version-menus) - `done`
 - [5. Filter Pane Redesign (Tag Bubbles + Condensed Layout)](#5-filter-pane-redesign-tag-bubbles--condensed-layout) - `done`
 - [6. Top Bar Action Prioritization + F5 Rescan Shortcut](#6-top-bar-action-prioritization--f5-rescan-shortcut) - `done`
@@ -118,9 +118,13 @@ Add a settings action that allows users to drop/select a PNG icon and apply it a
 
 ## 3. New Version Notifications and Mismatch Badges
 
-- Status: `planned`
+- Status: `done`
 - Priority: `medium`
 - Goal: Notify users when a game has a newer detected version than the one currently recorded as latest in `game.nfo`.
+
+### Work note
+
+- Completed on 2026-04-11.
 
 ### Summary
 

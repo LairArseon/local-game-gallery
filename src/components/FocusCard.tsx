@@ -23,6 +23,7 @@ type FocusCardProps = {
   onOpenScreenshot: (imagePath: string) => void;
   onPlayClick: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
   onOpenDetail: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
+  onResolveVersionMismatch: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
   actionLabels: {
     play: string;
     open: string;
@@ -39,6 +40,7 @@ export function FocusCard({
   onOpenScreenshot,
   onPlayClick,
   onOpenDetail,
+  onResolveVersionMismatch,
   actionLabels,
 }: FocusCardProps) {
   const { t } = useTranslation();
@@ -58,7 +60,7 @@ export function FocusCard({
     : null;
 
   return (
-    <article className={`focus-card panel ${isVertical ? 'focus-card--vertical' : 'focus-card--wide'}`}>
+    <article className={`focus-card panel ${game.hasVersionMismatch ? 'focus-card--version-mismatch' : ''} ${isVertical ? 'focus-card--vertical' : 'focus-card--wide'}`}>
       <div className={`game-card__art ${game.usesPlaceholderArt ? 'game-card__art--placeholder' : ''}`}>
         {hasScreenshotCarousel && focusImgSrc && currentCarouselImagePath ? (
           <button
@@ -105,6 +107,23 @@ export function FocusCard({
       </div>
       <div className="focus-card__content">
         <h3>{game.name}</h3>
+        {game.hasVersionMismatch ? (
+          <button
+            className="version-mismatch-badge"
+            type="button"
+            onClick={(event) => onResolveVersionMismatch(game, event)}
+            title={t('versionMismatch.resolveTooltip')}
+            aria-label={t('versionMismatch.badgeAria', {
+              current: game.metadata.latestVersion || t('detail.unknown'),
+              detected: game.detectedLatestVersion || t('detail.unknown'),
+            })}
+          >
+            {t('versionMismatch.badgeLabel', {
+              current: game.metadata.latestVersion || t('detail.unknown'),
+              detected: game.detectedLatestVersion || t('detail.unknown'),
+            })}
+          </button>
+        ) : null}
         <p>{t('detail.latestVersion')}: {game.metadata.latestVersion || t('detail.unknown')}</p>
         <p>{t('detail.status')}: {game.metadata.status || t('detail.notSet')}</p>
         <p>{t('detail.score')}: {game.metadata.score || t('detail.notSet')}</p>

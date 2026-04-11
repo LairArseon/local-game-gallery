@@ -23,6 +23,7 @@ import { ModalHost } from './components/ModalHost';
 import { SetupPanel } from './components/SetupPanel';
 import { TopbarControls } from './components/TopbarControls';
 import { TopbarPanels } from './components/TopbarPanels';
+import { VersionMismatchPanel } from './components/VersionMismatchPanel';
 import { useAppIconSettings } from './hooks/useAppIconSettings';
 import { useLogViewer } from './hooks/useLogViewer';
 import { useMediaManager } from './hooks/useMediaManager';
@@ -39,6 +40,7 @@ import { useContextMenuListeners } from './hooks/useContextMenuListeners';
 import { useResponsiveGrid } from './hooks/useResponsiveGrid';
 import { useAppLifecycleHandlers } from './hooks/useAppLifecycleHandlers';
 import { useGameActions } from './hooks/useGameActions';
+import { useVersionMismatchManager } from './hooks/useVersionMismatchManager';
 import {clamp} from './utils/app-helpers';
 
 const emptyScan: ScanResult = {
@@ -105,6 +107,8 @@ function App() {
     hideFilters: t('actions.hideFilters'),
     showSetup: t('actions.showSetup'),
     hideSetup: t('actions.hideSetup'),
+    showVersionNotifications: t('actions.showVersionNotifications'),
+    hideVersionNotifications: t('actions.hideVersionNotifications'),
     chooseLibraryFolder: t('actions.chooseLibraryFolder'),
     saving: t('actions.saving'),
   } as const), [t]);
@@ -447,6 +451,27 @@ function App() {
   });
 
   const {
+    isVersionNotificationsOpen,
+    setIsVersionNotificationsOpen,
+    visibleVersionMismatchGames,
+    dismissVersionMismatch,
+    resolveVersionMismatch,
+    focusGameFromNotification,
+  } = useVersionMismatchManager({
+    config,
+    setConfig,
+    scanResult,
+    setStatus,
+    refreshScan,
+    logAppEvent,
+    toErrorMessage,
+    t,
+    setDetailGamePath,
+    setSelectedGamePath,
+    cardsContainerRef,
+  });
+
+  const {
     renderFocusCard,
     renderGame,
     renderInlinePosterCardFocus,
@@ -460,6 +485,10 @@ function App() {
     onToggleSelection: toggleGameSelection,
     onPlayClick: handlePlayClick,
     onOpenDetail: handleOpenDetail,
+    onResolveVersionMismatch: (game, event) => {
+      event.stopPropagation();
+      void resolveVersionMismatch(game.path, game.name, game.detectedLatestVersion);
+    },
     onGameCardContextMenu,
     focusCarouselIndexByGamePath,
     setFocusCarouselIndexByGamePath,
@@ -546,15 +575,32 @@ function App() {
           isTagPoolPanelOpen={isTagPoolPanelOpen}
           isFilterPanelOpen={isFilterPanelOpen}
           isSidebarOpen={isSidebarOpen}
+          isVersionNotificationsOpen={isVersionNotificationsOpen}
           isScanning={isScanning}
+          versionMismatchCount={visibleVersionMismatchGames.length}
           onToggleTagPoolPanel={() => setIsTagPoolPanelOpen((current) => !current)}
           onToggleFilterPanel={() => setIsFilterPanelOpen((current) => !current)}
           onToggleSidebar={() => setIsSidebarOpen((current) => !current)}
+          onToggleVersionNotifications={() => setIsVersionNotificationsOpen((current) => !current)}
           onRescan={() => {
             void refreshScan();
           }}
           actionLabels={actionLabels}
         />
+        {isVersionNotificationsOpen ? (
+          <VersionMismatchPanel
+            games={visibleVersionMismatchGames}
+            onOpenGame={(gamePath) => {
+              focusGameFromNotification(gamePath);
+            }}
+            onResolve={(game) => {
+              void resolveVersionMismatch(game.path, game.name, game.detectedLatestVersion);
+            }}
+            onDismiss={(game) => {
+              void dismissVersionMismatch(game.path, game.detectedLatestVersion, game.name);
+            }}
+          />
+        ) : null}
         <TopbarPanels
           isTagPoolPanelOpen={isTagPoolPanelOpen}
           isFilterPanelOpen={isFilterPanelOpen}

@@ -7,7 +7,7 @@
  * test and keeping visual intent centralized.
  */
 import type { RefObject } from 'react';
-import { RefreshCw, Settings, SlidersHorizontal, Tag } from 'lucide-react';
+import { Bell, RefreshCw, Settings, SlidersHorizontal, Tag } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 type TopbarControlsProps = {
@@ -17,10 +17,13 @@ type TopbarControlsProps = {
   isTagPoolPanelOpen: boolean;
   isFilterPanelOpen: boolean;
   isSidebarOpen: boolean;
+  isVersionNotificationsOpen: boolean;
   isScanning: boolean;
+  versionMismatchCount: number;
   onToggleTagPoolPanel: () => void;
   onToggleFilterPanel: () => void;
   onToggleSidebar: () => void;
+  onToggleVersionNotifications: () => void;
   onRescan: () => void;
   actionLabels: {
     rescan: string;
@@ -31,6 +34,8 @@ type TopbarControlsProps = {
     hideFilters: string;
     showSetup: string;
     hideSetup: string;
+    showVersionNotifications: string;
+    hideVersionNotifications: string;
   };
 };
 
@@ -41,10 +46,13 @@ export function TopbarControls({
   isTagPoolPanelOpen,
   isFilterPanelOpen,
   isSidebarOpen,
+  isVersionNotificationsOpen,
   isScanning,
+  versionMismatchCount,
   onToggleTagPoolPanel,
   onToggleFilterPanel,
   onToggleSidebar,
+  onToggleVersionNotifications,
   onRescan,
   actionLabels,
 }: TopbarControlsProps) {
@@ -82,6 +90,19 @@ export function TopbarControls({
         title={isFilterPanelOpen ? actionLabels.hideFilters : actionLabels.showFilters}
       >
         <SlidersHorizontal size={16} aria-hidden="true" />
+      </button>
+      <button
+        className={`button button--icon-only topbar-notification-button ${isVersionNotificationsOpen ? 'is-active' : ''}`}
+        type="button"
+        onClick={onToggleVersionNotifications}
+        aria-pressed={isVersionNotificationsOpen}
+        aria-label={isVersionNotificationsOpen ? actionLabels.hideVersionNotifications : actionLabels.showVersionNotifications}
+        title={isVersionNotificationsOpen ? actionLabels.hideVersionNotifications : actionLabels.showVersionNotifications}
+      >
+        <Bell size={16} aria-hidden="true" />
+        {versionMismatchCount > 0 ? (
+          <span className="topbar-notification-button__count">{versionMismatchCount}</span>
+        ) : null}
       </button>
       <button
         className={`button button--icon-only ${isSidebarOpen ? 'is-active' : ''}`}

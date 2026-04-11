@@ -26,6 +26,7 @@ type UseGalleryRenderersArgs = {
   onToggleSelection: (path: string) => void;
   onPlayClick: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
   onOpenDetail: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
+  onResolveVersionMismatch: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
   onGameCardContextMenu: (targetGame: GameSummary, event: MouseEvent<HTMLElement>) => void;
   focusCarouselIndexByGamePath: Record<string, number>;
   setFocusCarouselIndexByGamePath: Dispatch<SetStateAction<Record<string, number>>>;
@@ -42,6 +43,7 @@ export function useGalleryRenderers({
   onToggleSelection,
   onPlayClick,
   onOpenDetail,
+  onResolveVersionMismatch,
   onGameCardContextMenu,
   focusCarouselIndexByGamePath,
   setFocusCarouselIndexByGamePath,
@@ -77,10 +79,11 @@ export function useGalleryRenderers({
         onOpenScreenshot={setScreenshotModalPath}
         onPlayClick={onPlayClick}
         onOpenDetail={onOpenDetail}
+        onResolveVersionMismatch={onResolveVersionMismatch}
         actionLabels={actionLabels}
       />
     );
-  }, [actionLabels, focusCarouselIndexByGamePath, getImageSrc, onOpenDetail, onPlayClick, setFocusCarouselIndexByGamePath, setScreenshotModalPath]);
+  }, [actionLabels, focusCarouselIndexByGamePath, getImageSrc, onOpenDetail, onPlayClick, onResolveVersionMismatch, setFocusCarouselIndexByGamePath, setScreenshotModalPath]);
 
   const renderGame = useCallback((game: GameSummary) => {
     return (
@@ -94,10 +97,11 @@ export function useGalleryRenderers({
         onToggleSelection={onToggleSelection}
         onPlayClick={onPlayClick}
         onOpenDetail={onOpenDetail}
+        onResolveVersionMismatch={onResolveVersionMismatch}
         onContextMenu={onGameCardContextMenu}
       />
     );
-  }, [actionLabels, getImageSrc, onGameCardContextMenu, onOpenDetail, onPlayClick, onToggleSelection, selectedGamePath, viewMode]);
+  }, [actionLabels, getImageSrc, onGameCardContextMenu, onOpenDetail, onPlayClick, onResolveVersionMismatch, onToggleSelection, selectedGamePath, viewMode]);
 
   const renderInlinePosterCardFocus = useCallback(() => {
     const rows: GameSummary[][] = [];

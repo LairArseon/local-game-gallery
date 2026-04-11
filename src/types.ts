@@ -17,6 +17,7 @@ export type FilterPreset = {
 
 export type GalleryConfig = {
   language: AppLanguage;
+  dismissedVersionMismatches: Record<string, string>;
   gamesRoot: string;
   excludePatterns: string[];
   hideDotEntries: boolean;
@@ -110,6 +111,9 @@ export type GameSummary = {
   createdGameNfo: boolean;
   createdVersionNfoCount: number;
   metadata: GameMetadata;
+  detectedLatestVersion: string;
+  hasVersionMismatch: boolean;
+  isVersionMismatchDismissed: boolean;
   media: GameMediaAssets;
   versionCount: number;
   versions: VersionSummary[];

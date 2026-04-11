@@ -42,6 +42,7 @@ function normalizeMetadataGapScale(value: number | string | undefined, fallback 
 
 const defaultConfig: GalleryConfig = {
   language: 'en',
+  dismissedVersionMismatches: {},
   gamesRoot: '',
   excludePatterns: ['.git', 'Thumbs.db'],
   hideDotEntries: true,
@@ -85,6 +86,11 @@ export async function saveConfig(config: GalleryConfig) {
     ...defaultConfig,
     ...config,
     language: normalizedLanguage,
+    dismissedVersionMismatches: Object.fromEntries(
+      Object.entries(config.dismissedVersionMismatches ?? {})
+        .map(([gamePath, detectedVersion]) => [String(gamePath).trim(), String(detectedVersion ?? '').trim()])
+        .filter(([gamePath, detectedVersion]) => gamePath && detectedVersion),
+    ),
     excludePatterns: [...new Set(config.excludePatterns.map((pattern) => pattern.trim()).filter(Boolean))],
     statusChoices: [...new Set((config.statusChoices ?? []).map((value) => value.trim()).filter(Boolean))],
     tagPool: [...new Set((config.tagPool ?? []).map((value) => value.trim()).filter(Boolean))],

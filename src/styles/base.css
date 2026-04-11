@@ -121,6 +121,8 @@ button {
   align-items: start;
   margin-bottom: 18px;
   padding: 18px 22px;
+  position: relative;
+  z-index: 60;
 }
 
 .topbar__title p {
@@ -138,6 +140,154 @@ button {
   flex-wrap: wrap;
   justify-content: end;
   align-items: center;
+}
+
+.topbar-notification-button {
+  position: relative;
+}
+
+.topbar-notification-button__count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  background: #f6c773;
+  color: #1a1b21;
+  padding: 0 0.2rem;
+}
+
+.topbar-notifications {
+  position: absolute;
+  right: 18px;
+  top: calc(100% - 6px);
+  z-index: 45;
+  width: min(520px, calc(100vw - 90px));
+  max-height: min(62vh, 540px);
+  overflow: auto;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(246, 199, 115, 0.32);
+  background: rgba(18, 16, 12, 0.94);
+  display: grid;
+  gap: 12px;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.48);
+}
+
+.topbar-notifications__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.topbar-notifications__heading h3,
+.topbar-notifications__heading p {
+  margin: 0;
+}
+
+.topbar-notifications__hint {
+  margin: 0;
+  color: rgba(247, 246, 242, 0.7);
+  font-size: 0.82rem;
+}
+
+.topbar-notifications__heading p {
+  color: rgba(247, 246, 242, 0.72);
+  font-size: 0.86rem;
+}
+
+.topbar-notifications__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.topbar-notifications__item {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(7, 10, 16, 0.42);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 10px;
+  align-items: center;
+}
+
+.topbar-notifications__game-link {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: 500;
+  display: inline-flex;
+  justify-self: start;
+}
+
+.topbar-notifications__game-name {
+  color: #f6c773;
+  font-weight: 650;
+}
+
+.topbar-notifications__version-delta {
+  margin: 0;
+  color: rgba(247, 246, 242, 0.84);
+  font-size: 0.84rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.topbar-notifications__version-delta svg {
+  opacity: 0.85;
+}
+
+.topbar-notifications__item p,
+.topbar-notifications__empty {
+  margin: 0;
+  color: rgba(247, 246, 242, 0.78);
+}
+
+.topbar-notifications__item-actions {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: end;
+}
+
+.topbar-notifications__icon-action {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #10131b;
+  transition: transform 150ms ease, filter 150ms ease;
+}
+
+.topbar-notifications__icon-action:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+}
+
+.topbar-notifications__icon-action--resolve {
+  background: #f6c773;
+}
+
+.topbar-notifications__icon-action--dismiss {
+  background: rgba(255, 128, 128, 0.84);
 }
 
 .topbar__search-group {

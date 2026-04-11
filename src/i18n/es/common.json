@@ -16,6 +16,8 @@
     "hideFilters": "Ocultar filtros",
     "showSetup": "Mostrar configuración",
     "hideSetup": "Ocultar configuración",
+    "showVersionNotifications": "Mostrar notificaciones de versión",
+    "hideVersionNotifications": "Ocultar notificaciones de versión",
     "chooseLibraryFolder": "Elegir carpeta de biblioteca",
     "saving": "Guardando..."
   },
@@ -183,6 +185,21 @@
     "prev": "Ant",
     "next": "Sig"
   },
+  "versionMismatch": {
+    "title": "Notificaciones de versión",
+    "count_one": "{{count}} juego requiere revisión",
+    "count_other": "{{count}} juegos requieren revisión",
+    "focusHint": "Haz clic en un juego para enfocarlo en la galería.",
+    "focusGameAction": "Enfocar en galería",
+    "openGameAria": "Enfocar {{game}} en la galería",
+    "itemSummary": "{{current}} -> {{detected}}",
+    "resolve": "Marcar como última",
+    "dismiss": "Descartar",
+    "empty": "No hay notificaciones pendientes de desajuste de versión.",
+    "badgeLabel": "Nueva versión: {{current}} -> {{detected}}",
+    "badgeAria": "Desajuste de versión. Actual {{current}}. Detectada {{detected}}.",
+    "resolveTooltip": "Actualizar latest_version a la versión detectada"
+  },
   "logs": {
     "clearConfirm": "¿Borrar todos los logs? Esta acción no se puede deshacer."
   },
@@ -226,6 +243,8 @@
     "failedOpenLogsFolder": "No se pudo abrir la carpeta de logs.",
     "foundGameFolders_one": "Se encontró {{count}} carpeta de juego.",
     "foundGameFolders_other": "Se encontraron {{count}} carpetas de juego.",
+    "versionMismatchResolved": "Se actualizó la última versión de {{game}} a {{version}}.",
+    "versionMismatchDismissed": "Se descartó la notificación de versión para {{game}}.",
     "scanCompletedNoMatches": "Escaneo completado. Todavía no hay juegos que coincidan.",
     "failedScanGameFolders": "No se pudieron escanear las carpetas de juegos."
   }

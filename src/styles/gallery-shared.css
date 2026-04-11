@@ -32,6 +32,16 @@
   box-shadow: 0 0 0 1px rgba(246, 199, 115, 0.4);
 }
 
+.game-card--version-mismatch {
+  border-color: rgba(102, 196, 255, 0.78);
+  box-shadow: 0 0 0 1px rgba(102, 196, 255, 0.3);
+}
+
+.game-card--version-mismatch.game-card--selected {
+  border-color: rgba(255, 225, 133, 0.9);
+  box-shadow: 0 0 0 1px rgba(255, 225, 133, 0.42), 0 0 16px rgba(102, 196, 255, 0.34);
+}
+
 .game-card__art {
   min-height: calc(120px * var(--content-media-scale));
   padding: calc(18px * var(--content-spacing-scale));
@@ -87,6 +97,28 @@
 .game-card__body,
 .empty-state {
   padding: calc(18px * var(--content-spacing-scale));
+}
+
+.version-mismatch-badge {
+  width: fit-content;
+  border: 1px solid rgba(246, 199, 115, 0.55);
+  background: rgba(246, 199, 115, 0.16);
+  color: #fce4b2;
+  border-radius: 999px;
+  padding: 0.18rem 0.58rem;
+  font-size: 0.76rem;
+  line-height: 1.2;
+}
+
+.version-mismatch-badge:hover {
+  background: rgba(246, 199, 115, 0.24);
+}
+
+.game-card__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .game-card__body p {
