@@ -6,7 +6,10 @@
  * modal's existing callback contracts and orchestrates conditional rendering so
  * App stays focused on state orchestration rather than modal markup volume.
  */
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { LogViewerModal } from './LogViewerModal';
 import { MediaModal } from './MediaModal';
 import { MetadataModal } from './MetadataModal';
@@ -19,6 +22,7 @@ type TagAutocompleteState = {
 } | null;
 
 type ModalHostProps = {
+  games: GameSummary[];
   metadataModalGamePath: string | null;
   metadataDraft: GameMetadata | null;
   statusChoices: string[];
@@ -72,6 +76,7 @@ type ModalHostProps = {
 };
 
 export function ModalHost({
+  games,
   metadataModalGamePath,
   metadataDraft,
   statusChoices,
@@ -119,6 +124,103 @@ export function ModalHost({
   screenshotModalPath,
   setScreenshotModalPath,
 }: ModalHostProps) {
+  const { t } = useTranslation();
+  const thumbsViewportRef = useRef<HTMLDivElement | null>(null);
+  const [isThumbOverflowing, setIsThumbOverflowing] = useState(false);
+  const [canScrollThumbsPrev, setCanScrollThumbsPrev] = useState(false);
+  const [canScrollThumbsNext, setCanScrollThumbsNext] = useState(false);
+
+  const screenshotGallery = useMemo(() => {
+    if (!screenshotModalPath) {
+      return {
+        screenshots: [] as string[],
+        currentIndex: -1,
+      };
+    }
+
+    const owningGame = games.find((game) => game.media.screenshots.includes(screenshotModalPath));
+    if (!owningGame) {
+      return {
+        screenshots: [screenshotModalPath],
+        currentIndex: 0,
+      };
+    }
+
+    const currentIndex = owningGame.media.screenshots.indexOf(screenshotModalPath);
+    return {
+      screenshots: owningGame.media.screenshots,
+      currentIndex: currentIndex >= 0 ? currentIndex : 0,
+    };
+  }, [games, screenshotModalPath]);
+
+  const hasLightboxGallery = screenshotGallery.screenshots.length > 1;
+
+  useEffect(() => {
+    if (!hasLightboxGallery) {
+      setCanScrollThumbsPrev(false);
+      setCanScrollThumbsNext(false);
+      return;
+    }
+
+    const viewport = thumbsViewportRef.current;
+    if (!viewport) {
+      return;
+    }
+
+    const updateThumbScrollState = () => {
+      const overflowAmount = viewport.scrollWidth - viewport.clientWidth;
+      const isOverflowing = overflowAmount > 4;
+      setIsThumbOverflowing(isOverflowing);
+
+      if (!isOverflowing) {
+        setCanScrollThumbsPrev(false);
+        setCanScrollThumbsNext(false);
+        return;
+      }
+
+      const maxScroll = viewport.scrollWidth - viewport.clientWidth;
+      setCanScrollThumbsPrev(viewport.scrollLeft > 1);
+      setCanScrollThumbsNext(viewport.scrollLeft < maxScroll - 1);
+    };
+
+    const syncActiveThumbIntoView = () => {
+      const activeThumb = viewport.querySelector<HTMLButtonElement>('.lightbox-thumb--active');
+      activeThumb?.scrollIntoView({ block: 'nearest', inline: 'center' });
+      updateThumbScrollState();
+    };
+
+    updateThumbScrollState();
+    syncActiveThumbIntoView();
+
+    viewport.addEventListener('scroll', updateThumbScrollState, { passive: true });
+    window.addEventListener('resize', updateThumbScrollState);
+
+    return () => {
+      viewport.removeEventListener('scroll', updateThumbScrollState);
+      window.removeEventListener('resize', updateThumbScrollState);
+    };
+  }, [hasLightboxGallery, screenshotModalPath, screenshotGallery.screenshots.length]);
+
+  function moveLightbox(delta: number) {
+    if (!screenshotGallery.screenshots.length || screenshotGallery.currentIndex < 0) {
+      return;
+    }
+
+    const nextIndex = (screenshotGallery.currentIndex + delta + screenshotGallery.screenshots.length) % screenshotGallery.screenshots.length;
+    setScreenshotModalPath(screenshotGallery.screenshots[nextIndex] ?? null);
+  }
+
+  function scrollThumbs(delta: number) {
+    const viewport = thumbsViewportRef.current;
+    if (!viewport) {
+      return;
+    }
+
+    const thumbnail = viewport.querySelector<HTMLElement>('.lightbox-thumb');
+    const thumbWidth = thumbnail?.getBoundingClientRect().width ?? 88;
+    viewport.scrollBy({ left: delta * (thumbWidth + 8), behavior: 'smooth' });
+  }
+
   return (
     <>
       {metadataModalGamePath && metadataDraft ? (
@@ -195,12 +297,79 @@ export function ModalHost({
         // Backdrop click closes lightbox; inner panel stops propagation to keep interactions local.
         <div className="modal-backdrop" onClick={() => setScreenshotModalPath(null)}>
           <section className="modal-panel modal-panel--lightbox" onClick={(event) => event.stopPropagation()}>
-            <header className="modal-panel__header">
-              <h2>Screenshot</h2>
-              <button className="button" type="button" onClick={() => setScreenshotModalPath(null)}>Close</button>
-            </header>
-            <div className="modal-panel__body modal-panel__body--lightbox">
-              <img src={filePathToSrc(screenshotModalPath) ?? undefined} alt="Screenshot preview" className="lightbox-image" />
+            <div className={`modal-panel__body modal-panel__body--lightbox ${hasLightboxGallery ? 'modal-panel__body--lightbox-has-thumbs' : ''}`}>
+              <div className="lightbox-stage">
+                {hasLightboxGallery ? (
+                  <button
+                    className="lightbox-nav-zone lightbox-nav-zone--prev"
+                    type="button"
+                    onClick={() => moveLightbox(-1)}
+                    aria-label={t('gameView.previousScreenshot')}
+                    title={t('gameView.previousScreenshot')}
+                  >
+                    <span className="lightbox-nav-zone__icon" aria-hidden="true">
+                      <ChevronLeft size={22} aria-hidden="true" />
+                    </span>
+                  </button>
+                ) : null}
+                <img src={filePathToSrc(screenshotModalPath) ?? undefined} alt={t('media.screenshotAlt')} className="lightbox-image" />
+                {hasLightboxGallery ? (
+                  <button
+                    className="lightbox-nav-zone lightbox-nav-zone--next"
+                    type="button"
+                    onClick={() => moveLightbox(1)}
+                    aria-label={t('gameView.nextScreenshot')}
+                    title={t('gameView.nextScreenshot')}
+                  >
+                    <span className="lightbox-nav-zone__icon" aria-hidden="true">
+                      <ChevronRight size={22} aria-hidden="true" />
+                    </span>
+                  </button>
+                ) : null}
+              </div>
+              {hasLightboxGallery ? (
+                <div className="lightbox-thumbs-shell">
+                  {isThumbOverflowing ? (
+                    <button
+                      className="lightbox-thumbs-nav"
+                      type="button"
+                      onClick={() => scrollThumbs(-1)}
+                      disabled={!canScrollThumbsPrev}
+                      aria-label={t('gameView.previousScreenshot')}
+                      title={t('gameView.previousScreenshot')}
+                    >
+                      <ChevronLeft size={18} aria-hidden="true" />
+                    </button>
+                  ) : <span className="lightbox-thumbs-nav-spacer" aria-hidden="true" />}
+                  <div className="lightbox-thumbs-viewport" ref={thumbsViewportRef} role="list" aria-label={t('detail.screenshots')}>
+                    <div className={`lightbox-thumbs-track ${!isThumbOverflowing ? 'lightbox-thumbs-track--centered' : ''}`}>
+                      {screenshotGallery.screenshots.map((imagePath) => (
+                        <button
+                          key={imagePath}
+                          type="button"
+                          role="listitem"
+                          className={`lightbox-thumb ${imagePath === screenshotModalPath ? 'lightbox-thumb--active' : ''}`}
+                          onClick={() => setScreenshotModalPath(imagePath)}
+                        >
+                          <img src={filePathToSrc(imagePath) ?? undefined} alt={t('media.screenshotAlt')} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {isThumbOverflowing ? (
+                    <button
+                      className="lightbox-thumbs-nav"
+                      type="button"
+                      onClick={() => scrollThumbs(1)}
+                      disabled={!canScrollThumbsNext}
+                      aria-label={t('gameView.nextScreenshot')}
+                      title={t('gameView.nextScreenshot')}
+                    >
+                      <ChevronRight size={18} aria-hidden="true" />
+                    </button>
+                  ) : <span className="lightbox-thumbs-nav-spacer" aria-hidden="true" />}
+                </div>
+              ) : null}
             </div>
           </section>
         </div>

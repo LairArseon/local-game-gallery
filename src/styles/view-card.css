@@ -2,6 +2,12 @@
   grid-template-columns: repeat(var(--grid-columns, 1), minmax(0, 1fr));
 }
 
+.cards--card.cards--switching {
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 4px;
+}
+
 .game-card--card {
   display: grid;
   grid-template-columns: 1fr;
@@ -13,6 +19,10 @@
   aspect-ratio: 16 / 9;
   align-self: stretch;
   background-color: #06080d;
+}
+
+.game-card--card.game-card--skeleton .game-card__art {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .game-card--card .media-preview--cover {

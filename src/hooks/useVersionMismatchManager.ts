@@ -9,7 +9,7 @@
  * Keeping this logic here prevents `App` from accumulating feature-specific
  * behavior while preserving a single orchestration surface for mismatch flows.
  */
-import { useMemo, useState, type Dispatch, type RefObject, type SetStateAction } from 'react';
+import { useEffect, useMemo, useState, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import type { TFunction } from 'i18next';
 import type { GalleryConfig, ScanResult } from '../types';
 
@@ -41,6 +41,30 @@ export function useVersionMismatchManager({
   cardsContainerRef,
 }: UseVersionMismatchManagerArgs) {
   const [isVersionNotificationsOpen, setIsVersionNotificationsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isVersionNotificationsOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+
+      if (target.closest('.topbar-notifications') || target.closest('.topbar-notification-button')) {
+        return;
+      }
+
+      setIsVersionNotificationsOpen(false);
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, [isVersionNotificationsOpen]);
 
   const mismatchedGames = useMemo(
     () => scanResult.games.filter((game) => game.hasVersionMismatch),

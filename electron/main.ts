@@ -8,7 +8,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { loadConfig, saveConfig } from './config';
 import { appendLogEvent, clearLogContents, openLogFolder, readLogContents } from './logger';
-import { importDroppedGameMedia, readGameMetadata, removeScreenshot, reorderScreenshots, saveGameMetadata } from './game-library';
+import { getLatestVersionName, importDroppedGameMedia, readGameMetadata, removeScreenshot, reorderScreenshots, saveGameMetadata } from './game-library';
 import { scanGames } from './scanner';
 import type {
   ApplyRuntimeAppIconPayload,
@@ -419,14 +419,71 @@ ipcMain.handle('gallery:open-folder', async (_event, payload: OpenFolderPayload)
 });
 
 ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Promise<PlayGameResult> => {
+  const launchMode = payload.launchMode ?? 'default';
   const metadata = await readGameMetadata(
     payload.gamePath,
     payload.gameName,
     payload.versions.map((version) => ({ ...version, hasNfo: false })),
   );
 
+  const detectedLatestVersion = getLatestVersionName(
+    payload.versions.map((version) => ({ ...version, hasNfo: false })),
+  );
+  const hasVersionMismatch = Boolean(
+    detectedLatestVersion
+    && metadata.latestVersion
+    && detectedLatestVersion !== metadata.latestVersion,
+  );
+  const window = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+
+  let versionsToSearch = payload.versions;
+  if (launchMode === 'choose-version-temporary' && payload.versions.length > 1) {
+    const versionOptions = payload.versions.map((version, index) => `${index + 1}. ${version.name}`);
+    const versionButtons = payload.versions.map((version, index) => {
+      const label = `${index + 1}) ${version.name}`;
+      return label.length > 38 ? `${label.slice(0, 35)}...` : label;
+    });
+
+    const versionSelection = window
+      ? await dialog.showMessageBox(window, {
+        type: 'question',
+        title: 'Choose Game Version',
+        message: 'Select which game version to launch now.',
+        detail: `This launch will not change your saved default executable.\n\n${versionOptions.join('\n')}`,
+        buttons: [...versionButtons, 'Cancel'],
+        cancelId: payload.versions.length,
+        defaultId: 0,
+        noLink: true,
+      })
+      : await dialog.showMessageBox({
+      type: 'question',
+      title: 'Choose Game Version',
+      message: 'Select which game version to launch now.',
+      detail: `This launch will not change your saved default executable.\n\n${versionOptions.join('\n')}`,
+      buttons: [...versionButtons, 'Cancel'],
+      cancelId: payload.versions.length,
+      defaultId: 0,
+      noLink: true,
+    });
+
+    if (versionSelection.response === payload.versions.length) {
+      await appendLogEvent({
+        level: 'warn',
+        source: 'main-play-game',
+        message: `Play canceled while choosing version for game "${payload.gameName}"`,
+      });
+      return {
+        launched: false,
+        executablePath: null,
+        message: 'Play canceled.',
+      };
+    }
+
+    versionsToSearch = [payload.versions[versionSelection.response] ?? payload.versions[0]];
+  }
+
   const storedExecutable = metadata.launchExecutable.trim();
-  if (storedExecutable) {
+  if (storedExecutable && !hasVersionMismatch && launchMode === 'default') {
     const absoluteStoredPath = toExecutableAbsolutePath(payload.gamePath, storedExecutable);
     if (await fileExists(absoluteStoredPath)) {
       launchExecutable(absoluteStoredPath);
@@ -444,7 +501,7 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
     }
   }
 
-  const searchFolders = payload.versions.map((version) => version.path);
+  const searchFolders = versionsToSearch.map((version) => version.path);
   const discoveredExecutables = [...new Set((await Promise.all(searchFolders.map((folder) => findExecutablesInFolder(folder)))).flat())].sort();
 
   if (!discoveredExecutables.length) {
@@ -456,12 +513,13 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
     return {
       launched: false,
       executablePath: null,
-      message: 'No executable files found in game version folders.',
+      message: launchMode === 'choose-version-temporary'
+        ? 'No executable files found in the selected version folder.'
+        : 'No executable files found in game version folders.',
     };
   }
 
   let selectedExecutable = discoveredExecutables[0];
-  const window = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
 
   if (discoveredExecutables.length > 1) {
     const relativeOptions = discoveredExecutables.map((candidate, index) => `${index + 1}. ${path.relative(payload.gamePath, candidate)}`);
@@ -470,12 +528,23 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
       return label.length > 38 ? `${label.slice(0, 35)}...` : label;
     });
 
+    const selectionTitle = launchMode === 'choose-version-temporary'
+      ? 'Choose Executable (This Launch Only)'
+      : hasVersionMismatch
+        ? 'Choose Executable (Version Mismatch)'
+        : 'Choose Executable';
+    const selectionDetail = launchMode === 'choose-version-temporary'
+      ? `Select which executable to use for this launch:\n\n${relativeOptions.join('\n')}\n\nThis will not change your saved default executable.`
+      : hasVersionMismatch
+        ? `Select which executable to use for this launch:\n\n${relativeOptions.join('\n')}\n\nYou'll be asked again until the version mismatch is resolved.`
+        : `Select which one should be used by default:\n\n${relativeOptions.join('\n')}`;
+
     const selection = window
       ? await dialog.showMessageBox(window, {
         type: 'question',
-        title: 'Choose Executable',
+        title: selectionTitle,
         message: 'Multiple executable files were found for this game.',
-        detail: `Select which one should be used by default:\n\n${relativeOptions.join('\n')}`,
+        detail: selectionDetail,
         buttons: [...selectedIndexButtons, 'Cancel'],
         cancelId: discoveredExecutables.length,
         defaultId: 0,
@@ -483,9 +552,9 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
       })
       : await dialog.showMessageBox({
       type: 'question',
-      title: 'Choose Executable',
+      title: selectionTitle,
       message: 'Multiple executable files were found for this game.',
-      detail: `Select which one should be used by default:\n\n${relativeOptions.join('\n')}`,
+      detail: selectionDetail,
       buttons: [...selectedIndexButtons, 'Cancel'],
       cancelId: discoveredExecutables.length,
       defaultId: 0,
@@ -508,12 +577,14 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
     selectedExecutable = discoveredExecutables[selection.response] ?? discoveredExecutables[0];
   }
 
-  metadata.launchExecutable = toStoredExecutablePath(payload.gamePath, selectedExecutable);
-  await saveGameMetadata({
-    gamePath: payload.gamePath,
-    title: payload.gameName,
-    metadata,
-  });
+  if (launchMode === 'default') {
+    metadata.launchExecutable = toStoredExecutablePath(payload.gamePath, selectedExecutable);
+    await saveGameMetadata({
+      gamePath: payload.gamePath,
+      title: payload.gameName,
+      metadata,
+    });
+  }
 
   launchExecutable(selectedExecutable);
   await appendGameLaunchActivity(payload.gamePath);

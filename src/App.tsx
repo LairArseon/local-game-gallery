@@ -97,6 +97,7 @@ function App() {
 
   const actionLabels = useMemo(() => ({
     play: t('actions.play'),
+    playByVersion: t('actions.playByVersion'),
     open: t('actions.open'),
     back: t('actions.back'),
     rescan: t('actions.rescan'),
@@ -307,6 +308,7 @@ function App() {
   // High-frequency game actions shared by cards, detail view, and context menus.
   const {
     handlePlayClick,
+    handlePlayWithVersionPromptClick,
     playGame,
     handleOpenDetail,
     openGameDetailFromPath,
@@ -484,6 +486,7 @@ function App() {
     getImageSrc: filePathToSrc,
     onToggleSelection: toggleGameSelection,
     onPlayClick: handlePlayClick,
+    onPlayWithVersionPromptClick: handlePlayWithVersionPromptClick,
     onOpenDetail: handleOpenDetail,
     onResolveVersionMismatch: (game, event) => {
       event.stopPropagation();
@@ -693,6 +696,7 @@ function App() {
           getImageSrc={filePathToSrc}
           onBackFromDetail={onBackFromDetail}
           onPlay={handlePlayClick}
+          onPlayWithVersionPrompt={handlePlayWithVersionPromptClick}
           onOpenMetadata={openMetadataModal}
           onOpenGameFolder={onOpenGameFolder}
           onOpenVersionFolder={onOpenVersionFolder}
@@ -716,6 +720,7 @@ function App() {
 
       {/* Global overlays flow: metadata/media/log/screenshot modal orchestration. */}
       <ModalHost
+        games={scanResult.games}
         metadataModalGamePath={metadataModalGamePath}
         metadataDraft={metadataDraft}
         statusChoices={config.statusChoices}

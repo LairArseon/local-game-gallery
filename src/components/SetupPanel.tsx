@@ -89,7 +89,7 @@ export function SetupPanel({
   return (
     <>
       <aside className={`panel settings ${isSidebarOpen ? 'settings--open' : 'settings--closed'}`}>
-        <form onSubmit={onSaveConfig}>
+        <form className="settings__form" onSubmit={onSaveConfig}>
           <div className="panel-heading">
             <div className="setup-heading__title-row">
               <h2>{t('setup.title')}</h2>

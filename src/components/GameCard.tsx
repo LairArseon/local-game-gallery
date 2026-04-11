@@ -90,10 +90,13 @@ export function GameCard({
         detected: game.detectedLatestVersion || t('detail.unknown'),
       })}
     >
-      {t('versionMismatch.badgeLabel', {
-        current: game.metadata.latestVersion || t('detail.unknown'),
-        detected: game.detectedLatestVersion || t('detail.unknown'),
-      })}
+      <span className="version-mismatch-badge__label">{t('versionMismatch.badgeLabelPrefix')}</span>
+      <span className="version-mismatch-badge__delta">
+        {t('versionMismatch.badgeLabelDelta', {
+          current: game.metadata.latestVersion || t('detail.unknown'),
+          detected: game.detectedLatestVersion || t('detail.unknown'),
+        })}
+      </span>
     </button>
   ) : null;
 

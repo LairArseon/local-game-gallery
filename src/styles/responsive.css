@@ -51,6 +51,11 @@
     max-height: none;
   }
 
+  .settings__form {
+    width: 100%;
+    max-width: none;
+  }
+
   .layout .settings {
     position: static;
     left: auto;

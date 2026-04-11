@@ -8,7 +8,7 @@
  * file remains focused on rendering and interaction layout.
  */
 import type { CSSProperties, MouseEvent, ReactNode } from 'react';
-import { ArrowLeft, Play } from 'lucide-react';
+import { ArrowLeft, ListVideo, Play } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { GameSummary } from '../types';
 
@@ -18,11 +18,13 @@ type DetailPageProps = {
   actionLabels: {
     back: string;
     play: string;
+    playByVersion: string;
   };
   focusCard: ReactNode;
   getImageSrc: (filePath: string | null) => string | null;
   onBack: () => void;
   onPlay: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
+  onPlayWithVersionPrompt: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
   onOpenMetadata: (gamePath: string) => void;
   onOpenGameFolder: (gamePath: string) => void;
   onOpenVersionFolder: (versionPath: string) => void;
@@ -45,6 +47,7 @@ export function DetailPage({
   onOpenVersionContextMenu,
   onOpenPictures,
   onOpenScreenshot,
+  onPlayWithVersionPrompt,
 }: DetailPageProps) {
   const { t } = useTranslation();
 
@@ -70,6 +73,17 @@ export function DetailPage({
         >
           <Play size={16} aria-hidden="true" />
         </button>
+        {game.versions.length > 1 ? (
+          <button
+            className="button button--play-version button--icon-only"
+            type="button"
+            onClick={(event) => onPlayWithVersionPrompt(game, event)}
+            aria-label={actionLabels.playByVersion}
+            title={actionLabels.playByVersion}
+          >
+            <ListVideo size={16} aria-hidden="true" />
+          </button>
+        ) : null}
       </header>
       {focusCard}
       <section className="detail-section panel">

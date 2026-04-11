@@ -180,6 +180,7 @@ export type PlayGamePayload = {
   gamePath: string;
   gameName: string;
   versions: PlayableVersion[];
+  launchMode?: 'default' | 'choose-version-temporary';
 };
 
 export type PlayGameResult = {

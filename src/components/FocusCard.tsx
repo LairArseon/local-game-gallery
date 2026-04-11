@@ -8,7 +8,7 @@
  * information hierarchy stays consistent across view modes.
  */
 import type { MouseEvent } from 'react';
-import { ArrowRight, Play } from 'lucide-react';
+import { ArrowRight, ListVideo, Play } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { GameSummary } from '../types';
 import { formatLastPlayed } from '../utils/app-helpers';
@@ -22,10 +22,12 @@ type FocusCardProps = {
   onMoveCarousel: (delta: number) => void;
   onOpenScreenshot: (imagePath: string) => void;
   onPlayClick: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
+  onPlayWithVersionPromptClick: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
   onOpenDetail: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
   onResolveVersionMismatch: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
   actionLabels: {
     play: string;
+    playByVersion: string;
     open: string;
   };
 };
@@ -39,6 +41,7 @@ export function FocusCard({
   onMoveCarousel,
   onOpenScreenshot,
   onPlayClick,
+  onPlayWithVersionPromptClick,
   onOpenDetail,
   onResolveVersionMismatch,
   actionLabels,
@@ -118,10 +121,13 @@ export function FocusCard({
               detected: game.detectedLatestVersion || t('detail.unknown'),
             })}
           >
-            {t('versionMismatch.badgeLabel', {
-              current: game.metadata.latestVersion || t('detail.unknown'),
-              detected: game.detectedLatestVersion || t('detail.unknown'),
-            })}
+            <span className="version-mismatch-badge__label">{t('versionMismatch.badgeLabelPrefix')}</span>
+            <span className="version-mismatch-badge__delta">
+              {t('versionMismatch.badgeLabelDelta', {
+                current: game.metadata.latestVersion || t('detail.unknown'),
+                detected: game.detectedLatestVersion || t('detail.unknown'),
+              })}
+            </span>
           </button>
         ) : null}
         <p>{t('detail.latestVersion')}: {game.metadata.latestVersion || t('detail.unknown')}</p>
@@ -144,6 +150,17 @@ export function FocusCard({
             >
               <Play size={16} aria-hidden="true" />
             </button>
+            {game.versions.length > 1 ? (
+              <button
+                className="button button--play-version button--icon button--icon-only"
+                type="button"
+                onClick={(event) => onPlayWithVersionPromptClick(game, event)}
+                aria-label={actionLabels.playByVersion}
+                title={actionLabels.playByVersion}
+              >
+                <ListVideo size={16} aria-hidden="true" />
+              </button>
+            ) : null}
             <button
               className="button button--icon button--icon-only"
               type="button"

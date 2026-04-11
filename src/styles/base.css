@@ -316,6 +316,23 @@ button {
   background: rgba(7, 10, 16, 0.45);
   display: grid;
   gap: 14px;
+  clip-path: inset(0 0 0 0 round 18px);
+  transform-origin: top center;
+  animation: topbarPanelReveal 300ms cubic-bezier(0.22, 0.78, 0.2, 1);
+}
+
+@keyframes topbarPanelReveal {
+  from {
+    clip-path: inset(0 0 100% 0 round 18px);
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    clip-path: inset(0 0 0 0 round 18px);
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .topbar-filters__grid {
@@ -615,6 +632,13 @@ button {
   gap: 8px;
 }
 
+.topbar-filters__action-button {
+  padding: 0.4rem 0.72rem;
+  font-size: 0.8rem;
+  line-height: 1.05;
+  border-radius: 12px;
+}
+
 .topbar-presets {
   margin-top: 6px;
   display: grid;
@@ -742,6 +766,11 @@ button {
   color: #0f2214;
 }
 
+.button--play-version {
+  background: linear-gradient(135deg, #86cbff 0%, #49a8ea 100%);
+  color: #0a2132;
+}
+
 .button--icon-only {
   display: inline-flex;
   align-items: center;
@@ -814,22 +843,38 @@ button {
 }
 
 .settings {
+  --settings-panel-width: min(360px, 34vw);
   width: min(360px, 34vw);
   max-height: calc(100vh - 120px);
+  overflow: hidden;
   overflow-y: auto;
-  transition: width 220ms ease, padding 220ms ease, border-color 220ms ease, opacity 180ms ease;
+  scrollbar-gutter: stable both-edges;
+  clip-path: inset(0 0 0 0 round 24px);
+  transition: clip-path 240ms ease, border-color 220ms ease, opacity 180ms ease;
+}
+
+.settings__form {
+  /* Keep inner layout at target width so controls don't "squish" while opening. */
+  width: 100%;
+  max-width: var(--settings-panel-width);
+  box-sizing: border-box;
+  padding-right: 8px;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 140ms ease 70ms, transform 220ms ease;
 }
 
 .settings--closed {
-  width: 0;
-  padding: 0;
+  width: var(--settings-panel-width);
   border-color: transparent;
   opacity: 0;
   overflow: hidden;
+  clip-path: inset(0 100% 0 0 round 24px);
 }
 
-.settings--closed form {
-  display: none;
+.settings--closed .settings__form {
+  opacity: 0;
+  transform: translateX(-10px);
 }
 
 .panel-heading {

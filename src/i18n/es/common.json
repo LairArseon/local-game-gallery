@@ -6,6 +6,7 @@
   },
   "actions": {
     "play": "Jugar",
+    "playByVersion": "Elegir version y jugar",
     "open": "Abrir",
     "back": "Volver",
     "rescan": "Reescanear",
@@ -197,6 +198,8 @@
     "dismiss": "Descartar",
     "empty": "No hay notificaciones pendientes de desajuste de versión.",
     "badgeLabel": "Nueva versión: {{current}} -> {{detected}}",
+    "badgeLabelPrefix": "Nueva versión",
+    "badgeLabelDelta": "{{current}} -> {{detected}}",
     "badgeAria": "Desajuste de versión. Actual {{current}}. Detectada {{detected}}.",
     "resolveTooltip": "Actualizar latest_version a la versión detectada"
   },

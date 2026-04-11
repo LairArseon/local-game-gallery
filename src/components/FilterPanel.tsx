@@ -304,10 +304,10 @@ export function FilterPanel({
       </div>
 
       <div className="topbar-filters__actions">
-        <button className="button" type="button" onClick={onResetStagedFilters}>
+        <button className="button topbar-filters__action-button topbar-filters__action-button--reset" type="button" onClick={onResetStagedFilters}>
           {t('filters.resetStaged')}
         </button>
-        <button className="button button--primary" type="button" onClick={onApplyFiltersAndOrdering}>
+        <button className="button button--primary topbar-filters__action-button topbar-filters__action-button--apply" type="button" onClick={onApplyFiltersAndOrdering}>
           {t('filters.apply')}
         </button>
       </div>

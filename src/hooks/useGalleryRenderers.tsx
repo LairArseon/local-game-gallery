@@ -13,6 +13,7 @@ import type { GalleryViewMode, GameSummary } from '../types';
 
 type ActionLabels = {
   play: string;
+  playByVersion: string;
   open: string;
 };
 
@@ -25,6 +26,7 @@ type UseGalleryRenderersArgs = {
   getImageSrc: (filePath: string | null) => string | null;
   onToggleSelection: (path: string) => void;
   onPlayClick: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
+  onPlayWithVersionPromptClick: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
   onOpenDetail: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
   onResolveVersionMismatch: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
   onGameCardContextMenu: (targetGame: GameSummary, event: MouseEvent<HTMLElement>) => void;
@@ -42,6 +44,7 @@ export function useGalleryRenderers({
   getImageSrc,
   onToggleSelection,
   onPlayClick,
+  onPlayWithVersionPromptClick,
   onOpenDetail,
   onResolveVersionMismatch,
   onGameCardContextMenu,
@@ -78,12 +81,13 @@ export function useGalleryRenderers({
         onMoveCarousel={moveFocusCarousel}
         onOpenScreenshot={setScreenshotModalPath}
         onPlayClick={onPlayClick}
+        onPlayWithVersionPromptClick={onPlayWithVersionPromptClick}
         onOpenDetail={onOpenDetail}
         onResolveVersionMismatch={onResolveVersionMismatch}
         actionLabels={actionLabels}
       />
     );
-  }, [actionLabels, focusCarouselIndexByGamePath, getImageSrc, onOpenDetail, onPlayClick, onResolveVersionMismatch, setFocusCarouselIndexByGamePath, setScreenshotModalPath]);
+  }, [actionLabels, focusCarouselIndexByGamePath, getImageSrc, onOpenDetail, onPlayClick, onPlayWithVersionPromptClick, onResolveVersionMismatch, setFocusCarouselIndexByGamePath, setScreenshotModalPath]);
 
   const renderGame = useCallback((game: GameSummary) => {
     return (

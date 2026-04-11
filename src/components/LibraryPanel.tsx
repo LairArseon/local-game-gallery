@@ -7,7 +7,7 @@
  * reused while App remains an orchestrator. Special behavior includes dynamic
  * card grid wiring and view-mode switch controls.
  */
-import type { CSSProperties, ReactNode, RefObject } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DetailPage } from './DetailPage';
 import type { GalleryViewMode, GameSummary, ScanResult } from '../types';
@@ -21,11 +21,13 @@ type LibraryPanelProps = {
   actionLabels: {
     back: string;
     play: string;
+    playByVersion: string;
   };
   renderFocusCard: (game: GameSummary, isVertical: boolean, showActions?: boolean) => ReactNode;
   getImageSrc: (filePath: string | null) => string | null;
   onBackFromDetail: () => void;
   onPlay: (game: GameSummary, event: React.MouseEvent<HTMLButtonElement>) => void;
+  onPlayWithVersionPrompt: (game: GameSummary, event: React.MouseEvent<HTMLButtonElement>) => void;
   onOpenMetadata: (gamePath: string) => void;
   onOpenGameFolder: (gamePath: string) => void;
   onOpenVersionFolder: (versionPath: string) => void;
@@ -53,6 +55,7 @@ export function LibraryPanel({
   getImageSrc,
   onBackFromDetail,
   onPlay,
+  onPlayWithVersionPrompt,
   onOpenMetadata,
   onOpenGameFolder,
   onOpenVersionFolder,
@@ -71,6 +74,38 @@ export function LibraryPanel({
   renderGame,
 }: LibraryPanelProps) {
   const { t } = useTranslation();
+  const previousViewModeRef = useRef<GalleryViewMode>(viewMode);
+  const [isPosterCardSwitching, setIsPosterCardSwitching] = useState(false);
+
+  const isPosterCardView = viewMode === 'poster' || viewMode === 'card';
+
+  useLayoutEffect(() => {
+    const previousViewMode = previousViewModeRef.current;
+    previousViewModeRef.current = viewMode;
+
+    if (!isPosterCardView || previousViewMode === viewMode || !filteredGames.length) {
+      setIsPosterCardSwitching(false);
+      return;
+    }
+
+    setIsPosterCardSwitching(true);
+    const revealTimer = window.setTimeout(() => {
+      setIsPosterCardSwitching(false);
+    }, 150);
+
+    return () => {
+      window.clearTimeout(revealTimer);
+    };
+  }, [filteredGames.length, isPosterCardView, viewMode]);
+
+  const skeletonCount = useMemo(() => {
+    if (!filteredGames.length) {
+      return 0;
+    }
+
+    const estimatedVisible = Math.max(6, gridColumns * 2);
+    return Math.min(filteredGames.length, estimatedVisible);
+  }, [filteredGames.length, gridColumns]);
 
   return (
     <section
@@ -86,6 +121,7 @@ export function LibraryPanel({
           getImageSrc={getImageSrc}
           onBack={onBackFromDetail}
           onPlay={onPlay}
+          onPlayWithVersionPrompt={onPlayWithVersionPrompt}
           onOpenMetadata={onOpenMetadata}
           onOpenGameFolder={onOpenGameFolder}
           onOpenVersionFolder={onOpenVersionFolder}
@@ -137,13 +173,28 @@ export function LibraryPanel({
               </div>
             ) : (
               <div
-                className={`cards cards--${viewMode}`}
+                className={`cards cards--${viewMode} ${isPosterCardSwitching ? 'cards--switching' : ''}`}
                 ref={cardsContainerRef}
                 style={{ ['--grid-columns' as string]: String(gridColumns) } as CSSProperties}
               >
-                {viewMode === 'poster' || viewMode === 'card'
-                  ? renderInlinePosterCardFocus()
-                  : filteredGames.map((game) => renderGame(game))}
+                {viewMode === 'poster' || viewMode === 'card' ? (
+                  isPosterCardSwitching ? (
+                    Array.from({ length: skeletonCount }).map((_, index) => (
+                      <article key={`skeleton-${index}`} className={`game-card game-card--${viewMode} game-card--skeleton`} aria-hidden="true">
+                        <div className="game-card__art" />
+                        <div className="game-card__body">
+                          <div className="skeleton-line skeleton-line--title" />
+                          <div className="skeleton-line" />
+                          <div className="skeleton-line skeleton-line--short" />
+                        </div>
+                      </article>
+                    ))
+                  ) : (
+                    renderInlinePosterCardFocus()
+                  )
+                ) : (
+                  filteredGames.map((game) => renderGame(game))
+                )}
               </div>
             )}
 

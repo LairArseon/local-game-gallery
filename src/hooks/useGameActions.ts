@@ -32,7 +32,20 @@ export function useGameActions({
     void playGame(game);
   }
 
+  function handlePlayWithVersionPromptClick(game: GameSummary, event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    void playGameWithVersionPrompt(game);
+  }
+
   async function playGame(game: GameSummary) {
+    return runPlayGame(game, 'default');
+  }
+
+  async function playGameWithVersionPrompt(game: GameSummary) {
+    return runPlayGame(game, 'choose-version-temporary');
+  }
+
+  async function runPlayGame(game: GameSummary, launchMode: 'default' | 'choose-version-temporary') {
     try {
       const result = await window.gallery.playGame({
         gamePath: game.path,
@@ -41,6 +54,7 @@ export function useGameActions({
           name: version.name,
           path: version.path,
         })),
+        launchMode,
       });
       setStatus(result.message);
       // Refresh only when a launch actually happened (play call can also return no-op statuses).
@@ -89,7 +103,9 @@ export function useGameActions({
 
   return {
     handlePlayClick,
+    handlePlayWithVersionPromptClick,
     playGame,
+    playGameWithVersionPrompt,
     handleOpenDetail,
     openGameDetailFromPath,
     openFolderInExplorer,

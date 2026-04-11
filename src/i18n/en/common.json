@@ -6,6 +6,7 @@
   },
   "actions": {
     "play": "Play",
+    "playByVersion": "Choose version and play",
     "open": "Open",
     "back": "Back",
     "rescan": "Rescan",
@@ -197,6 +198,8 @@
     "dismiss": "Dismiss",
     "empty": "No pending version mismatch notifications.",
     "badgeLabel": "New version: {{current}} -> {{detected}}",
+    "badgeLabelPrefix": "New version",
+    "badgeLabelDelta": "{{current}} -> {{detected}}",
     "badgeAria": "Version mismatch. Current {{current}}. Detected {{detected}}.",
     "resolveTooltip": "Update latest_version to detected version"
   },
