@@ -10,6 +10,7 @@
  */
 import type { Dispatch, DragEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ArrowLeft, ArrowRight, X } from 'lucide-react';
 import type { GameSummary } from '../types';
 
 type FeaturedTarget = 'poster' | 'card' | 'background' | null;
@@ -42,7 +43,7 @@ type MediaModalProps = {
 function extractDroppedFilePaths(event: DragEvent<HTMLElement>) {
   // Electron exposes absolute paths on dropped files; keep only valid path entries.
   return Array.from(event.dataTransfer.files)
-    .map((file) => file.path)
+    .map((file) => (file as File & { path?: string }).path ?? '')
     .filter(Boolean);
 }
 
@@ -80,7 +81,22 @@ export function MediaModal({
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <section className="modal-panel modal-panel--wide" onClick={(event) => event.stopPropagation()}>
+      <section
+        className="modal-panel modal-panel--wide"
+        onMouseDownCapture={(event) => {
+          if (!screenshotContextMenu) {
+            return;
+          }
+
+          const target = event.target;
+          if (target instanceof Element && target.closest('.context-menu')) {
+            return;
+          }
+
+          setScreenshotContextMenu(null);
+        }}
+        onClick={(event) => event.stopPropagation()}
+      >
         <header className="modal-panel__header">
           <h2>{t('media.managePictures')}</h2>
           <button className="button" type="button" onClick={onClose}>{t('common.close')}</button>
@@ -242,7 +258,7 @@ export function MediaModal({
                         }}
                         title={t('media.screenshotActions')}
                       >
-                        ...
+                        <X size={12} aria-hidden="true" />
                       </button>
                       <img src={getImageSrc(imagePath) ?? undefined} alt={t('media.screenshotAlt')} className="media-preview" draggable={false} />
                       <div className="media-grid__reorder">
@@ -255,7 +271,9 @@ export function MediaModal({
                             if (prev) void onReorderScreenshots(imagePath, prev);
                           }}
                           aria-label={t('media.moveLeft')}
-                        >{'â—€'}</button>
+                        >
+                          <ArrowLeft size={12} aria-hidden="true" />
+                        </button>
                         <button
                           className="button button--icon"
                           type="button"
@@ -265,7 +283,9 @@ export function MediaModal({
                             if (next) void onReorderScreenshots(imagePath, next);
                           }}
                           aria-label={t('media.moveRight')}
-                        >{'â–¶'}</button>
+                        >
+                          <ArrowRight size={12} aria-hidden="true" />
+                        </button>
                       </div>
                     </div>
                   )) : <p>{t('media.noScreenshots')}</p>}

@@ -359,19 +359,25 @@
   left: 10px;
   top: 10px;
   z-index: 3;
+  border: 1px solid rgba(255, 111, 120, 0.35);
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(3, 5, 10, 0.76);
-  color: rgba(247, 246, 242, 0.9);
-  font-size: 0.72rem;
+  background: rgba(6, 8, 12, 0.28);
+  color: #ff6f78;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   line-height: 1;
-  padding: 0.2rem 0.5rem;
   cursor: pointer;
   user-select: none;
 }
 
 .media-grid__drag-handle:hover {
-  background: rgba(18, 22, 34, 0.9);
+  background: rgba(6, 8, 12, 0.4);
+  border-color: rgba(255, 111, 120, 0.52);
+  color: #ff8891;
 }
 
 .media-grid__item--dragging {
@@ -454,10 +460,13 @@
 
 .media-grid__reorder .button {
   pointer-events: auto;
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 24px;
+  min-height: 24px;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
   background: rgba(3, 5, 10, 0.72);
+  padding: 0;
 }
 
 .media-grid--featured {
