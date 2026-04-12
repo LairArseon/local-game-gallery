@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Reusable, accessible select replacement used by setup, filter, and modal flows.
  *
  * This control is intentionally lightweight but still supports keyboard-friendly
@@ -6,6 +6,8 @@
  * focus movement, and enter/escape behavior. It also normalizes option rendering
  * so styling stays consistent across panels and overlays where native select
  * styling would otherwise diverge heavily between platforms.
+ *
+ * New to this project: start here for dropdown interaction behavior (open/close, keyboard navigation, option focus), then trace its callbacks in setup/filter/modal parents for state changes.
  */
 import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { ChevronDown } from 'lucide-react';
@@ -233,3 +235,9 @@ export function CustomSelect({ value, options, ariaLabel, onChange, className }:
     </div>
   );
 }
+
+
+
+
+
+

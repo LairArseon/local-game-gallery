@@ -1,10 +1,12 @@
-/**
+﻿/**
  * Centralized overlay host for all app modal surfaces.
  *
  * This component keeps modal composition out of App by wiring metadata, media,
  * log viewer, and screenshot lightbox overlays in one place. It preserves each
  * modal's existing callback contracts and orchestrates conditional rendering so
  * App stays focused on state orchestration rather than modal markup volume.
+ *
+ * New to this project: this is the modal switchboard; use it to see which state flag opens each modal and which hook owns each modal's behavior.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
@@ -13,6 +15,8 @@ import { useTranslation } from 'react-i18next';
 import { LogViewerModal } from './LogViewerModal';
 import { MediaModal } from './MediaModal';
 import { MetadataModal } from './MetadataModal';
+import { VaultPinModal } from './VaultPinModal';
+import { VaultUnlockModal } from './VaultUnlockModal';
 import type { GameMetadata, GameSummary } from '../types';
 
 type TagAutocompleteState = {
@@ -73,6 +77,21 @@ type ModalHostProps = {
   clearLogsFromViewer: () => Promise<void>;
   screenshotModalPath: string | null;
   setScreenshotModalPath: Dispatch<SetStateAction<string | null>>;
+  isVaultUnlockModalOpen: boolean;
+  vaultPinInput: string;
+  vaultPinError: string | null;
+  setVaultPinInput: Dispatch<SetStateAction<string>>;
+  confirmVaultUnlock: () => void;
+  cancelVaultUnlock: () => void;
+  isVaultPinModalOpen: boolean;
+  hasExistingVaultPin: boolean;
+  newVaultPinInput: string;
+  confirmVaultPinInput: string;
+  vaultPinModalError: string | null;
+  setNewVaultPinInput: Dispatch<SetStateAction<string>>;
+  setConfirmVaultPinInput: Dispatch<SetStateAction<string>>;
+  saveVaultPin: () => void;
+  cancelVaultPinEditor: () => void;
 };
 
 export function ModalHost({
@@ -123,6 +142,21 @@ export function ModalHost({
   clearLogsFromViewer,
   screenshotModalPath,
   setScreenshotModalPath,
+  isVaultUnlockModalOpen,
+  vaultPinInput,
+  vaultPinError,
+  setVaultPinInput,
+  confirmVaultUnlock,
+  cancelVaultUnlock,
+  isVaultPinModalOpen,
+  hasExistingVaultPin,
+  newVaultPinInput,
+  confirmVaultPinInput,
+  vaultPinModalError,
+  setNewVaultPinInput,
+  setConfirmVaultPinInput,
+  saveVaultPin,
+  cancelVaultPinEditor,
 }: ModalHostProps) {
   const { t } = useTranslation();
   const thumbsViewportRef = useRef<HTMLDivElement | null>(null);
@@ -374,6 +408,35 @@ export function ModalHost({
           </section>
         </div>
       ) : null}
+
+      {isVaultUnlockModalOpen ? (
+        <VaultUnlockModal
+          pinValue={vaultPinInput}
+          pinError={vaultPinError}
+          onPinValueChange={setVaultPinInput}
+          onConfirm={confirmVaultUnlock}
+          onCancel={cancelVaultUnlock}
+        />
+      ) : null}
+
+      {isVaultPinModalOpen ? (
+        <VaultPinModal
+          hasExistingPin={hasExistingVaultPin}
+          newPinValue={newVaultPinInput}
+          confirmPinValue={confirmVaultPinInput}
+          pinError={vaultPinModalError}
+          onNewPinValueChange={setNewVaultPinInput}
+          onConfirmPinValueChange={setConfirmVaultPinInput}
+          onConfirm={saveVaultPin}
+          onCancel={cancelVaultPinEditor}
+        />
+      ) : null}
     </>
   );
 }
+
+
+
+
+
+

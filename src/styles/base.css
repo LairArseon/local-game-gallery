@@ -211,6 +211,34 @@ button {
   gap: 10px;
 }
 
+.topbar-notifications__vault-alerts {
+  border: 1px solid rgba(214, 96, 109, 0.32);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(52, 19, 24, 0.4);
+  display: grid;
+  gap: 8px;
+}
+
+.topbar-notifications__vault-alerts h4 {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.topbar-notifications__vault-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.topbar-notifications__vault-item {
+  font-size: 0.8rem;
+  color: rgba(247, 246, 242, 0.84);
+  word-break: break-all;
+}
+
 .topbar-notifications__item {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
@@ -787,6 +815,18 @@ button {
 
 .topbar__actions .button--icon-only.is-busy {
   background: rgba(255, 183, 102, 0.24);
+}
+
+.topbar__actions .button--icon-only.is-vault-open {
+  background: rgba(113, 192, 255, 0.26);
+  box-shadow: inset 0 0 0 1px rgba(135, 206, 255, 0.52);
+  color: #d8f1ff;
+}
+
+.topbar__actions .button--icon-only.is-vault-closed {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+  color: inherit;
 }
 
 .icon-spin {

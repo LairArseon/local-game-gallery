@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Full detail workspace for a selected game.
  *
  * This view composes metadata, version actions, media shortcuts, and the focus
@@ -6,6 +6,8 @@
  * users can play, edit, browse folders, and inspect screenshots without leaving
  * the current context. Callback props keep side effects in hooks/App while this
  * file remains focused on rendering and interaction layout.
+ *
+ * New to this project: this is the single-game workspace; follow its action callbacks (play, metadata, media, folders) to hooks that perform side effects.
  */
 import type { CSSProperties, MouseEvent, ReactNode } from 'react';
 import { ArrowLeft, ListVideo, Play } from 'lucide-react';
@@ -181,3 +183,9 @@ export function DetailPage({
     </section>
   );
 }
+
+
+
+
+
+

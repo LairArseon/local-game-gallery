@@ -14,6 +14,8 @@
  *
  * This file intentionally focuses on wiring and lifecycle order, while detailed
  * business behavior lives in domain hooks/components.
+ *
+ * New to this project: read App top-to-bottom to see feature composition order, then jump into each imported hook for domain behavior and IPC/persistence details.
  */
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -41,7 +43,8 @@ import { useResponsiveGrid } from './hooks/useResponsiveGrid';
 import { useAppLifecycleHandlers } from './hooks/useAppLifecycleHandlers';
 import { useGameActions } from './hooks/useGameActions';
 import { useVersionMismatchManager } from './hooks/useVersionMismatchManager';
-import {clamp} from './utils/app-helpers';
+import { useVaultManager } from './hooks/useVaultManager';
+import { clamp } from './utils/app-helpers';
 
 const emptyScan: ScanResult = {
   rootPath: '',
@@ -108,6 +111,8 @@ function App() {
     hideFilters: t('actions.hideFilters'),
     showSetup: t('actions.showSetup'),
     hideSetup: t('actions.hideSetup'),
+    showVault: t('actions.showVault'),
+    hideVault: t('actions.hideVault'),
     showVersionNotifications: t('actions.showVersionNotifications'),
     hideVersionNotifications: t('actions.hideVersionNotifications'),
     chooseLibraryFolder: t('actions.chooseLibraryFolder'),
@@ -206,7 +211,6 @@ function App() {
     isPresetNamingOpen,
     draftPresetName,
     isPresetSaving,
-    topUsedFilterSuggestions,
     filteredGames,
     setDraftTagRules,
     setActiveFilterRuleEditorIndex,
@@ -348,16 +352,6 @@ function App() {
     setScreenshotModalPath,
   });
 
-  useContextMenuListeners({
-    games: scanResult.games,
-    openGameDetailFromPath,
-    openFolderInExplorer,
-    openMetadataModal,
-    openPicturesModal,
-    playGame,
-    setStatus,
-  });
-
   async function refreshScan() {
     // Central scan gateway used by setup save, manual refresh, and post-action sync.
     setIsScanning(true);
@@ -430,29 +424,6 @@ function App() {
   });
 
   const {
-    onToggleSystemMenuBar,
-    onOpenLogViewer,
-    onOpenLogFolder,
-    onPickAppIcon,
-    onDropAppIconFile,
-    onApplyAppIconNow,
-    onBackFromDetail,
-    onOpenGameFolder,
-    onOpenVersionFolder,
-    onOpenVersionContextMenu,
-    onGameCardContextMenu,
-  } = useAppViewHandlers({
-    logAppEvent,
-    openLogViewer,
-    openLogFolderFromSetup,
-    pickAppIconPng,
-    handleDropAppIconFile,
-    applyAppIconNow,
-    openFolderInExplorer,
-    setDetailGamePath,
-  });
-
-  const {
     isVersionNotificationsOpen,
     setIsVersionNotificationsOpen,
     visibleVersionMismatchGames,
@@ -474,13 +445,132 @@ function App() {
   });
 
   const {
+    isVaultOpen,
+    requestVaultToggle,
+    visibleFilteredGames,
+    effectiveTagPoolUsage,
+    toggleGameVaultMembership,
+    announcedMissingVaultedPaths,
+    isVaultUnlockModalOpen,
+    vaultPinInput,
+    setVaultPinInput,
+    vaultPinError,
+    confirmVaultUnlock,
+    cancelVaultUnlock,
+    isVaultPinModalOpen,
+    newVaultPinInput,
+    setNewVaultPinInput,
+    confirmVaultPinInput,
+    setConfirmVaultPinInput,
+    vaultPinModalError,
+    openVaultPinEditor,
+    saveVaultPin,
+    cancelVaultPinEditor,
+  } = useVaultManager({
+    config,
+    setConfig,
+    scanResult,
+    filteredGames,
+    selectedGamePath,
+    detailGamePath,
+    setSelectedGamePath,
+    setDetailGamePath,
+    setScanResult,
+    setStatus,
+    refreshScan,
+    logAppEvent,
+    toErrorMessage,
+    t,
+    onOpenNotificationCenter: () => setIsVersionNotificationsOpen(true),
+  });
+
+  // Keep this in App because it combines outputs from two separate features:
+  // 1) the list of version mismatches, and 2) whether vaulted games should be
+  // hidden right now. App is the place where those feature outputs are merged
+  // before being sent to the notification UI.
+  const vaultAwareVersionMismatchGames = useMemo(
+    () => (isVaultOpen ? visibleVersionMismatchGames : visibleVersionMismatchGames.filter((game) => !game.isVaulted)),
+    [isVaultOpen, visibleVersionMismatchGames],
+  );
+
+  // Same idea as above: this suggestion list needs both current filter input
+  // (what tags are already in use) and vault-aware tag counts (what is visible
+  // in the current vault state). Since it merges data from multiple features,
+  // we keep it here in App and pass the final list to the filter panel.
+  const vaultAwareTopUsedFilterSuggestions = useMemo(() => {
+    if (!config) {
+      return [] as Array<{ tag: string; count: number }>;
+    }
+
+    const activeKeys = new Set(
+      draftTagRules
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+        .map((entry) => (entry.startsWith('-') ? entry.slice(1).trim() : entry).toLowerCase()),
+    );
+
+    return config.tagPool
+      .map((tag) => ({
+        tag,
+        count: Number.isFinite(effectiveTagPoolUsage[tag]) ? effectiveTagPoolUsage[tag] : 0,
+      }))
+      .filter((entry) => !activeKeys.has(entry.tag.toLowerCase()))
+      .sort((left, right) => {
+        if (left.count !== right.count) {
+          return right.count - left.count;
+        }
+
+        return left.tag.localeCompare(right.tag, undefined, { sensitivity: 'base' });
+      })
+      .slice(0, 10);
+  }, [config, draftTagRules, effectiveTagPoolUsage]);
+
+  const {
+    onToggleSystemMenuBar,
+    onOpenLogViewer,
+    onOpenLogFolder,
+    onPickAppIcon,
+    onDropAppIconFile,
+    onApplyAppIconNow,
+    onBackFromDetail,
+    onOpenGameFolder,
+    onOpenVersionFolder,
+    onOpenVersionContextMenu,
+    onGameCardContextMenu,
+    onOpenVaultContextMenu,
+  } = useAppViewHandlers({
+    logAppEvent,
+    openLogViewer,
+    openLogFolderFromSetup,
+    pickAppIconPng,
+    handleDropAppIconFile,
+    applyAppIconNow,
+    openFolderInExplorer,
+    setDetailGamePath,
+    isVaultOpen,
+    hasVaultPin: Boolean(config?.vaultPin?.trim()),
+  });
+
+  useContextMenuListeners({
+    games: scanResult.games,
+    openGameDetailFromPath,
+    openFolderInExplorer,
+    openMetadataModal,
+    openPicturesModal,
+    playGame,
+    toggleGameVaultMembership,
+    openVaultPinEditor,
+    setStatus,
+  });
+
+  const {
     renderFocusCard,
     renderGame,
     renderInlinePosterCardFocus,
   } = useGalleryRenderers({
     viewMode,
     selectedGamePath,
-    filteredGames,
+    filteredGames: visibleFilteredGames,
     gridColumns,
     actionLabels,
     getImageSrc: filePathToSrc,
@@ -500,13 +590,20 @@ function App() {
 
   // Derived selection state for list/focus panes and detail page routing.
   const selectedGame = useMemo(
-    () => filteredGames.find((game) => game.path === selectedGamePath) ?? null,
-    [filteredGames, selectedGamePath],
+    () => visibleFilteredGames.find((game) => game.path === selectedGamePath) ?? null,
+    [visibleFilteredGames, selectedGamePath],
   );
 
   const detailGame = useMemo(
-    () => scanResult.games.find((game) => game.path === detailGamePath) ?? null,
-    [scanResult.games, detailGamePath],
+    () => {
+      const game = scanResult.games.find((candidate) => candidate.path === detailGamePath) ?? null;
+      if (!game) {
+        return null;
+      }
+
+      return !isVaultOpen && game.isVaulted ? null : game;
+    },
+    [scanResult.games, detailGamePath, isVaultOpen],
   );
 
   // Dynamic scale layer: adapts typography/spacing/media to current grid density.
@@ -546,7 +643,7 @@ function App() {
     viewMode,
     cardsContainerRef,
     effectiveMediaScale,
-    filteredGamesLength: filteredGames.length,
+    filteredGamesLength: visibleFilteredGames.length,
     detailGamePath,
     config,
     setGridColumns,
@@ -578,12 +675,16 @@ function App() {
           isTagPoolPanelOpen={isTagPoolPanelOpen}
           isFilterPanelOpen={isFilterPanelOpen}
           isSidebarOpen={isSidebarOpen}
+          isVaultOpen={isVaultOpen}
+          hasVaultPin={Boolean(config.vaultPin?.trim())}
           isVersionNotificationsOpen={isVersionNotificationsOpen}
           isScanning={isScanning}
-          versionMismatchCount={visibleVersionMismatchGames.length}
+          versionMismatchCount={vaultAwareVersionMismatchGames.length + announcedMissingVaultedPaths.length}
           onToggleTagPoolPanel={() => setIsTagPoolPanelOpen((current) => !current)}
           onToggleFilterPanel={() => setIsFilterPanelOpen((current) => !current)}
           onToggleSidebar={() => setIsSidebarOpen((current) => !current)}
+          onToggleVault={requestVaultToggle}
+          onOpenVaultContextMenu={onOpenVaultContextMenu}
           onToggleVersionNotifications={() => setIsVersionNotificationsOpen((current) => !current)}
           onRescan={() => {
             void refreshScan();
@@ -592,7 +693,8 @@ function App() {
         />
         {isVersionNotificationsOpen ? (
           <VersionMismatchPanel
-            games={visibleVersionMismatchGames}
+            games={vaultAwareVersionMismatchGames}
+            missingVaultedPaths={announcedMissingVaultedPaths}
             onOpenGame={(gamePath) => {
               focusGameFromNotification(gamePath);
             }}
@@ -609,7 +711,7 @@ function App() {
           isFilterPanelOpen={isFilterPanelOpen}
           tagPoolPanelProps={{
             tagPool: config.tagPool,
-            tagPoolUsage: config.tagPoolUsage,
+            tagPoolUsage: effectiveTagPoolUsage,
             activeTagPoolEditorIndex,
             activeTagAutocomplete,
             activeTagSuggestions,
@@ -627,7 +729,7 @@ function App() {
             activeFilterRuleEditorIndex,
             activeTagAutocomplete,
             activeTagSuggestions,
-            topUsedFilterSuggestions,
+            topUsedFilterSuggestions: vaultAwareTopUsedFilterSuggestions,
             draftMinScore,
             draftOrderBy,
             draftStatus,
@@ -709,7 +811,7 @@ function App() {
           onChangeViewMode={(mode) => {
             void changeViewMode(mode);
           }}
-          filteredGames={filteredGames}
+          filteredGames={visibleFilteredGames}
           selectedGame={selectedGame}
           cardsContainerRef={cardsContainerRef}
           gridColumns={gridColumns}
@@ -767,9 +869,30 @@ function App() {
         clearLogsFromViewer={clearLogsFromViewer}
         screenshotModalPath={screenshotModalPath}
         setScreenshotModalPath={setScreenshotModalPath}
+        isVaultUnlockModalOpen={isVaultUnlockModalOpen}
+        vaultPinInput={vaultPinInput}
+        vaultPinError={vaultPinError}
+        setVaultPinInput={setVaultPinInput}
+        confirmVaultUnlock={confirmVaultUnlock}
+        cancelVaultUnlock={cancelVaultUnlock}
+        isVaultPinModalOpen={isVaultPinModalOpen}
+        hasExistingVaultPin={Boolean(config.vaultPin?.trim())}
+        newVaultPinInput={newVaultPinInput}
+        confirmVaultPinInput={confirmVaultPinInput}
+        vaultPinModalError={vaultPinModalError}
+        setNewVaultPinInput={setNewVaultPinInput}
+        setConfirmVaultPinInput={setConfirmVaultPinInput}
+        saveVaultPin={saveVaultPin}
+        cancelVaultPinEditor={cancelVaultPinEditor}
       />
     </main>
   );
 }
 
 export default App;
+
+
+
+
+
+

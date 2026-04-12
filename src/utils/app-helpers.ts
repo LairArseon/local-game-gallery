@@ -1,7 +1,9 @@
-/**
+﻿/**
  * Shared pure helpers used by renderer UI and filtering logic.
  *
  * Keep these side-effect free so they are safe across components.
+ *
+ * New to this project: this is the shared pure-helper library; start with exported utilities used by App/hooks (scaling, matching, usage counts).
  */
 import type { GameSummary } from '../types';
 
@@ -93,3 +95,9 @@ export function formatLastPlayed(value: string | null) {
     minute: '2-digit',
   });
 }
+
+
+
+
+
+

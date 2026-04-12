@@ -110,6 +110,7 @@ export async function scanGames(config: GalleryConfig): Promise<ScanResult> {
   const warnings: string[] = [];
   const entries = await readdir(config.gamesRoot, { withFileTypes: true });
   const games: GameSummary[] = [];
+  const vaultedGamePaths = new Set(config.vaultedGamePaths ?? []);
 
   for (const entry of entries) {
     if (!entry.isDirectory()) {
@@ -170,6 +171,7 @@ export async function scanGames(config: GalleryConfig): Promise<ScanResult> {
     games.push({
       name: entry.name,
       path: gamePath,
+      isVaulted: vaultedGamePaths.has(gamePath),
       lastPlayedAt,
       hasNfo: true,
       picturesPath: picturesStats?.isDirectory() ? picturesPath : null,

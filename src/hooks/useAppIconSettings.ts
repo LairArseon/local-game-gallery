@@ -1,10 +1,12 @@
-/**
+﻿/**
  * Orchestrates app icon configuration workflows end-to-end.
  *
  * The hook handles file picking, drag/drop staging, icon inspection, preview
  * cache busting, and runtime icon apply/reset actions. It also captures drag
  * depth state to avoid flicker during nested drag events and reports status/log
  * messages for both success and failure paths.
+ *
+ * New to this project: this hook owns icon staging, validation, preview, and apply/reset; trace window.gallery icon calls to Electron handlers for persistence/runtime apply.
  */
 import { useEffect, useRef, useState, type Dispatch, type DragEvent, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -220,3 +222,9 @@ export function useAppIconSettings({
     applyAppIconNow,
   };
 }
+
+
+
+
+
+

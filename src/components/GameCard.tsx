@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Polymorphic game tile renderer for all gallery view variants.
  *
  * A single card implementation powers poster, card, compact, and expanded
@@ -6,6 +6,8 @@
  * selection, context menu entry points, and action affordances while adapting
  * its markup density per mode. This keeps interaction contracts stable even as
  * visual presentation changes.
+ *
+ * New to this project: this is the shared tile for all view modes; inspect mode-specific branches here, then trace emitted events to selection/play/context-menu handlers.
  */
 import type { MouseEvent, ReactNode } from 'react';
 import { ArrowRight, Play } from 'lucide-react';
@@ -106,12 +108,13 @@ export function GameCard({
     onContextMenu: (event: MouseEvent<HTMLElement>) => onContextMenu(game, event),
   };
   const versionMismatchClass = game.hasVersionMismatch ? 'game-card--version-mismatch' : '';
+  const vaultedClass = game.isVaulted ? 'game-card--vaulted' : '';
 
   if (viewMode === 'compact') {
     const compactDescription = game.metadata.description.trim();
     const compactTags = game.metadata.tags.map((tag) => tag.trim()).filter(Boolean);
     return (
-      <article className={`game-card game-card--compact ${versionMismatchClass} ${isSelected ? 'game-card--selected' : ''}`} data-game-path={game.path} onClick={commonProps.onClick} onContextMenu={commonProps.onContextMenu}>
+      <article className={`game-card game-card--compact ${versionMismatchClass} ${vaultedClass} ${isSelected ? 'game-card--selected' : ''}`} data-game-path={game.path} onClick={commonProps.onClick} onContextMenu={commonProps.onContextMenu}>
         <div className="game-card__row">
           <h3>{game.name}</h3>
           {mismatchBadge}
@@ -150,7 +153,7 @@ export function GameCard({
 
   if (viewMode === 'card') {
     return (
-      <article className={`game-card game-card--card ${versionMismatchClass} ${isSelected ? 'game-card--selected' : ''}`} data-game-path={game.path} onClick={commonProps.onClick} onContextMenu={commonProps.onContextMenu}>
+      <article className={`game-card game-card--card ${versionMismatchClass} ${vaultedClass} ${isSelected ? 'game-card--selected' : ''}`} data-game-path={game.path} onClick={commonProps.onClick} onContextMenu={commonProps.onContextMenu}>
         {art}
         <div className="game-card__body">
           <h3>{game.name}</h3>
@@ -167,7 +170,7 @@ export function GameCard({
 
   if (viewMode === 'expanded') {
     return (
-      <article className={`game-card game-card--expanded ${versionMismatchClass} ${isSelected ? 'game-card--selected' : ''}`} data-game-path={game.path} onClick={commonProps.onClick} onContextMenu={commonProps.onContextMenu}>
+      <article className={`game-card game-card--expanded ${versionMismatchClass} ${vaultedClass} ${isSelected ? 'game-card--selected' : ''}`} data-game-path={game.path} onClick={commonProps.onClick} onContextMenu={commonProps.onContextMenu}>
         {art}
         <div className="game-card__body game-card__body--expanded">
           <div>
@@ -216,7 +219,7 @@ export function GameCard({
   }
 
   return (
-    <article className={`game-card game-card--poster ${versionMismatchClass} ${isSelected ? 'game-card--selected' : ''}`} data-game-path={game.path} onClick={commonProps.onClick} onContextMenu={commonProps.onContextMenu}>
+    <article className={`game-card game-card--poster ${versionMismatchClass} ${vaultedClass} ${isSelected ? 'game-card--selected' : ''}`} data-game-path={game.path} onClick={commonProps.onClick} onContextMenu={commonProps.onContextMenu}>
       {art}
       <div className="game-card__body">
         <h3>{game.name}</h3>
@@ -228,3 +231,9 @@ export function GameCard({
     </article>
   );
 }
+
+
+
+
+
+

@@ -1,10 +1,12 @@
-/**
+﻿/**
  * Shared autocomplete engine for tag editing across pool, filters, and metadata.
  *
  * The hook derives normalized suggestions from known tags, handles keyboard
  * navigation semantics, and applies accepted suggestions back into the correct
  * state domain. Centralizing these rules ensures autocomplete behaves the same
  * regardless of which editor surface is active.
+ *
+ * New to this project: this hook provides shared tag suggestion and keyboard semantics across editors; start with applyTagSuggestion and keydown handling.
  */
 import { useMemo, type Dispatch, type KeyboardEvent, type SetStateAction } from 'react';
 import type { GalleryConfig, GameMetadata } from '../types';
@@ -190,3 +192,9 @@ export function useTagAutocompleteManager({
     handleTagAutocompleteKeyDown,
   };
 }
+
+
+
+
+
+

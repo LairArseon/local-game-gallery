@@ -1,5 +1,7 @@
-/**
+﻿/**
  * Persistent configuration load/save and normalization helpers.
+ *
+ * New to this project: start here for on-disk config defaults, normalization, and migration-compatible transforms before renderer state consumes settings.
  */
 import { app } from 'electron';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -12,6 +14,48 @@ const minGlobalZoom = 0.75;
 const maxGlobalZoom = 2;
 const minMetadataGapScale = 0.5;
 const maxMetadataGapScale = 4;
+const vaultPinObfuscationPrefix = 'obf:v1:';
+const vaultPinObfuscationKey = Buffer.from('local-game-gallery-vault-pin', 'utf8');
+
+function obfuscateVaultPin(pin: string) {
+  if (!pin) {
+    return '';
+  }
+
+  const input = Buffer.from(pin, 'utf8');
+  const output = Buffer.allocUnsafe(input.length);
+
+  for (let index = 0; index < input.length; index += 1) {
+    output[index] = input[index] ^ vaultPinObfuscationKey[index % vaultPinObfuscationKey.length];
+  }
+
+  return `${vaultPinObfuscationPrefix}${output.toString('base64')}`;
+}
+
+function deobfuscateVaultPin(value: string) {
+  if (!value) {
+    return '';
+  }
+
+  if (!value.startsWith(vaultPinObfuscationPrefix)) {
+    // Backward compatibility with existing plain-text values.
+    return value;
+  }
+
+  try {
+    const encoded = value.slice(vaultPinObfuscationPrefix.length);
+    const input = Buffer.from(encoded, 'base64');
+    const output = Buffer.allocUnsafe(input.length);
+
+    for (let index = 0; index < input.length; index += 1) {
+      output[index] = input[index] ^ vaultPinObfuscationKey[index % vaultPinObfuscationKey.length];
+    }
+
+    return output.toString('utf8');
+  } catch {
+    return '';
+  }
+}
 
 function normalizeUiScale(value: number | string | undefined, fallback = 1) {
   const parsed = Number.parseFloat(String(value ?? ''));
@@ -43,6 +87,8 @@ function normalizeMetadataGapScale(value: number | string | undefined, fallback 
 const defaultConfig: GalleryConfig = {
   language: 'en',
   dismissedVersionMismatches: {},
+  vaultedGamePaths: [],
+  vaultPin: '',
   gamesRoot: '',
   excludePatterns: ['.git', 'Thumbs.db'],
   hideDotEntries: true,
@@ -73,7 +119,13 @@ export async function loadConfig() {
 
   try {
     const fileContents = await readFile(configPath, 'utf8');
-    return { ...defaultConfig, ...JSON.parse(fileContents) } as GalleryConfig;
+    const parsed = JSON.parse(fileContents) as Partial<GalleryConfig>;
+    const merged = { ...defaultConfig, ...parsed } as GalleryConfig;
+
+    return {
+      ...merged,
+      vaultPin: deobfuscateVaultPin(String(parsed.vaultPin ?? merged.vaultPin ?? '').trim()),
+    };
   } catch {
     return defaultConfig;
   }
@@ -91,6 +143,8 @@ export async function saveConfig(config: GalleryConfig) {
         .map(([gamePath, detectedVersion]) => [String(gamePath).trim(), String(detectedVersion ?? '').trim()])
         .filter(([gamePath, detectedVersion]) => gamePath && detectedVersion),
     ),
+    vaultedGamePaths: [...new Set((config.vaultedGamePaths ?? []).map((gamePath) => String(gamePath).trim()).filter(Boolean))],
+    vaultPin: String(config.vaultPin ?? '').trim(),
     excludePatterns: [...new Set(config.excludePatterns.map((pattern) => pattern.trim()).filter(Boolean))],
     statusChoices: [...new Set((config.statusChoices ?? []).map((value) => value.trim()).filter(Boolean))],
     tagPool: [...new Set((config.tagPool ?? []).map((value) => value.trim()).filter(Boolean))],
@@ -117,9 +171,20 @@ export async function saveConfig(config: GalleryConfig) {
       .filter((preset) => preset.name),
   };
   const configPath = getConfigPath();
+  const persistedConfig: GalleryConfig = {
+    ...normalizedConfig,
+    // Convenience-level obfuscation so the PIN is not obvious in plain text.
+    vaultPin: obfuscateVaultPin(normalizedConfig.vaultPin),
+  };
 
   await mkdir(path.dirname(configPath), { recursive: true });
-  await writeFile(configPath, JSON.stringify(normalizedConfig, null, 2), 'utf8');
+  await writeFile(configPath, JSON.stringify(persistedConfig, null, 2), 'utf8');
 
   return normalizedConfig;
 }
+
+
+
+
+
+

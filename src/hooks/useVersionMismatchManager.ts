@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Encapsulates version-mismatch notification state and actions.
  *
  * Responsibilities:
@@ -8,6 +8,8 @@
  *
  * Keeping this logic here prevents `App` from accumulating feature-specific
  * behavior while preserving a single orchestration surface for mismatch flows.
+ *
+ * New to this project: this hook owns mismatch notification lifecycle; start with visibleVersionMismatchGames and resolve/dismiss/focus action paths.
  */
 import { useEffect, useMemo, useState, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import type { TFunction } from 'i18next';
@@ -162,3 +164,8 @@ export function useVersionMismatchManager({
     focusGameFromNotification,
   };
 }
+
+
+
+
+

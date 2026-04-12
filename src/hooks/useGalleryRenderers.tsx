@@ -1,10 +1,12 @@
-/**
+﻿/**
  * Produces memoized render helpers for gallery cards and inline focus rows.
  *
  * Because this hook returns JSX-producing callbacks, it lives in TSX and wraps
  * repetitive rendering patterns used across poster/card/compact/expanded modes.
  * It also handles focus-card carousel index updates and screenshot open wiring,
  * reducing markup and callback churn in App.
+ *
+ * New to this project: this hook returns JSX render helpers for gallery layouts; inspect renderGame/renderFocusCard to see view-mode-specific composition.
  */
 import { Fragment, useCallback, type Dispatch, type MouseEvent, type SetStateAction } from 'react';
 import { FocusCard } from '../components/FocusCard';
@@ -132,3 +134,9 @@ export function useGalleryRenderers({
     renderInlinePosterCardFocus,
   };
 }
+
+
+
+
+
+

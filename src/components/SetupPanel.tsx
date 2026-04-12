@@ -1,10 +1,12 @@
-/**
+﻿/**
  * Configuration sidebar for library paths, layout tuning, and app preferences.
  *
  * The panel exposes persistent settings with immediate form feedback, including
  * folder selection, UI scale controls, status choices, and app icon controls.
  * It also contains UX safeguards such as icon format warnings and drag/drop
  * affordances so setup flows remain discoverable for new users.
+ *
+ * New to this project: this sidebar exposes persisted app settings; trace save and picker callbacks to lifecycle/icon hooks to see what writes to config.
  */
 import type { DragEvent, FocusEvent, MouseEvent, SubmitEventHandler } from 'react';
 import { useState } from 'react';
@@ -441,3 +443,9 @@ export function SetupPanel({
     </>
   );
 }
+
+
+
+
+
+

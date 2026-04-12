@@ -1,9 +1,11 @@
-/**
+﻿/**
  * Encapsulates media modal domain behavior for import and screenshot management.
  *
  * This hook tracks modal scope state, drop targets, reorder drag state, and
  * screenshot context-menu interactions. It also provides normalized helpers for
  * media imports/removals and triggers refresh flows after successful updates.
+ *
+ * New to this project: this hook owns media modal state machine and file operations; trace import/reorder/remove handlers to gallery media IPC calls.
  */
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -184,3 +186,9 @@ export function useMediaManager({
     filePathToSrc,
   };
 }
+
+
+
+
+
+

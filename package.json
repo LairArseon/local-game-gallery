@@ -1,7 +1,9 @@
 {
   "name": "local-game-gallery",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "private": true,
+  "author": "Lair Arseon",
+  "license": "CC0-1.0",
   "description": "Local desktop gallery for browsing installed games",
   "main": "dist-electron/electron/main.js",
   "scripts": {

@@ -1,10 +1,12 @@
-/**
+﻿/**
  * Owns metadata modal lifecycle and persistence logic.
  *
  * The hook builds editable drafts, handles modal open/close transitions, saves
  * metadata to disk, and merges newly introduced tags into the global tag pool.
  * It also resets metadata autocomplete/editor state to avoid stale editing
  * context when switching games.
+ *
+ * New to this project: this hook manages metadata drafts and save flow; start with openMetadataModal and saveMetadataChanges for end-to-end behavior.
  */
 import { useState, type Dispatch, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -139,3 +141,9 @@ export function useMetadataManager({
     saveMetadataChanges,
   };
 }
+
+
+
+
+
+

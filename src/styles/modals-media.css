@@ -37,6 +37,38 @@
   grid-template-rows: minmax(0, 1fr);
 }
 
+.modal-panel--vault {
+  width: min(420px, 100%);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.modal-panel__body--vault {
+  padding: 20px;
+  display: grid;
+  gap: 12px;
+}
+
+.modal-panel__body--vault h3,
+.modal-panel__body--vault p {
+  margin: 0;
+}
+
+.modal-panel__vault-field {
+  margin: 0;
+}
+
+.modal-panel__vault-error {
+  margin: 0;
+  color: #ffb6bd;
+  font-size: 0.86rem;
+}
+
+.modal-panel__vault-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .modal-panel__header,
 .modal-panel__footer {
   padding: 18px 22px;

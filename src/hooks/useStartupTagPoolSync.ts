@@ -1,10 +1,12 @@
-/**
+﻿/**
  * Performs one-time startup synchronization between scanned metadata tags and tag pool config.
  *
  * After the first successful scan in a session, this hook computes canonical tag
  * usage counts and persists merged pool/usage values only when changes are
  * detected. It prevents repetitive writes through an internal guard ref and logs
  * synchronization failures for diagnostics.
+ *
+ * New to this project: this hook performs one-time post-scan tag-pool synchronization; follow its guard ref and diff checks to see when writes are skipped.
  */
 import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react';
 import type { GalleryConfig, ScanResult } from '../types';
@@ -83,3 +85,9 @@ export function useStartupTagPoolSync({
     void startupTagPoolSync();
   }, [config, scanResult.scannedAt, scanResult.games, setConfig, setStatus, logAppEvent, toErrorMessage]);
 }
+
+
+
+
+
+

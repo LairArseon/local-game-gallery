@@ -1,10 +1,12 @@
-/**
+﻿/**
  * Owns filtering domain state, preset persistence, and result projection logic.
  *
  * The hook separates staged edits from applied filters, computes top tag
  * suggestions, persists named presets, and returns a sorted filtered game list.
  * Centralizing this logic avoids duplicated query/tag/status/score semantics and
  * keeps filter behavior consistent across UI entry points.
+ *
+ * New to this project: this hook defines filtering semantics (draft vs applied, presets, ordering); start with filteredGames and applyFiltersAndOrdering outputs.
  */
 import { useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +23,7 @@ type UseFilterManagerArgs = {
   config: GalleryConfig | null;
   setConfig: Dispatch<SetStateAction<GalleryConfig | null>>;
   games: GameSummary[];
+  tagPoolUsageOverride?: Record<string, number> | null;
   searchQuery: string;
   setStatus: Dispatch<SetStateAction<string>>;
   logAppEvent: (message: string, level?: 'info' | 'warn' | 'error', source?: string) => Promise<void>;
@@ -32,6 +35,7 @@ export function useFilterManager({
   config,
   setConfig,
   games,
+  tagPoolUsageOverride,
   searchQuery,
   setStatus,
   logAppEvent,
@@ -69,7 +73,9 @@ export function useFilterManager({
     return config.tagPool
       .map((tag) => ({
         tag,
-        count: Number.isFinite(config.tagPoolUsage?.[tag]) ? config.tagPoolUsage[tag] : 0,
+        count: Number.isFinite((tagPoolUsageOverride ?? config.tagPoolUsage)?.[tag])
+          ? ((tagPoolUsageOverride ?? config.tagPoolUsage)?.[tag] ?? 0)
+          : 0,
       }))
       .filter((entry) => !activeKeys.has(entry.tag.toLowerCase()))
       .sort((left, right) => {
@@ -80,7 +86,7 @@ export function useFilterManager({
         return left.tag.localeCompare(right.tag, undefined, { sensitivity: 'base' });
       })
       .slice(0, 10);
-  }, [config, draftTagRules]);
+  }, [config, draftTagRules, tagPoolUsageOverride]);
 
   function resetStagedFilters() {
     setDraftTagRules([]);
@@ -269,3 +275,9 @@ export function useFilterManager({
     applyFiltersAndOrdering,
   };
 }
+
+
+
+
+
+

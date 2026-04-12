@@ -1,5 +1,7 @@
 ﻿/**
  * Electron main process bootstrap, IPC wiring, and desktop integrations.
+ *
+ * New to this project: this is the desktop integration hub; start with ipcMain handlers to map renderer window.gallery calls to filesystem/process operations.
  */
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell } from 'electron';
 import type { OpenDialogOptions } from 'electron';
@@ -28,6 +30,7 @@ import type {
   RemoveScreenshotPayload,
   ReorderScreenshotsPayload,
   SaveGameMetadataPayload,
+  VaultContextMenuPayload,
   VersionContextMenuPayload,
 } from '../src/types';
 
@@ -94,6 +97,52 @@ function launchExecutable(executablePath: string) {
     stdio: 'ignore',
   });
   processHandle.unref();
+}
+
+async function setWindowsHiddenAttribute(targetPath: string, hidden: boolean) {
+  if (process.platform !== 'win32') {
+    return;
+  }
+
+  if (!(await fileExists(targetPath))) {
+    return;
+  }
+
+  const runAttrib = (command: string, args: string[]) => new Promise<void>((resolve, reject) => {
+    const child = spawn(command, args, {
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stderrOutput = '';
+
+    child.stderr.on('data', (chunk: Buffer | string) => {
+      stderrOutput += chunk.toString();
+    });
+
+    child.once('error', (error) => {
+      reject(error);
+    });
+
+    child.once('close', (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      const stderrText = stderrOutput.trim();
+      reject(new Error(stderrText || `${command} exited with code ${String(code ?? 'unknown')}`));
+    });
+  });
+
+  const attribFlag = hidden ? '+h' : '-h';
+
+  try {
+    await runAttrib('attrib.exe', [attribFlag, targetPath]);
+  } catch {
+    // Some environments do not expose attrib.exe in PATH for direct spawn.
+    await runAttrib('cmd.exe', ['/d', '/s', '/c', `attrib ${attribFlag} "${targetPath}"`]);
+  }
 }
 
 async function appendGameLaunchActivity(gamePath: string) {
@@ -171,7 +220,42 @@ ipcMain.handle('gallery:get-config', async () => loadConfig());
 
 ipcMain.handle('gallery:get-app-version', async () => app.getVersion());
 
-ipcMain.handle('gallery:save-config', async (_event, config: GalleryConfig) => saveConfig(config));
+ipcMain.handle('gallery:save-config', async (_event, config: GalleryConfig) => {
+  const previousConfig = await loadConfig();
+  const savedConfig = await saveConfig(config);
+
+  const previousVaultSet = new Set(previousConfig.vaultedGamePaths ?? []);
+  const nextVaultSet = new Set(savedConfig.vaultedGamePaths ?? []);
+
+  const newlyVaulted = [...nextVaultSet].filter((gamePath) => !previousVaultSet.has(gamePath));
+  const newlyUnvaulted = [...previousVaultSet].filter((gamePath) => !nextVaultSet.has(gamePath));
+
+  for (const gamePath of newlyVaulted) {
+    try {
+      await setWindowsHiddenAttribute(gamePath, true);
+    } catch (error) {
+      await appendLogEvent({
+        level: 'warn',
+        source: 'main-save-config',
+        message: `Failed to hide vaulted folder "${gamePath}": ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  }
+
+  for (const gamePath of newlyUnvaulted) {
+    try {
+      await setWindowsHiddenAttribute(gamePath, false);
+    } catch (error) {
+      await appendLogEvent({
+        level: 'warn',
+        source: 'main-save-config',
+        message: `Failed to unhide unvaulted folder "${gamePath}": ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  }
+
+  return savedConfig;
+});
 
 ipcMain.handle('gallery:pick-games-root', async () => {
   const window = BrowserWindow.getFocusedWindow() ?? mainWindow;
@@ -606,7 +690,7 @@ ipcMain.handle('gallery:show-game-context-menu', (event, payload: GameContextMen
     return;
   }
 
-  const menu = Menu.buildFromTemplate([
+  const template: Electron.MenuItemConstructorOptions[] = [
     {
       label: 'Open',
       click: () => {
@@ -653,7 +737,22 @@ ipcMain.handle('gallery:show-game-context-menu', (event, payload: GameContextMen
         });
       },
     },
-  ]);
+  ];
+
+  if (payload.isVaultOpen) {
+    template.push({ type: 'separator' });
+    template.push({
+      label: payload.isGameVaulted ? 'Remove from vault' : 'Add to vault',
+      click: () => {
+        window.webContents.send('gallery:context-menu-action', {
+          action: payload.isGameVaulted ? 'remove-from-vault' : 'add-to-vault',
+          gamePath: payload.gamePath,
+        });
+      },
+    });
+  }
+
+  const menu = Menu.buildFromTemplate(template);
 
   menu.popup({ window });
 });
@@ -679,6 +778,30 @@ ipcMain.handle('gallery:show-version-context-menu', (event, payload: VersionCont
   menu.popup({ window });
 });
 
+ipcMain.handle('gallery:show-vault-context-menu', (event, payload: VaultContextMenuPayload) => {
+  if (!payload.isVaultOpen) {
+    return;
+  }
+
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!window) {
+    return;
+  }
+
+  const menu = Menu.buildFromTemplate([
+    {
+      label: payload.hasVaultPin ? 'Change vault PIN' : 'Add vault PIN',
+      click: () => {
+        window.webContents.send('gallery:vault-context-menu-action', {
+          action: payload.hasVaultPin ? 'change-vault-pin' : 'add-vault-pin',
+        });
+      },
+    },
+  ]);
+
+  menu.popup({ window });
+});
+
 app.whenReady().then(async () => {
   await createWindow();
 
@@ -694,3 +817,9 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
+
+
+
+
+
+

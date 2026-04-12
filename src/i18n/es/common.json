@@ -17,6 +17,8 @@
     "hideFilters": "Ocultar filtros",
     "showSetup": "Mostrar configuración",
     "hideSetup": "Ocultar configuración",
+    "showVault": "Abrir vault",
+    "hideVault": "Cerrar vault",
     "showVersionNotifications": "Mostrar notificaciones de versión",
     "hideVersionNotifications": "Ocultar notificaciones de versión",
     "chooseLibraryFolder": "Elegir carpeta de biblioteca",
@@ -43,6 +45,9 @@
     "savedBetweenLaunches": "La configuración se guarda entre ejecuciones de la app.",
     "languageTitle": "Idioma",
     "languageHint": "Se guarda con la configuración y se aplica automáticamente al iniciar.",
+    "vaultPin": "PIN del vault",
+    "vaultPinPlaceholder": "PIN opcional para abrir el vault",
+    "vaultPinHint": "Define un PIN para requerir desbloqueo antes de mostrar juegos del vault.",
     "languageEnglish": "Inglés",
     "languageSpanish": "Español",
     "saveSetup": "Guardar configuración",
@@ -203,6 +208,25 @@
     "badgeAria": "Desajuste de versión. Actual {{current}}. Detectada {{detected}}.",
     "resolveTooltip": "Actualizar latest_version a la versión detectada"
   },
+  "vaultNotifications": {
+    "title": "Alertas de vault: carpetas faltantes"
+  },
+  "vaultModal": {
+    "title": "Desbloquear vault",
+    "description": "Ingresa tu PIN del vault para mostrar los juegos ocultos.",
+    "pinLabel": "PIN",
+    "pinPlaceholder": "Ingresa el PIN",
+    "unlock": "Desbloquear",
+    "addPinTitle": "Agregar PIN del vault",
+    "addPinDescription": "Define un PIN para futuros desbloqueos del vault.",
+    "changePinTitle": "Cambiar PIN del vault",
+    "changePinDescription": "Define un nuevo PIN para futuros desbloqueos del vault.",
+    "newPinLabel": "Nuevo PIN",
+    "newPinPlaceholder": "Ingresa el nuevo PIN",
+    "confirmPinLabel": "Confirmar PIN",
+    "confirmPinPlaceholder": "Repite el nuevo PIN",
+    "savePin": "Guardar PIN"
+  },
   "logs": {
     "clearConfirm": "¿Borrar todos los logs? Esta acción no se puede deshacer."
   },
@@ -248,6 +272,13 @@
     "foundGameFolders_other": "Se encontraron {{count}} carpetas de juego.",
     "versionMismatchResolved": "Se actualizó la última versión de {{game}} a {{version}}.",
     "versionMismatchDismissed": "Se descartó la notificación de versión para {{game}}.",
+    "vaultAdded": "Juego agregado al vault.",
+    "vaultRemoved": "Juego removido del vault.",
+    "vaultPinInvalid": "PIN del vault incorrecto.",
+    "vaultPinSaved": "PIN del vault guardado.",
+    "vaultPinMismatch": "El PIN y la confirmación no coinciden.",
+    "failedSaveVaultPin": "No se pudo guardar el PIN del vault.",
+    "failedUpdateVault": "No se pudo actualizar el vault.",
     "scanCompletedNoMatches": "Escaneo completado. Todavía no hay juegos que coincidan.",
     "failedScanGameFolders": "No se pudieron escanear las carpetas de juegos."
   }

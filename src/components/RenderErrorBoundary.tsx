@@ -1,10 +1,12 @@
-/**
+﻿/**
  * Defensive top-level render boundary for runtime UI failures.
  *
  * Instead of allowing crashes to blank the renderer, this boundary catches
  * render-time errors and presents recoverable feedback to the user. It acts as
  * a safety net for unexpected exceptions in deeply nested component trees and
  * provides a stable fallback surface during refactors.
+ *
+ * New to this project: this is the renderer safety net; start here to understand how runtime render failures are caught and surfaced instead of blanking the app.
  */
 import React from 'react';
 
@@ -49,3 +51,9 @@ export class RenderErrorBoundary extends React.Component<React.PropsWithChildren
     );
   }
 }
+
+
+
+
+
+

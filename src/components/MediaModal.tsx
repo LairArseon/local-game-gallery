@@ -1,10 +1,12 @@
-/**
+﻿/**
  * Media management modal for featured art and screenshot gallery operations.
  *
  * This overlay coordinates several high-friction workflows in one place:
  * importing via dialog or drop, drag-reordering screenshots, and quick delete
  * actions through a contextual menu. It also preserves local drag intent state
  * so interactions feel predictable while async media updates are pending.
+ *
+ * New to this project: this is the media workflow UI (import, reorder, remove); trace handlers to useMediaManager for file operations and scan refresh.
  */
 import type { Dispatch, DragEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -253,7 +255,7 @@ export function MediaModal({
                             if (prev) void onReorderScreenshots(imagePath, prev);
                           }}
                           aria-label={t('media.moveLeft')}
-                        >{'◀'}</button>
+                        >{'â—€'}</button>
                         <button
                           className="button button--icon"
                           type="button"
@@ -263,7 +265,7 @@ export function MediaModal({
                             if (next) void onReorderScreenshots(imagePath, next);
                           }}
                           aria-label={t('media.moveRight')}
-                        >{'▶'}</button>
+                        >{'â–¶'}</button>
                       </div>
                     </div>
                   )) : <p>{t('media.noScreenshots')}</p>}
@@ -292,3 +294,9 @@ export function MediaModal({
     </div>
   );
 }
+
+
+
+
+
+

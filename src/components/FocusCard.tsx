@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Rich game spotlight card used in side panes and detail experiences.
  *
  * This component prioritizes high-signal metadata while supporting screenshot
@@ -6,6 +6,8 @@
  * types when screenshots are unavailable and exposes compact controls for play
  * and open-detail flows. The same card is reused in multiple layouts so the
  * information hierarchy stays consistent across view modes.
+ *
+ * New to this project: this card defines spotlight presentation and quick actions; follow play/open handlers and carousel state wiring back to App and game-action hooks.
  */
 import type { MouseEvent } from 'react';
 import { ArrowRight, ListVideo, Play } from 'lucide-react';
@@ -63,7 +65,7 @@ export function FocusCard({
     : null;
 
   return (
-    <article className={`focus-card panel ${game.hasVersionMismatch ? 'focus-card--version-mismatch' : ''} ${isVertical ? 'focus-card--vertical' : 'focus-card--wide'}`}>
+    <article className={`focus-card panel ${game.hasVersionMismatch ? 'focus-card--version-mismatch' : ''} ${game.isVaulted ? 'focus-card--vaulted' : ''} ${isVertical ? 'focus-card--vertical' : 'focus-card--wide'}`}>
       <div className={`game-card__art ${game.usesPlaceholderArt ? 'game-card__art--placeholder' : ''}`}>
         {hasScreenshotCarousel && focusImgSrc && currentCarouselImagePath ? (
           <button
@@ -176,3 +178,9 @@ export function FocusCard({
     </article>
   );
 }
+
+
+
+
+
+

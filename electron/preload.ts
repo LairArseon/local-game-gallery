@@ -17,6 +17,8 @@ import type {
   PlayGamePayload,
   ReorderScreenshotsPayload,
   SaveGameMetadataPayload,
+  VaultContextMenuAction,
+  VaultContextMenuPayload,
   VersionContextMenuAction,
   VersionContextMenuPayload,
 } from '../src/types';
@@ -36,6 +38,7 @@ const api: GalleryApi = {
   scanGames: () => ipcRenderer.invoke('gallery:scan-games'),
   showGameContextMenu: (payload: GameContextMenuPayload) => ipcRenderer.invoke('gallery:show-game-context-menu', payload),
   showVersionContextMenu: (payload: VersionContextMenuPayload) => ipcRenderer.invoke('gallery:show-version-context-menu', payload),
+  showVaultContextMenu: (payload: VaultContextMenuPayload) => ipcRenderer.invoke('gallery:show-vault-context-menu', payload),
   openFolder: (payload: OpenFolderPayload) => ipcRenderer.invoke('gallery:open-folder', payload),
   logEvent: (payload: LogEventPayload) => ipcRenderer.invoke('gallery:log-event', payload),
   getLogContents: () => ipcRenderer.invoke('gallery:get-log-contents'),
@@ -66,6 +69,16 @@ const api: GalleryApi = {
     ipcRenderer.on('gallery:version-context-menu-action', listener);
     return () => {
       ipcRenderer.removeListener('gallery:version-context-menu-action', listener);
+    };
+  },
+  onVaultContextMenuAction: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: VaultContextMenuAction) => {
+      callback(payload);
+    };
+
+    ipcRenderer.on('gallery:vault-context-menu-action', listener);
+    return () => {
+      ipcRenderer.removeListener('gallery:vault-context-menu-action', listener);
     };
   },
 };

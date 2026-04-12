@@ -18,6 +18,8 @@ export type FilterPreset = {
 export type GalleryConfig = {
   language: AppLanguage;
   dismissedVersionMismatches: Record<string, string>;
+  vaultedGamePaths: string[];
+  vaultPin: string;
   gamesRoot: string;
   excludePatterns: string[];
   hideDotEntries: boolean;
@@ -102,6 +104,7 @@ export type GameMediaAssets = {
 export type GameSummary = {
   name: string;
   path: string;
+  isVaulted: boolean;
   lastPlayedAt: string | null;
   hasNfo: boolean;
   picturesPath: string | null;
@@ -129,10 +132,12 @@ export type ScanResult = {
 export type GameContextMenuPayload = {
   gamePath: string;
   gameName: string;
+  isVaultOpen: boolean;
+  isGameVaulted: boolean;
 };
 
 export type GameContextMenuAction = {
-  action: 'open' | 'play' | 'edit-metadata' | 'manage-pictures' | 'open-game-folder';
+  action: 'open' | 'play' | 'edit-metadata' | 'manage-pictures' | 'open-game-folder' | 'add-to-vault' | 'remove-from-vault';
   gamePath: string;
 };
 
@@ -144,6 +149,15 @@ export type VersionContextMenuPayload = {
 export type VersionContextMenuAction = {
   action: 'open-version-folder';
   versionPath: string;
+};
+
+export type VaultContextMenuPayload = {
+  isVaultOpen: boolean;
+  hasVaultPin: boolean;
+};
+
+export type VaultContextMenuAction = {
+  action: 'add-vault-pin' | 'change-vault-pin';
 };
 
 export type OpenFolderPayload = {
@@ -212,6 +226,8 @@ export type GalleryApi = {
   onGameContextMenuAction: (callback: (payload: GameContextMenuAction) => void) => () => void;
   showVersionContextMenu: (payload: VersionContextMenuPayload) => Promise<void>;
   onVersionContextMenuAction: (callback: (payload: VersionContextMenuAction) => void) => () => void;
+  showVaultContextMenu: (payload: VaultContextMenuPayload) => Promise<void>;
+  onVaultContextMenuAction: (callback: (payload: VaultContextMenuAction) => void) => () => void;
   openFolder: (payload: OpenFolderPayload) => Promise<OpenFolderResult>;
   logEvent: (payload: LogEventPayload) => Promise<void>;
   getLogContents: () => Promise<string>;

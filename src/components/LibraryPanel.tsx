@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Main library surface that switches between browsing and detail states.
  *
  * This component owns the structural shell of the right-side content area:
@@ -6,6 +6,8 @@
  * It receives renderer callbacks so heavy list/detail presentation logic can be
  * reused while App remains an orchestrator. Special behavior includes dynamic
  * card grid wiring and view-mode switch controls.
+ *
+ * New to this project: this component decides between gallery and detail surfaces; trace incoming renderer callbacks to understand list/detail composition boundaries.
  */
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -214,3 +216,9 @@ export function LibraryPanel({
     </section>
   );
 }
+
+
+
+
+
+

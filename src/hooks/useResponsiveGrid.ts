@@ -1,9 +1,11 @@
-/**
+﻿/**
  * Calculates responsive column counts for poster/card grid layouts.
  *
  * The hook observes container resize events, applies scale-aware minimum card
  * widths, and respects optional user-configured column overrides. It runs only
  * for relevant view modes and keeps grid sizing logic out of App markup code.
+ *
+ * New to this project: this hook computes responsive column counts from container size, mode, and scale; start with the resize effect and column calculation logic.
  */
 import { useEffect, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import type { GalleryConfig, GalleryViewMode } from '../types';
@@ -66,3 +68,9 @@ export function useResponsiveGrid({
     };
   }, [viewMode, cardsContainerRef, effectiveMediaScale, filteredGamesLength, detailGamePath, config?.posterColumns, config?.cardColumns, setGridColumns]);
 }
+
+
+
+
+
+

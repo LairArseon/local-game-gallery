@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Staged filter editor for rules, ordering, status constraints, and presets.
  *
  * The panel separates draft filter edits from applied gallery state so users can
@@ -6,6 +6,8 @@
  * syntax (prefix with '-'), quick suggestions, and preset persistence actions.
  * All state mutations are delegated via callbacks, keeping this component purely
  * presentational and easy to evolve without touching business logic.
+ *
+ * New to this project: this panel edits filter drafts before apply; trace its callbacks to useFilterManager to see how rules become the final filtered list.
  */
 import type { KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -314,3 +316,9 @@ export function FilterPanel({
     </section>
   );
 }
+
+
+
+
+
+

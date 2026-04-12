@@ -1,10 +1,12 @@
-/**
+﻿/**
  * Modal window for inspecting runtime logs with lightweight filtering tools.
  *
  * The viewer supports level/date filters, empty-state messaging, and guarded
  * clear-log actions while async operations are in progress. It is designed for
  * fast diagnostics without leaving the app, and keeps controls intentionally
  * small so large log payloads remain readable.
+ *
+ * New to this project: this modal only renders diagnostics UI; follow its props to useLogViewer for loading, filtering, and clear-log behavior.
  */
 import { CustomSelect } from './CustomSelect';
 
@@ -73,3 +75,9 @@ export function LogViewerModal({
     </div>
   );
 }
+
+
+
+
+
+

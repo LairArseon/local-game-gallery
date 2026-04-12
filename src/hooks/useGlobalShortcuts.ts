@@ -1,10 +1,12 @@
-/**
+﻿/**
  * Registers app-wide input shortcuts and related global interaction effects.
  *
  * This hook handles zoom controls (wheel and key variants), find focus shortcut,
  * manual refresh keybinding, and screenshot lightbox escape close behavior.
  * Keeping these listeners centralized prevents duplicated window event wiring
  * and guarantees proper cleanup when component state changes.
+ *
+ * New to this project: this hook registers global keyboard/mouse shortcuts; follow event listeners here to understand zoom/find/refresh/escape behavior.
  */
 import { useEffect, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import type { GalleryConfig } from '../types';
@@ -164,3 +166,9 @@ export function useGlobalShortcuts({
     };
   }, [screenshotModalPath, setScreenshotModalPath]);
 }
+
+
+
+
+
+

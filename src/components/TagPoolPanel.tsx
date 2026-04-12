@@ -1,10 +1,12 @@
-/**
+﻿/**
  * Topbar panel for maintaining the global tag pool.
  *
  * Users can add, rename, and remove canonical tags while seeing live usage
  * counts from the current library. Editing uses bubble interactions paired with
  * autocomplete so tag normalization is fast and consistent. Removal behavior is
  * intentionally strict to prevent deleting tags still referenced by games.
+ *
+ * New to this project: this panel manages canonical tags and usage; follow edit/add/remove handlers to useTagPoolManager and autocomplete hooks.
  */
 import type { KeyboardEvent } from 'react';
 
@@ -126,3 +128,9 @@ export function TagPoolPanel({
     </section>
   );
 }
+
+
+
+
+
+

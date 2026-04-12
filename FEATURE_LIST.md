@@ -20,7 +20,7 @@ Status options:
 
 ## Feature Index
 
-- [1. App Vault (Password-Protected Hidden Games)](#1-app-vault-password-protected-hidden-games) - `idea`
+- [1. App Vault (Password-Protected Hidden Games)](#1-app-vault-password-protected-hidden-games) - `done`
 - [2. In-App App Icon Customization (Drop PNG)](#2-in-app-app-icon-customization-drop-png) - `done`
 - [3. New Version Notifications and Mismatch Badges](#3-new-version-notifications-and-mismatch-badges) - `done`
 - [4. Quick Folder Navigation from Game and Version Menus](#4-quick-folder-navigation-from-game-and-version-menus) - `done`
@@ -34,9 +34,13 @@ Status options:
 
 ## 1. App Vault (Password-Protected Hidden Games)
 
-- Status: `idea`
+- Status: `done`
 - Priority: `high`
 - Goal: Allow users to hide selected games behind a vault that requires a password to access.
+
+### Work note
+
+- Completed on 2026-04-12.
 
 ### Summary
 

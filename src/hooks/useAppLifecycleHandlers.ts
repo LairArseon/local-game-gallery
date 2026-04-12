@@ -1,10 +1,12 @@
-/**
+﻿/**
  * Encapsulates app bootstrap and persisted configuration actions.
  *
  * This hook initializes config/version state on mount and exposes setup-facing
  * handlers for root selection, config save, and view-mode persistence. It keeps
  * async status/error paths uniform, including menu-bar sync and refresh chaining
  * after successful writes.
+ *
+ * New to this project: this hook wires bootstrap and config save flows; start with initializeApp and saveConfig to see how persisted settings reach App state.
  */
 import { useEffect, type Dispatch, type SetStateAction, type SubmitEventHandler } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -146,3 +148,9 @@ export function useAppLifecycleHandlers({
     changeViewMode,
   };
 }
+
+
+
+
+
+

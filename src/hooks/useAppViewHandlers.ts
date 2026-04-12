@@ -1,10 +1,12 @@
-/**
+﻿/**
  * Provides stable callback adapters for setup/detail/view interactions.
  *
  * These wrappers isolate imperative UI side effects (IPC calls, logging, and
  * navigation-style state updates) from JSX props. The goal is to keep App and
  * presentational components declarative while still exposing concise handlers
  * for commonly triggered actions.
+ *
+ * New to this project: this hook adapts UI intents into stable callbacks and context-menu triggers; follow window.gallery menu calls to main-process context handlers.
  */
 import { useCallback, type DragEvent, type MouseEvent } from 'react';
 import type { GameSummary } from '../types';
@@ -18,6 +20,8 @@ type UseAppViewHandlersArgs = {
   applyAppIconNow: () => Promise<unknown>;
   openFolderInExplorer: (folderPath: string) => Promise<unknown>;
   setDetailGamePath: (value: string | null) => void;
+  isVaultOpen: boolean;
+  hasVaultPin: boolean;
 };
 
 export function useAppViewHandlers({
@@ -29,6 +33,8 @@ export function useAppViewHandlers({
   applyAppIconNow,
   openFolderInExplorer,
   setDetailGamePath,
+  isVaultOpen,
+  hasVaultPin,
 }: UseAppViewHandlersArgs) {
   const onToggleSystemMenuBar = useCallback((nextVisible: boolean) => {
     // Apply immediately for UI responsiveness; persistence still happens via config save flow.
@@ -81,8 +87,22 @@ export function useAppViewHandlers({
     void window.gallery.showGameContextMenu({
       gamePath: targetGame.path,
       gameName: targetGame.name,
+      isVaultOpen,
+      isGameVaulted: targetGame.isVaulted,
     });
-  }, []);
+  }, [isVaultOpen]);
+
+  const onOpenVaultContextMenu = useCallback((event: MouseEvent<HTMLButtonElement>, _hasVaultPin: boolean) => {
+    if (!isVaultOpen) {
+      return;
+    }
+
+    event.preventDefault();
+    void window.gallery.showVaultContextMenu({
+      isVaultOpen,
+      hasVaultPin,
+    });
+  }, [hasVaultPin, isVaultOpen]);
 
   return {
     onToggleSystemMenuBar,
@@ -96,5 +116,12 @@ export function useAppViewHandlers({
     onOpenVersionFolder,
     onOpenVersionContextMenu,
     onGameCardContextMenu,
+    onOpenVaultContextMenu,
   };
 }
+
+
+
+
+
+

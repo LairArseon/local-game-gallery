@@ -1,9 +1,11 @@
-/**
+﻿/**
  * Manages log viewer state, filtering, and maintenance actions.
  *
  * The hook coordinates modal open/load timing, derived filtered log content,
  * clear-log operations, and log-folder shortcuts while surfacing status/logging
  * feedback on failures. This keeps diagnostics tooling isolated from UI markup.
+ *
+ * New to this project: this hook owns log modal state and filtering/clearing actions; start with openLogViewer and filteredLogContents derivation.
  */
 import { useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -108,3 +110,9 @@ export function useLogViewer({ setStatus, logAppEvent, toErrorMessage }: UseLogV
     openLogFolderFromSetup,
   };
 }
+
+
+
+
+
+

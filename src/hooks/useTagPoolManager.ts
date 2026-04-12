@@ -1,10 +1,12 @@
-/**
+﻿/**
  * Manages tag-pool editing lifecycle, persistence, and rename propagation.
  *
  * This hook enforces safety checks for removals, normalizes pool/usage writes,
  * and propagates tag renames into game metadata when needed. It also tracks
  * inline editor state (active index and original values) so edits can be
  * finalized or restored predictably.
+ *
+ * New to this project: this hook controls tag-pool editing lifecycle and rename propagation; inspect finalizeTagPoolEdit and persistence safeguards first.
  */
 import { useState, type Dispatch, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -232,3 +234,9 @@ export function useTagPoolManager({
     setActiveTagPoolEditorIndex,
   };
 }
+
+
+
+
+
+

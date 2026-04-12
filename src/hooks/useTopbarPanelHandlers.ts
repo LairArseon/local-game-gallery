@@ -1,10 +1,12 @@
-/**
+﻿/**
  * Provides stable callback bundles for topbar tag-pool and filter panels.
  *
  * This hook converts many inline lambdas into memoized handlers that coordinate
  * autocomplete, editing lifecycle, preset actions, and panel-specific keyboard
  * behavior. It helps keep App and panel components focused on composition while
  * preserving consistent interaction semantics.
+ *
+ * New to this project: this hook bundles high-churn panel callbacks into stable handlers; trace each returned handler to the underlying manager functions.
  */
 import { useCallback, type Dispatch, type KeyboardEvent, type SetStateAction } from 'react';
 
@@ -173,3 +175,9 @@ export function useTopbarPanelHandlers({
     addTagToPool,
   };
 }
+
+
+
+
+
+

@@ -1,10 +1,12 @@
-/**
+﻿/**
  * Metadata editing modal for core fields, notes, and tag maintenance.
  *
  * The editor supports inline bubble-style tag editing with autocomplete and
  * keyboard navigation while also handling multiline notes and status/score
  * updates. Interactions are staged in a draft object passed from state hooks,
  * allowing cancellation without side effects and save-on-demand behavior.
+ *
+ * New to this project: this modal edits metadata drafts and tags; follow save/autocomplete callbacks to useMetadataManager and tag helpers.
  */
 import type { KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -231,3 +233,9 @@ export function MetadataModal({
     </div>
   );
 }
+
+
+
+
+
+

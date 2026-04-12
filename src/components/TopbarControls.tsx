@@ -1,13 +1,16 @@
-/**
+﻿/**
  * Compact control strip for search and high-frequency top-level actions.
  *
  * This component groups search, panel toggles, setup toggle, and manual rescan
  * into one predictable row so App does not carry repetitive button markup.
  * Labels and pressed states are fully driven by props, making behavior easy to
  * test and keeping visual intent centralized.
+ *
+ * New to this project: this is the global control strip (search, toggles, rescan, vault); trace each callback prop to App/hook orchestration for behavior.
  */
 import type { RefObject } from 'react';
-import { Bell, RefreshCw, Settings, SlidersHorizontal, Tag } from 'lucide-react';
+import type { MouseEvent } from 'react';
+import { Bell, Lock, LockOpen, RefreshCw, Settings, SlidersHorizontal, Tag } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 type TopbarControlsProps = {
@@ -17,12 +20,16 @@ type TopbarControlsProps = {
   isTagPoolPanelOpen: boolean;
   isFilterPanelOpen: boolean;
   isSidebarOpen: boolean;
+  isVaultOpen: boolean;
+  hasVaultPin: boolean;
   isVersionNotificationsOpen: boolean;
   isScanning: boolean;
   versionMismatchCount: number;
   onToggleTagPoolPanel: () => void;
   onToggleFilterPanel: () => void;
   onToggleSidebar: () => void;
+  onToggleVault: () => void;
+  onOpenVaultContextMenu: (event: MouseEvent<HTMLButtonElement>, hasVaultPin: boolean) => void;
   onToggleVersionNotifications: () => void;
   onRescan: () => void;
   actionLabels: {
@@ -34,6 +41,8 @@ type TopbarControlsProps = {
     hideFilters: string;
     showSetup: string;
     hideSetup: string;
+    showVault: string;
+    hideVault: string;
     showVersionNotifications: string;
     hideVersionNotifications: string;
   };
@@ -46,12 +55,16 @@ export function TopbarControls({
   isTagPoolPanelOpen,
   isFilterPanelOpen,
   isSidebarOpen,
+  isVaultOpen,
+  hasVaultPin,
   isVersionNotificationsOpen,
   isScanning,
   versionMismatchCount,
   onToggleTagPoolPanel,
   onToggleFilterPanel,
   onToggleSidebar,
+  onToggleVault,
+  onOpenVaultContextMenu,
   onToggleVersionNotifications,
   onRescan,
   actionLabels,
@@ -92,6 +105,17 @@ export function TopbarControls({
         <SlidersHorizontal size={16} aria-hidden="true" />
       </button>
       <button
+        className={`button button--icon-only ${isVaultOpen ? 'is-vault-open' : 'is-vault-closed'}`}
+        type="button"
+        onClick={onToggleVault}
+        onContextMenu={(event) => onOpenVaultContextMenu(event, hasVaultPin)}
+        aria-pressed={isVaultOpen}
+        aria-label={isVaultOpen ? actionLabels.hideVault : actionLabels.showVault}
+        title={isVaultOpen ? actionLabels.hideVault : actionLabels.showVault}
+      >
+        {isVaultOpen ? <LockOpen size={16} aria-hidden="true" /> : <Lock size={16} aria-hidden="true" />}
+      </button>
+      <button
         className={`button button--icon-only topbar-notification-button ${isVersionNotificationsOpen ? 'is-active' : ''}`}
         type="button"
         onClick={onToggleVersionNotifications}
@@ -127,3 +151,9 @@ export function TopbarControls({
     </div>
   );
 }
+
+
+
+
+
+

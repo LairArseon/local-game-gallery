@@ -1,9 +1,11 @@
-/**
+﻿/**
  * Centralizes high-frequency game actions triggered by cards, detail pages, and menus.
  *
  * The hook unifies play launch logic, detail selection flow, folder open actions,
  * and single-selection toggling. It also keeps status/log error handling aligned
  * across these paths so behavior stays predictable regardless of entry point.
+ *
+ * New to this project: this hook centralizes play/open/folder/selection actions; start with runPlayGame to trace launch payloads into Electron play IPC.
  */
 import type { Dispatch, MouseEvent, SetStateAction } from 'react';
 import type { GameSummary } from '../types';
@@ -112,3 +114,9 @@ export function useGameActions({
     toggleGameSelection,
   };
 }
+
+
+
+
+
+

@@ -17,6 +17,8 @@
     "hideFilters": "Hide filters",
     "showSetup": "Show setup",
     "hideSetup": "Hide setup",
+    "showVault": "Open vault",
+    "hideVault": "Close vault",
     "showVersionNotifications": "Show version notifications",
     "hideVersionNotifications": "Hide version notifications",
     "chooseLibraryFolder": "Choose library folder",
@@ -43,6 +45,9 @@
     "savedBetweenLaunches": "Configuration is saved between app launches.",
     "languageTitle": "Language",
     "languageHint": "Saved with setup and applied automatically on next launch.",
+    "vaultPin": "Vault PIN",
+    "vaultPinPlaceholder": "Optional PIN to unlock vault",
+    "vaultPinHint": "Set a PIN to require unlock before showing vaulted games.",
     "languageEnglish": "English",
     "languageSpanish": "Spanish",
     "saveSetup": "Save setup",
@@ -203,6 +208,25 @@
     "badgeAria": "Version mismatch. Current {{current}}. Detected {{detected}}.",
     "resolveTooltip": "Update latest_version to detected version"
   },
+  "vaultNotifications": {
+    "title": "Vault alerts: missing vaulted folders"
+  },
+  "vaultModal": {
+    "title": "Unlock vault",
+    "description": "Enter your vault PIN to reveal vaulted games.",
+    "pinLabel": "PIN",
+    "pinPlaceholder": "Enter PIN",
+    "unlock": "Unlock",
+    "addPinTitle": "Add vault PIN",
+    "addPinDescription": "Set a PIN for future vault unlocks.",
+    "changePinTitle": "Change vault PIN",
+    "changePinDescription": "Set a new PIN for future vault unlocks.",
+    "newPinLabel": "New PIN",
+    "newPinPlaceholder": "Enter new PIN",
+    "confirmPinLabel": "Confirm PIN",
+    "confirmPinPlaceholder": "Repeat new PIN",
+    "savePin": "Save PIN"
+  },
   "logs": {
     "clearConfirm": "Clear all logs? This cannot be undone."
   },
@@ -248,6 +272,13 @@
     "foundGameFolders_other": "Found {{count}} game folders.",
     "versionMismatchResolved": "Updated {{game}} latest version to {{version}}.",
     "versionMismatchDismissed": "Dismissed version notification for {{game}}.",
+    "vaultAdded": "Game added to vault.",
+    "vaultRemoved": "Game removed from vault.",
+    "vaultPinInvalid": "Incorrect vault PIN.",
+    "vaultPinSaved": "Vault PIN saved.",
+    "vaultPinMismatch": "PIN and confirmation do not match.",
+    "failedSaveVaultPin": "Failed to save vault PIN.",
+    "failedUpdateVault": "Failed to update vault membership.",
     "scanCompletedNoMatches": "Scan completed. No games matched yet.",
     "failedScanGameFolders": "Failed to scan game folders."
   }
