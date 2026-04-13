@@ -1,0 +1,79 @@
+{
+  "schemaVersion": "1.0",
+  "profiles": [
+    {
+      "id": "full-desktop-suite-win",
+      "description": "Current full desktop installer (includes local service runtime).",
+      "components": [
+        "full-desktop-suite"
+      ],
+      "commands": [
+        "npm run dist:win"
+      ],
+      "outputs": [
+        "release/Local Game Gallery Setup *.exe"
+      ],
+      "status": "implemented"
+    },
+    {
+      "id": "desktop-client-win",
+      "description": "Standalone desktop client installer that connects to external service.",
+      "components": [
+        "desktop-client"
+      ],
+      "commands": [
+        "npm run dist:standalone-client:win"
+      ],
+      "outputs": [
+        "release/standalone-client/*.exe"
+      ],
+      "status": "implemented"
+    },
+    {
+      "id": "web-client-static",
+      "description": "Static browser bundle for generic web hosting.",
+      "components": [
+        "web-client"
+      ],
+      "commands": [
+        "npm run build:web-client"
+      ],
+      "outputs": [
+        "dist-web-client/**/*"
+      ],
+      "status": "implemented"
+    },
+    {
+      "id": "service-web-compose",
+      "description": "Docker compose stack for service plus web client.",
+      "components": [
+        "service",
+        "web-client"
+      ],
+      "commands": [
+        "docker compose --env-file docker/.env -f docker/compose.yml up --build -d gallery-service gallery-web"
+      ],
+      "outputs": [
+        "docker image local-game-gallery-gallery-service",
+        "docker image local-game-gallery-gallery-web"
+      ],
+      "status": "implemented"
+    },
+    {
+      "id": "bundle-installer-win",
+      "description": "Selectable installer for service, web client, and desktop client.",
+      "components": [
+        "service",
+        "web-client",
+        "desktop-client"
+      ],
+      "commands": [
+        "npm run dist:bundle-installer:win"
+      ],
+      "outputs": [
+        "installer/bundle/*.exe"
+      ],
+      "status": "implemented"
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "1.0",
+  "bundleId": "local-game-gallery",
+  "bundleName": "Local Game Gallery",
+  "components": [
+    {
+      "id": "service",
+      "displayName": "Gallery Service",
+      "kind": "service",
+      "selectionMode": "optional",
+      "artifacts": [
+        "docker/gallery-service-image",
+        "baremetal/service-runtime"
+      ],
+      "dependsOn": [],
+      "conflictsWith": []
+    },
+    {
+      "id": "web-client",
+      "displayName": "Web Client",
+      "kind": "web",
+      "selectionMode": "optional",
+      "artifacts": [
+        "dist-web-client",
+        "docker/gallery-web-image"
+      ],
+      "dependsOn": [
+        "service"
+      ],
+      "conflictsWith": []
+    },
+    {
+      "id": "desktop-client",
+      "displayName": "Desktop Client",
+      "kind": "desktop-client",
+      "selectionMode": "optional",
+      "artifacts": [
+        "release/standalone-client-installer"
+      ],
+      "dependsOn": [
+        "service"
+      ],
+      "conflictsWith": [
+        "full-desktop-suite"
+      ]
+    },
+    {
+      "id": "full-desktop-suite",
+      "displayName": "Full Desktop Suite",
+      "kind": "desktop-suite",
+      "selectionMode": "optional",
+      "artifacts": [
+        "release/full-desktop-installer"
+      ],
+      "dependsOn": [],
+      "conflictsWith": [
+        "desktop-client",
+        "service",
+        "web-client"
+      ]
+    }
+  ],
+  "selectionRules": {
+    "atLeastOne": true,
+    "allowServiceFreeDesktopSuite": true,
+    "allowServiceFreeDesktopClient": false,
+    "allowServiceFreeWebClient": false
+  },
+  "defaults": {
+    "development": [
+      "service",
+      "web-client"
+    ],
+    "bundleInstaller": [
+      "service",
+      "web-client",
+      "desktop-client"
+    ]
+  }
+}

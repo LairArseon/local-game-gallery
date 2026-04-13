@@ -1,0 +1,32 @@
+name: local-game-gallery
+
+services:
+  gallery-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.service
+    container_name: local-game-gallery-service
+    restart: unless-stopped
+    environment:
+      LGG_SERVICE_HOST: "${LGG_SERVICE_HOST}"
+      LGG_SERVICE_PORT: "${LGG_SERVICE_PORT}"
+      LGG_DATA_DIR: "${LGG_DATA_DIR}"
+      LGG_RUNTIME_CONTEXT: "${LGG_RUNTIME_CONTEXT}"
+    ports:
+      - "${LGG_SERVICE_PUBLISHED_PORT}:${LGG_SERVICE_PORT}"
+    volumes:
+      - "${LGG_DATA_ROOT:?Set LGG_DATA_ROOT to an absolute host folder}:${LGG_DATA_DIR}"
+      - "${LGG_GAMES_ROOT:?Set LGG_GAMES_ROOT to an absolute host folder}:/games"
+
+  gallery-web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+      args:
+        VITE_GALLERY_SERVICE_URL: "${VITE_GALLERY_SERVICE_URL}"
+    container_name: local-game-gallery-web
+    restart: unless-stopped
+    depends_on:
+      - gallery-service
+    ports:
+      - "${LGG_WEB_PORT}:8080"

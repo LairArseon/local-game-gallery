@@ -1,0 +1,9 @@
+node_modules
+release
+dist
+dist-electron
+docker-data
+.git
+.gitignore
+.vscode
+*.log

@@ -1,0 +1,21 @@
+.game-card--expanded {
+  display: grid;
+  grid-template-columns: clamp(160px, calc(28vw * var(--content-media-scale)), calc(320px * var(--content-media-scale))) minmax(0, 1fr);
+}
+
+.game-card--expanded .game-card__art {
+  min-height: 0;
+  aspect-ratio: 16 / 9;
+  align-self: start;
+  background-color: #06080d;
+}
+
+.game-card--expanded .media-preview--cover {
+  object-fit: contain;
+}
+
+.game-card__body--expanded {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
