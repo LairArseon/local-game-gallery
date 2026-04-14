@@ -47,7 +47,7 @@ function runDocker(args) {
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
 const packageJson = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
-const serviceVersion = String(packageJson.version ?? '0.0.0-dev').trim() || '0.0.0-dev';
+const serviceVersion = String(packageJson.version ?? '1.0.0').trim() || '1.0.0';
 
 const parsed = parseArgs(process.argv.slice(2));
 const targetImage = parsed.image ?? String(process.env.DOCKERHUB_IMAGE ?? '').trim();

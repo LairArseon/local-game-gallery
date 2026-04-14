@@ -125,6 +125,98 @@ button {
   z-index: 60;
 }
 
+.floating-fallback-alert {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: min(420px, calc(100vw - 48px));
+  z-index: 95;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 139, 120, 0.56);
+  background: linear-gradient(160deg, rgba(68, 21, 21, 0.94) 0%, rgba(52, 17, 17, 0.94) 100%);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.38);
+  padding: 0.76rem 0.86rem;
+  display: grid;
+  gap: 4px;
+}
+
+.floating-fallback-alert__title,
+.floating-fallback-alert__body {
+  margin: 0;
+}
+
+.floating-fallback-alert__title {
+  color: #ffd0b7;
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+
+.floating-fallback-alert__body {
+  color: rgba(255, 225, 214, 0.9);
+  font-size: 0.79rem;
+  line-height: 1.38;
+}
+
+.topbar-sync-progress {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 999px;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  background: rgba(246, 199, 115, 0.14);
+  transition: opacity 180ms ease;
+}
+
+.topbar-sync-progress.is-visible {
+  opacity: 0.95;
+}
+
+.topbar-sync-progress__bar {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform 180ms linear;
+  background: linear-gradient(90deg, rgba(243, 157, 66, 0.74) 0%, #f6c773 50%, #ff9f4d 100%);
+  box-shadow: 0 0 10px rgba(255, 167, 86, 0.38);
+}
+
+.topbar-sync-progress__bar.is-active::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: max(24px, 20%);
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 240, 210, 0.75) 50%, transparent 100%);
+  animation: topbarSyncProgressSweep 1.35s ease-in-out infinite;
+}
+
+@keyframes topbarSyncProgressSweep {
+  from {
+    transform: translateX(-140%);
+  }
+
+  to {
+    transform: translateX(560%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topbar-sync-progress__bar {
+    transition: none;
+  }
+
+  .topbar-sync-progress__bar.is-active::after {
+    animation: none;
+  }
+}
+
 .topbar__title p {
   margin: 0;
 }
@@ -872,6 +964,26 @@ button {
   color: #16181d;
 }
 
+.button--danger {
+  background: linear-gradient(135deg, #ff9583 0%, #e45362 100%);
+  color: #2d1117;
+}
+
+.button--danger:hover {
+  background: linear-gradient(135deg, #ff9583 0%, #e45362 100%);
+  filter: brightness(1.06);
+}
+
+.button--danger-soft {
+  border: 1px solid rgba(244, 126, 126, 0.44);
+  background: rgba(180, 64, 78, 0.24);
+  color: rgba(255, 211, 211, 0.95);
+}
+
+.button--danger-soft:hover {
+  background: rgba(206, 82, 98, 0.32);
+}
+
 .topbar-filters__action-button--apply.button--primary:hover {
   background: linear-gradient(135deg, #f6c773 0%, #ff8b58 100%);
   filter: brightness(1.08);
@@ -1044,6 +1156,29 @@ button {
   margin-bottom: 18px;
 }
 
+.setup-managed-paths {
+  display: grid;
+}
+
+.setup-managed-paths--locked {
+  margin-bottom: 18px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 176, 106, 0.26);
+  background: rgba(255, 176, 106, 0.1);
+}
+
+.setup-managed-paths__warning {
+  margin: 0 0 12px;
+  color: rgba(255, 218, 184, 0.94);
+  font-size: 0.81rem;
+  line-height: 1.4;
+}
+
+.setup-managed-paths .field:last-child {
+  margin-bottom: 0;
+}
+
 .field__hint {
   color: rgba(247, 246, 242, 0.66);
   font-size: 0.8rem;
@@ -1062,6 +1197,22 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.field__label-help {
+  display: inline-flex;
+  width: fit-content;
+  cursor: help;
+  border-bottom: 1px dotted rgba(247, 246, 242, 0.42);
+}
+
+.field__label-help:hover {
+  border-bottom-color: rgba(247, 246, 242, 0.76);
+}
+
+.field__label-help:focus-visible {
+  outline: 2px solid rgba(125, 188, 255, 0.75);
+  outline-offset: 1px;
 }
 
 .field input,
@@ -1224,6 +1375,16 @@ button {
   margin-bottom: 14px;
 }
 
+.field--mirror-parity {
+  margin-top: -8px;
+}
+
+.setup-mirror-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .warnings {
   margin-bottom: 16px;
   padding: 14px 16px;
@@ -1253,4 +1414,13 @@ button {
 .view-switcher__button--active {
   background: linear-gradient(135deg, #f6c773 0%, #ff8b58 100%);
   color: #16181d;
+}
+
+@media (max-width: 760px) {
+  .floating-fallback-alert {
+    right: 12px;
+    left: 12px;
+    bottom: 12px;
+    width: auto;
+  }
 }

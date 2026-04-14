@@ -15,6 +15,8 @@ import type { GameSummary } from '../types';
 
 type UseContextMenuListenersArgs = {
   games: GameSummary[];
+  canLaunch: boolean;
+  launchBlockedMessage?: string | null;
   isVaultOpen: boolean;
   openGameDetailFromPath: (gamePath: string) => void;
   openFolderInExplorer: (folderPath: string) => Promise<unknown>;
@@ -29,6 +31,8 @@ type UseContextMenuListenersArgs = {
 
 export function useContextMenuListeners({
   games,
+  canLaunch,
+  launchBlockedMessage,
   isVaultOpen,
   openGameDetailFromPath,
   openFolderInExplorer,
@@ -76,21 +80,31 @@ export function useContextMenuListeners({
         return;
       }
 
-      // For any launch-like action, resolve against current list to avoid stale paths.
-      const game = games.find((candidate) => candidate.path === payload.gamePath);
-      if (game) {
-        void playGame(game);
-        return;
+      if (payload.action === 'play') {
+        if (!canLaunch) {
+          if (launchBlockedMessage) {
+            setStatus(launchBlockedMessage);
+          }
+          return;
+        }
+
+        // For launch-like actions, resolve against current list to avoid stale paths.
+        const game = games.find((candidate) => candidate.path === payload.gamePath);
+        if (game) {
+          void playGame(game);
+          return;
+        }
+
+        // Surface stale payloads (e.g., list changed after menu opened) to the user.
+        setStatus(t('status.unableFindSelectedGame'));
       }
 
-      // Surface stale payloads (e.g., list changed after menu opened) to the user.
-      setStatus(t('status.unableFindSelectedGame'));
     });
 
     return () => {
       dispose();
     };
-  }, [galleryClient, games, openGameDetailFromPath, openFolderInExplorer, openMetadataModal, openPicturesModal, playGame, setStatus, toggleGameVaultMembership]);
+  }, [canLaunch, galleryClient, games, launchBlockedMessage, openGameDetailFromPath, openFolderInExplorer, openMetadataModal, openPicturesModal, playGame, setStatus, toggleGameVaultMembership]);
 
   useEffect(() => {
     // Version menu currently exposes folder-open only; keep isolated for future actions.

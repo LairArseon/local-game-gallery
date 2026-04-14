@@ -19,6 +19,7 @@ import {
   type PlayGameResult,
   type RemoveScreenshotPayload,
   type ReorderScreenshotsPayload,
+  type ScanRequestOptions,
   type SaveGameMetadataPayload,
   type ScanResult,
   type ServiceApiVersionInfo,
@@ -62,6 +63,25 @@ type UploadGameMediaPayload = {
   files: UploadMediaFilePayload[];
 };
 
+type HostDialogOptions = {
+  properties: string[];
+  title: string;
+};
+
+type HostDialogResult = {
+  canceled: boolean;
+  filePaths: string[];
+};
+
+type HostDialogApi = {
+  showOpenDialog: (options: HostDialogOptions) => Promise<HostDialogResult>;
+};
+
+type HostDialogModule = {
+  dialog?: HostDialogApi;
+  default?: unknown;
+};
+
 export type GalleryHttpService = {
   stop: () => Promise<void>;
   getHealth: () => ServiceHealthStatus;
@@ -76,6 +96,7 @@ const envPort = Number.parseInt(String(process.env.LGG_SERVICE_PORT ?? ''), 10);
 const envRuntimeContext = String(process.env.LGG_RUNTIME_CONTEXT ?? '').trim().toLowerCase();
 const isContainerizedRuntime = envRuntimeContext === 'docker';
 const containerGamesRoot = '/games';
+const containerMetadataMirrorRoot = '/metadata-mirror';
 const defaultHost = envHost || '0.0.0.0';
 const defaultPort = Number.isFinite(envPort) && envPort > 0 ? envPort : 37995;
 const imageContentTypes = new Map<string, string>([
@@ -263,13 +284,29 @@ function nextScreenshotIndex(entries: string[]) {
   return maxExistingIndex + 1;
 }
 
-function isAllowedMediaPath(targetPath: string, config: GalleryConfig) {
-  const rootPath = String(config.gamesRoot ?? '').trim();
-  if (rootPath) {
-    const resolvedRoot = path.resolve(rootPath);
+function resolveAllowedGalleryRoots(config: GalleryConfig) {
+  const configuredRoots = [
+    String(config.gamesRoot ?? '').trim(),
+    String(config.metadataMirrorRoot ?? '').trim(),
+  ].filter(Boolean);
+
+  const uniqueResolvedRoots = new Set(configuredRoots.map((rootPath) => path.resolve(rootPath)));
+  return [...uniqueResolvedRoots];
+}
+
+function isPathInsideAllowedGalleryRoots(targetPath: string, config: GalleryConfig) {
+  for (const resolvedRoot of resolveAllowedGalleryRoots(config)) {
     if (isPathInside(resolvedRoot, targetPath)) {
       return true;
     }
+  }
+
+  return false;
+}
+
+function isAllowedMediaPath(targetPath: string, config: GalleryConfig) {
+  if (isPathInsideAllowedGalleryRoots(targetPath, config)) {
+    return true;
   }
 
   const iconPath = String(config.appIconPngPath ?? '').trim();
@@ -404,6 +441,44 @@ async function openFolderInSystemShell(folderPath: string): Promise<OpenFolderRe
   }
 }
 
+function resolveHostDialogApi(moduleValue: HostDialogModule): HostDialogApi | null {
+  if (moduleValue.dialog && typeof moduleValue.dialog.showOpenDialog === 'function') {
+    return moduleValue.dialog;
+  }
+
+  if (moduleValue.default && typeof moduleValue.default === 'object') {
+    const maybeDialog = (moduleValue.default as { dialog?: HostDialogApi }).dialog;
+    if (maybeDialog && typeof maybeDialog.showOpenDialog === 'function') {
+      return maybeDialog;
+    }
+  }
+
+  return null;
+}
+
+async function pickFolderFromHostDialog(title: string) {
+  if (!process.versions.electron) {
+    throw new Error('Host folder picker is unavailable in this runtime.');
+  }
+
+  const electronModule = await import('electron') as HostDialogModule;
+  const dialogApi = resolveHostDialogApi(electronModule);
+  if (!dialogApi) {
+    throw new Error('Host folder picker API is unavailable.');
+  }
+
+  const result = await dialogApi.showOpenDialog({
+    properties: ['openDirectory'],
+    title,
+  });
+
+  if (result.canceled) {
+    return null;
+  }
+
+  return result.filePaths[0] ?? null;
+}
+
 async function launchGameFromService(payload: PlayGamePayload): Promise<PlayGameResult> {
   const rawGamePath = String(payload.gamePath ?? '').trim();
   if (!rawGamePath) {
@@ -502,13 +577,19 @@ function applyRuntimeConfigPolicy(config: GalleryConfig) {
     return config;
   }
 
-  if (config.gamesRoot === containerGamesRoot) {
+  const currentGamesRoot = String(config.gamesRoot ?? '').trim();
+  const currentMetadataMirrorRoot = String(config.metadataMirrorRoot ?? '').trim();
+  const shouldUpdateGamesRoot = currentGamesRoot !== containerGamesRoot;
+  const shouldUpdateMetadataMirrorRoot = currentMetadataMirrorRoot !== containerMetadataMirrorRoot;
+
+  if (!shouldUpdateGamesRoot && !shouldUpdateMetadataMirrorRoot) {
     return config;
   }
 
   return {
     ...config,
     gamesRoot: containerGamesRoot,
+    metadataMirrorRoot: containerMetadataMirrorRoot,
   };
 }
 
@@ -516,7 +597,10 @@ async function loadRuntimeConfig() {
   const config = await loadConfig();
   const runtimeScopedConfig = applyRuntimeConfigPolicy(config);
 
-  if (runtimeScopedConfig.gamesRoot === config.gamesRoot) {
+  if (
+    runtimeScopedConfig.gamesRoot === config.gamesRoot
+    && runtimeScopedConfig.metadataMirrorRoot === config.metadataMirrorRoot
+  ) {
     return config;
   }
 
@@ -534,9 +618,11 @@ export async function startGalleryHttpService({
 
   const resolveRequestCapabilities = (request: IncomingMessage): ServiceCapabilities => {
     const supportsLaunch = !isContainerizedRuntime && isRequestFromSameMachine(request);
+    const supportsHostFolderPicker = supportsLaunch && Boolean(process.versions.electron);
 
     return {
       supportsLaunch,
+      supportsHostFolderPicker,
       launchPolicy: 'host-desktop-only',
       supportsNativeContextMenu: false,
       supportsTrayLifecycle: true,
@@ -547,6 +633,7 @@ export async function startGalleryHttpService({
   };
   const localHostCapabilities: ServiceCapabilities = {
     supportsLaunch: !isContainerizedRuntime,
+    supportsHostFolderPicker: !isContainerizedRuntime && Boolean(process.versions.electron),
     launchPolicy: 'host-desktop-only',
     supportsNativeContextMenu: false,
     supportsTrayLifecycle: true,
@@ -629,6 +716,38 @@ export async function startGalleryHttpService({
         return;
       }
 
+      if (method === 'POST' && route === '/api/pick-games-root') {
+        const capabilities = resolveRequestCapabilities(request);
+        if (!capabilities.supportsLaunch) {
+          sendError(response, 403, 'forbidden_host_action', 'Picking folders is allowed only for same-machine clients.');
+          return;
+        }
+
+        try {
+          const selectedPath = await pickFolderFromHostDialog('Choose your main games folder');
+          sendOk(response, { selectedPath });
+        } catch (error) {
+          sendError(response, 400, 'pick_games_root_failed', toErrorMessage(error, 'Failed to pick games root folder.'));
+        }
+        return;
+      }
+
+      if (method === 'POST' && route === '/api/pick-metadata-mirror-root') {
+        const capabilities = resolveRequestCapabilities(request);
+        if (!capabilities.supportsLaunch) {
+          sendError(response, 403, 'forbidden_host_action', 'Picking folders is allowed only for same-machine clients.');
+          return;
+        }
+
+        try {
+          const selectedPath = await pickFolderFromHostDialog('Choose metadata mirror folder');
+          sendOk(response, { selectedPath });
+        } catch (error) {
+          sendError(response, 400, 'pick_metadata_mirror_root_failed', toErrorMessage(error, 'Failed to pick metadata mirror folder.'));
+        }
+        return;
+      }
+
       if (method === 'GET' && route === '/api/media-file') {
         const mediaPath = String(requestUrl.searchParams.get('path') ?? '').trim();
         if (!mediaPath) {
@@ -693,11 +812,27 @@ export async function startGalleryHttpService({
 
       if (method === 'POST' && route === '/api/scan') {
         try {
+          let scanRequest: ScanRequestOptions = {};
+          const contentLengthHeader = request.headers['content-length'];
+          const contentLength = Number.parseInt(String(contentLengthHeader ?? ''), 10);
+          const hasRequestBody = (Number.isFinite(contentLength) && contentLength > 0)
+            || Boolean(request.headers['transfer-encoding']);
+
+          if (hasRequestBody) {
+            scanRequest = await readJsonBody<ScanRequestOptions>(request);
+          }
+
           const config = await loadRuntimeConfig();
-          const scanResult: ScanResult = await scanGames(config);
+          const scanResult: ScanResult = await scanGames(config, scanRequest);
           sendOk(response, scanResult);
         } catch (error) {
-          sendError(response, 400, 'scan_failed', toErrorMessage(error, 'Scan failed.'));
+          const message = toErrorMessage(error, 'Scan failed.');
+          await appendLogEvent({
+            level: 'error',
+            source: 'scan-sync',
+            message: `HTTP scan request failed: ${message}`,
+          }).catch(() => undefined);
+          sendError(response, 400, 'scan_failed', message);
         }
         return;
       }
@@ -762,17 +897,16 @@ export async function startGalleryHttpService({
         try {
           const payload = await readJsonBody<UploadGameMediaPayload>(request);
           const config = await loadRuntimeConfig();
-          const configuredRootPath = String(config.gamesRoot ?? '').trim();
-          if (!configuredRootPath) {
+          const allowedRoots = resolveAllowedGalleryRoots(config);
+          if (!allowedRoots.length) {
             sendError(response, 400, 'missing_games_root', 'Games root is not configured on host.');
             return;
           }
 
-          const resolvedRoot = path.resolve(configuredRootPath);
           const resolvedGamePath = path.resolve(String(payload.gamePath ?? '').trim());
 
-          if (!resolvedRoot || !isPathInside(resolvedRoot, resolvedGamePath)) {
-            sendError(response, 403, 'forbidden_game_path', 'Target game path is outside allowed gallery root.');
+          if (!isPathInsideAllowedGalleryRoots(resolvedGamePath, config)) {
+            sendError(response, 403, 'forbidden_game_path', 'Target game path is outside allowed gallery roots.');
             return;
           }
 

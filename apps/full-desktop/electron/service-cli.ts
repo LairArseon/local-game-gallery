@@ -7,8 +7,8 @@ async function run() {
   const appVersion = String(
     process.env.LGG_SERVICE_BUILD
       ?? process.env.npm_package_version
-      ?? '0.0.0-dev',
-  ).trim() || '0.0.0-dev';
+      ?? '1.0.0',
+  ).trim() || '1.0.0';
 
   const service = await startGalleryHttpService({
     appVersion,

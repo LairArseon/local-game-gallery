@@ -2,7 +2,9 @@
   "app": {
     "title": "Galería Local de Juegos",
     "gamesFound": "Juegos encontrados: {{count}}",
-    "loadingConfig": "Cargando configuración..."
+    "loadingConfig": "Cargando configuración...",
+    "mirrorFallbackBannerTitle": "Carpeta principal de juegos no disponible",
+    "mirrorFallbackBannerBody": "Navegando desde el espejo de metadatos de respaldo. Las acciones de lanzamiento están deshabilitadas hasta que la carpeta principal vuelva a estar disponible."
   },
   "actions": {
     "play": "Jugar",
@@ -54,6 +56,24 @@
     "gamesRoot": "Carpeta raíz de juegos",
     "gamesRootPlaceholder": "D:\\Juegos o /home/tuusuario/Juegos",
     "gamesRootLockedByDocker": "Gestionado por el montaje de Docker. Actualiza LGG_GAMES_ROOT en docker/.env (o en variables del shell) y reinicia el contenedor para cambiar esta ruta.",
+    "dockerManagedRootsWarning": "La carpeta raíz de juegos y la carpeta del espejo de metadatos están gestionadas por montajes de Docker. Actualiza LGG_GAMES_ROOT y LGG_METADATA_MIRROR_ROOT en docker/.env (o en variables del shell) y reinicia el contenedor para cambiar estas rutas.",
+    "folderPickerUnavailableInBrowser": "El selector de carpetas no está disponible para esta conexión. Usa el modo escritorio o una sesión del host en la misma máquina, o ingresa la ruta del host manualmente.",
+    "metadataMirrorRoot": "Carpeta raíz del espejo de metadatos",
+    "metadataMirrorRootPlaceholder": "D:\\Games-Metadata-Mirror o /home/tuusuario/Games-Metadata-Mirror",
+    "metadataMirrorRootLockedByDocker": "Gestionado por el montaje de Docker. Actualiza LGG_METADATA_MIRROR_ROOT en docker/.env (o en variables del shell) y reinicia el contenedor para cambiar esta ruta.",
+    "metadataMirrorRootHint": "Se usa como espejo sincronizado de metadatos/imágenes y como origen de navegación de respaldo cuando la carpeta principal de juegos no está disponible.",
+    "chooseMirrorFolder": "Elegir carpeta del espejo de metadatos",
+    "metadataMirrorSyncConfirm": "Carpeta de espejo guardada. ¿Ejecutar la sincronización inicial de metadatos ahora?",
+    "metadataMirrorSyncTitle": "¿Ejecutar ahora la sincronización inicial del espejo de metadatos?",
+    "metadataMirrorSyncBody": "Esta sincronización reconcilia metadatos e imágenes del espejo con tu carpeta actual de juegos para que la navegación de respaldo esté lista si la carpeta fuente no está disponible.",
+    "metadataMirrorSyncNow": "Sincronizar ahora",
+    "metadataMirrorSyncLater": "Después",
+    "metadataMirrorParitySyncAction": "Ejecutar sincronización de paridad completa",
+    "metadataMirrorParitySyncHint": "Ejecuta una reconciliación completa del espejo y puede eliminar imágenes que ya no existan en la carpeta principal de juegos.",
+    "metadataMirrorParitySyncConfirmTitle": "¿Ejecutar sincronización de paridad completa?",
+    "metadataMirrorParitySyncConfirmBody": "Esta sincronización manual fuerza la paridad total entre la carpeta de juegos y el espejo de metadatos, incluyendo eliminar imágenes del espejo que ya no existan en la fuente. ¿Continuar?",
+    "metadataMirrorParitySyncConfirmAction": "Ejecutar paridad",
+    "metadataMirrorParitySyncCancel": "Cancelar",
     "excludePatterns": "Patrones de exclusión",
     "hideDotEntries": "Ocultar archivos y carpetas que empiezan con punto",
     "versionFolderPattern": "Patrón de carpeta de versión",
@@ -237,7 +257,11 @@
     "pickRootFirst": "Elige una carpeta raíz para empezar.",
     "failedLoadConfig": "No se pudo cargar la configuración.",
     "libraryFolderSaved": "Carpeta de biblioteca guardada.",
+    "metadataMirrorFolderSaved": "Carpeta del espejo de metadatos guardada.",
+    "metadataMirrorRootRequiredForParitySync": "Define una carpeta de espejo de metadatos antes de ejecutar la sincronización de paridad.",
+    "metadataMirrorParitySyncCompleted": "La sincronización de paridad completa finalizó para {{count}} carpetas de juego.",
     "failedOpenFolderPicker": "No se pudo abrir el selector de carpetas.",
+    "failedOpenMirrorFolderPicker": "No se pudo abrir el selector de carpeta del espejo de metadatos.",
     "configurationSaved": "Configuración guardada.",
     "failedSaveConfig": "No se pudo guardar la configuración.",
     "failedPersistViewMode": "No se pudo guardar el modo de vista seleccionado.",
@@ -286,6 +310,7 @@
     "failedRemoveVaultPin": "No se pudo eliminar el PIN del vault.",
     "failedUpdateVault": "No se pudo actualizar el vault.",
     "scanCompletedNoMatches": "Escaneo completado. Todavía no hay juegos que coincidan.",
+    "launchDisabledMirrorFallback": "El lanzamiento de juegos está deshabilitado mientras navegas desde el espejo de metadatos de respaldo.",
     "failedScanGameFolders": "No se pudieron escanear las carpetas de juegos."
   }
 }

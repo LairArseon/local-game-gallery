@@ -42,10 +42,24 @@
   grid-template-rows: minmax(0, 1fr);
 }
 
+.modal-panel--danger {
+  border-color: rgba(246, 120, 120, 0.5);
+  background: rgba(28, 12, 14, 0.95);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.42), inset 0 0 0 1px rgba(255, 155, 155, 0.06);
+}
+
 .modal-panel__body--vault {
   padding: 20px;
   display: grid;
   gap: 12px;
+}
+
+.modal-panel__body--danger h3 {
+  color: rgba(255, 218, 218, 0.98);
+}
+
+.modal-panel__body--danger p {
+  color: rgba(255, 214, 214, 0.86);
 }
 
 .modal-panel__body--vault h3,

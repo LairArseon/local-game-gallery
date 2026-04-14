@@ -3,6 +3,7 @@ export type LaunchPolicy = 'host-desktop-only';
 
 export type ServiceCapabilities = {
   supportsLaunch: boolean;
+  supportsHostFolderPicker: boolean;
   launchPolicy: LaunchPolicy;
   supportsNativeContextMenu: boolean;
   supportsTrayLifecycle: boolean;
@@ -48,6 +49,7 @@ export type GalleryConfig = {
   vaultedGamePaths: string[];
   vaultPin: string;
   gamesRoot: string;
+  metadataMirrorRoot: string;
   excludePatterns: string[];
   hideDotEntries: boolean;
   versionFolderPattern: string;
@@ -154,6 +156,12 @@ export type ScanResult = {
   scannedAt: string;
   games: GameSummary[];
   warnings: string[];
+  usingMirrorFallback: boolean;
+};
+
+export type ScanRequestOptions = {
+  syncMirror?: boolean;
+  mirrorParity?: boolean;
 };
 
 export type GameContextMenuPayload = {
@@ -161,6 +169,7 @@ export type GameContextMenuPayload = {
   gameName: string;
   isVaultOpen: boolean;
   isGameVaulted: boolean;
+  canPlay?: boolean;
   anchorX?: number;
   anchorY?: number;
 };
@@ -251,11 +260,12 @@ export type GalleryApi = {
   getConfig: () => Promise<GalleryConfig>;
   saveConfig: (config: GalleryConfig) => Promise<GalleryConfig>;
   pickGamesRoot: () => Promise<string | null>;
+  pickMetadataMirrorRoot: () => Promise<string | null>;
   pickAppIconPng: () => Promise<string | null>;
   inspectAppIconFile: (payload: AppIconInspectPayload) => Promise<AppIconInspectResult>;
   stageDroppedAppIcon: (payload: StageDroppedAppIconPayload) => Promise<string>;
   applyRuntimeAppIcon: (payload: ApplyRuntimeAppIconPayload) => Promise<ApplyRuntimeAppIconResult>;
-  scanGames: () => Promise<ScanResult>;
+  scanGames: (options?: ScanRequestOptions) => Promise<ScanResult>;
   showGameContextMenu: (payload: GameContextMenuPayload) => Promise<void>;
   onGameContextMenuAction: (callback: (payload: GameContextMenuAction) => void) => () => void;
   showVersionContextMenu: (payload: VersionContextMenuPayload) => Promise<void>;

@@ -115,6 +115,8 @@ export function LibraryPanel({
     return Math.min(filteredGames.length, estimatedVisible);
   }, [filteredGames.length, gridColumns]);
 
+  const shouldShowTopWarnings = !scanResult.usingMirrorFallback && scanResult.warnings.length > 0;
+
   return (
     <section
       className={`panel library ${detailGame ? 'library--detail' : ''} ${detailBackgroundSrc ? 'library--detail-bg' : ''}`}
@@ -164,7 +166,7 @@ export function LibraryPanel({
             </div>
           </div>
 
-          {scanResult.warnings.length > 0 ? (
+          {shouldShowTopWarnings ? (
             <div className="warnings">
               {scanResult.warnings.map((warning) => (
                 <p key={warning}>{warning}</p>

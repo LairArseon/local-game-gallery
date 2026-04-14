@@ -27,6 +27,12 @@ type TagAutocompleteState = {
 
 type ModalHostProps = {
   games: GameSummary[];
+  isMirrorSyncConfirmOpen: boolean;
+  onConfirmMirrorSync: () => void;
+  onCancelMirrorSync: () => void;
+  isMirrorParityConfirmOpen: boolean;
+  onConfirmMirrorParitySync: () => void;
+  onCancelMirrorParitySync: () => void;
   metadataModalGamePath: string | null;
   metadataDraft: GameMetadata | null;
   statusChoices: string[];
@@ -96,6 +102,12 @@ type ModalHostProps = {
 
 export function ModalHost({
   games,
+  isMirrorSyncConfirmOpen,
+  onConfirmMirrorSync,
+  onCancelMirrorSync,
+  isMirrorParityConfirmOpen,
+  onConfirmMirrorParitySync,
+  onCancelMirrorParitySync,
   metadataModalGamePath,
   metadataDraft,
   statusChoices,
@@ -325,6 +337,36 @@ export function ModalHost({
           onChangeDateFilter={(nextValue) => setLogDateFilter(nextValue)}
           onClearLogs={() => void clearLogsFromViewer()}
         />
+      ) : null}
+
+      {isMirrorSyncConfirmOpen ? (
+        <div className="modal-backdrop" onClick={onCancelMirrorSync}>
+          <section className="modal-panel modal-panel--vault" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-panel__body modal-panel__body--vault">
+              <h3>{t('setup.metadataMirrorSyncTitle')}</h3>
+              <p>{t('setup.metadataMirrorSyncBody')}</p>
+              <div className="modal-panel__vault-actions">
+                <button className="button" type="button" onClick={onCancelMirrorSync}>{t('setup.metadataMirrorSyncLater')}</button>
+                <button className="button button--primary" type="button" onClick={onConfirmMirrorSync}>{t('setup.metadataMirrorSyncNow')}</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {isMirrorParityConfirmOpen ? (
+        <div className="modal-backdrop" onClick={onCancelMirrorParitySync}>
+          <section className="modal-panel modal-panel--vault modal-panel--danger" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-panel__body modal-panel__body--vault modal-panel__body--danger">
+              <h3>{t('setup.metadataMirrorParitySyncConfirmTitle')}</h3>
+              <p>{t('setup.metadataMirrorParitySyncConfirmBody')}</p>
+              <div className="modal-panel__vault-actions">
+                <button className="button" type="button" onClick={onCancelMirrorParitySync}>{t('setup.metadataMirrorParitySyncCancel')}</button>
+                <button className="button button--danger" type="button" onClick={onConfirmMirrorParitySync}>{t('setup.metadataMirrorParitySyncConfirmAction')}</button>
+              </div>
+            </div>
+          </section>
+        </div>
       ) : null}
 
       {screenshotModalPath ? (

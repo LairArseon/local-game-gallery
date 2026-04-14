@@ -2,7 +2,7 @@
  * App shell and state orchestration for Local Game Gallery.
  *
  * Entry-point flow (high level):
- * 1) Initialize persisted config/version and optionally run first scan.
+ * 1) Initialize persisted config/version and run startup scan-only refresh.
  * 2) Compose domain hooks (filters, metadata, media, tag pool, shortcuts).
  * 3) Derive view-model state (selected/detail games, scaling, grid columns).
  * 4) Render orchestration-only layout shells (topbar/setup/library/modals).
@@ -52,6 +52,7 @@ const emptyScan: ScanResult = {
   scannedAt: '',
   games: [],
   warnings: [],
+  usingMirrorFallback: false,
 };
 
 const dynamicScaleBaselineColumns: Record<'poster' | 'card', number> = {
@@ -60,9 +61,12 @@ const dynamicScaleBaselineColumns: Record<'poster' | 'card', number> = {
 };
 
 const narrowViewportMaxWidthPx = 760;
+const fallbackRecoveryProbeIntervalMs = 12000;
+type RefreshScanMode = 'scan-only' | 'scan-and-sync' | 'parity-sync' | 'fallback-recovery-probe';
 
 const desktopCapabilities: ServiceCapabilities = {
   supportsLaunch: true,
+  supportsHostFolderPicker: true,
   launchPolicy: 'host-desktop-only',
   supportsNativeContextMenu: true,
   supportsTrayLifecycle: true,
@@ -73,6 +77,7 @@ const desktopCapabilities: ServiceCapabilities = {
 
 const webCapabilities: ServiceCapabilities = {
   supportsLaunch: false,
+  supportsHostFolderPicker: false,
   launchPolicy: 'host-desktop-only',
   supportsNativeContextMenu: false,
   supportsTrayLifecycle: false,
@@ -93,6 +98,7 @@ function App() {
   const [status, setStatus] = useState(() => t('app.loadingConfig'));
   const [isSaving, setIsSaving] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState(0);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [viewMode, setViewMode] = useState<GalleryViewMode>('poster');
   const [selectedGamePath, setSelectedGamePath] = useState<string | null>(null);
@@ -104,6 +110,8 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isTagPoolPanelOpen, setIsTagPoolPanelOpen] = useState(false);
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
+  const [isMirrorSyncConfirmOpen, setIsMirrorSyncConfirmOpen] = useState(false);
+  const [isMirrorParityConfirmOpen, setIsMirrorParityConfirmOpen] = useState(false);
   const [screenshotModalPath, setScreenshotModalPath] = useState<string | null>(null);
   const [focusCarouselIndexByGamePath, setFocusCarouselIndexByGamePath] = useState<Record<string, number>>({});
   const [serviceCapabilities, setServiceCapabilities] = useState<ServiceCapabilities>(() => (
@@ -116,6 +124,10 @@ function App() {
   } | null>(null);
   const cardsContainerRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const mirrorSyncConfirmResolveRef = useRef<((shouldSync: boolean) => void) | null>(null);
+  const mirrorParityConfirmResolveRef = useRef<((shouldSync: boolean) => void) | null>(null);
+  const scanInFlightRef = useRef<Promise<ScanResult | null> | null>(null);
+  const refreshScanRef = useRef<((mode?: RefreshScanMode) => Promise<ScanResult | null>) | null>(null);
 
   useEffect(() => {
     if (!config?.language) {
@@ -171,10 +183,70 @@ function App() {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, [detailGamePath, isNarrowViewport]);
 
-  const canLaunch = serviceCapabilities.supportsLaunch;
+  useEffect(() => () => {
+    if (!mirrorSyncConfirmResolveRef.current) {
+      if (!mirrorParityConfirmResolveRef.current) {
+        return;
+      }
+    }
+
+    if (mirrorSyncConfirmResolveRef.current) {
+      mirrorSyncConfirmResolveRef.current(false);
+      mirrorSyncConfirmResolveRef.current = null;
+    }
+
+    if (mirrorParityConfirmResolveRef.current) {
+      mirrorParityConfirmResolveRef.current(false);
+      mirrorParityConfirmResolveRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isScanning) {
+      return;
+    }
+
+    const progressInterval = window.setInterval(() => {
+      setScanProgress((current) => {
+        if (current >= 0.94) {
+          return current;
+        }
+
+        const easedNext = current + ((1 - current) * 0.08);
+        return Math.min(easedNext, 0.94);
+      });
+    }, 180);
+
+    return () => {
+      window.clearInterval(progressInterval);
+    };
+  }, [isScanning]);
+
+  useEffect(() => {
+    if (isScanning || scanProgress <= 0) {
+      return;
+    }
+
+    if (scanProgress < 1) {
+      setScanProgress(1);
+    }
+
+    const resetDelay = window.setTimeout(() => {
+      setScanProgress(0);
+    }, 260);
+
+    return () => {
+      window.clearTimeout(resetDelay);
+    };
+  }, [isScanning, scanProgress]);
+
+  const isUsingMirrorFallback = scanResult.usingMirrorFallback;
+  const launchBlockedMessage = isUsingMirrorFallback ? t('status.launchDisabledMirrorFallback') : null;
+  const canLaunch = serviceCapabilities.supportsLaunch && !isUsingMirrorFallback;
   const canOpenFolders = serviceCapabilities.clientMode === 'desktop';
   const supportsNativeContextMenu = serviceCapabilities.supportsNativeContextMenu;
   const isGamesRootEditable = serviceCapabilities.isGamesRootEditable !== false;
+  const supportsFolderPicker = hasDesktopBridge || serviceCapabilities.supportsHostFolderPicker;
 
   const actionLabels = useMemo(() => ({
     play: t('actions.play'),
@@ -369,9 +441,67 @@ function App() {
     }
   }
 
+  async function confirmInitialMirrorSync() {
+    return new Promise<boolean>((resolve) => {
+      if (mirrorSyncConfirmResolveRef.current) {
+        mirrorSyncConfirmResolveRef.current(false);
+      }
+
+      mirrorSyncConfirmResolveRef.current = resolve;
+      setIsMirrorSyncConfirmOpen(true);
+    });
+  }
+
+  function resolveInitialMirrorSyncConfirmation(shouldSync: boolean) {
+    setIsMirrorSyncConfirmOpen(false);
+
+    const resolve = mirrorSyncConfirmResolveRef.current;
+    mirrorSyncConfirmResolveRef.current = null;
+    resolve?.(shouldSync);
+  }
+
+  async function confirmMirrorParitySync() {
+    return new Promise<boolean>((resolve) => {
+      if (mirrorParityConfirmResolveRef.current) {
+        mirrorParityConfirmResolveRef.current(false);
+      }
+
+      mirrorParityConfirmResolveRef.current = resolve;
+      setIsMirrorParityConfirmOpen(true);
+    });
+  }
+
+  function resolveMirrorParitySyncConfirmation(shouldSync: boolean) {
+    setIsMirrorParityConfirmOpen(false);
+
+    const resolve = mirrorParityConfirmResolveRef.current;
+    mirrorParityConfirmResolveRef.current = null;
+    resolve?.(shouldSync);
+  }
+
+  async function runMirrorParitySync() {
+    if (!config?.metadataMirrorRoot.trim()) {
+      setStatus(t('status.metadataMirrorRootRequiredForParitySync'));
+      return;
+    }
+
+    const shouldSync = await confirmMirrorParitySync();
+    if (!shouldSync) {
+      return;
+    }
+
+    const result = await refreshScan('parity-sync');
+    if (!result) {
+      return;
+    }
+
+    setStatus(t('status.metadataMirrorParitySyncCompleted', { count: result.games.length }));
+  }
+
   // Lifecycle orchestrator: bootstraps config/version and setup/save/view-mode flows.
   const {
     pickRoot,
+    pickMetadataMirrorRoot,
     saveConfig,
     changeViewMode,
   } = useAppLifecycleHandlers({
@@ -382,6 +512,7 @@ function App() {
     setIsSidebarOpen,
     setViewMode,
     setAppVersion,
+    confirmInitialMirrorSync,
     refreshScan,
     logAppEvent,
     toErrorMessage,
@@ -398,6 +529,8 @@ function App() {
     toggleGameSelection,
   } = useGameActions({
     games: scanResult.games,
+    canLaunch,
+    launchBlockedMessage,
     setStatus,
     setDetailGamePath,
     setSelectedGamePath,
@@ -439,25 +572,113 @@ function App() {
     setScreenshotModalPath,
   });
 
-  async function refreshScan() {
-    // Central scan gateway used by setup save, manual refresh, and post-action sync.
-    setIsScanning(true);
-    try {
-      const result = await galleryClient.scanGames();
-      setScanResult(result);
-      setStatus(result.games.length ? t('status.foundGameFolders', { count: result.games.length }) : t('status.scanCompletedNoMatches'));
-      return result;
-    } catch (error) {
-      // Reset to empty snapshot so stale scan data is not shown after failures.
-      setScanResult(emptyScan);
-      const logMessage = toErrorMessage(error, 'Failed to scan game folders.');
-      setStatus(t('status.failedScanGameFolders'));
-      void logAppEvent(logMessage, 'error', 'scan-games');
-      return null;
-    } finally {
-      setIsScanning(false);
+  async function refreshScan(mode: RefreshScanMode = 'scan-and-sync') {
+    if (scanInFlightRef.current) {
+      return scanInFlightRef.current;
     }
+
+    const isFallbackRecoveryProbe = mode === 'fallback-recovery-probe';
+    const shouldSyncMirror = mode === 'scan-and-sync' || mode === 'parity-sync';
+    const shouldMirrorParity = mode === 'parity-sync';
+    if (!isFallbackRecoveryProbe) {
+      setScanProgress(0.06);
+    }
+
+    // Central scan gateway used by setup save, manual refresh, and post-action sync.
+    const startedAtMs = Date.now();
+    const scanPromise = (async () => {
+      if (!isFallbackRecoveryProbe) {
+        setIsScanning(true);
+        void logAppEvent(
+          `Scan started (mode=${mode}, sync=${shouldSyncMirror ? 'enabled' : 'disabled'}, parity=${shouldMirrorParity ? 'full' : 'safe-media-preserve'}).`,
+          'info',
+          'scan-orchestrator',
+        );
+      }
+
+      try {
+        const result = await galleryClient.scanGames({
+          syncMirror: shouldSyncMirror,
+          mirrorParity: shouldMirrorParity,
+        });
+
+        if (isFallbackRecoveryProbe) {
+          if (!result.usingMirrorFallback) {
+            setScanResult(result);
+            setStatus(result.games.length ? t('status.foundGameFolders', { count: result.games.length }) : t('status.scanCompletedNoMatches'));
+            void logAppEvent(
+              `Primary game folder recovered automatically (games=${result.games.length}).`,
+              'info',
+              'fallback-probe',
+            );
+          }
+
+          return result;
+        }
+
+        setScanResult(result);
+        setStatus(result.games.length ? t('status.foundGameFolders', { count: result.games.length }) : t('status.scanCompletedNoMatches'));
+
+        const elapsedMs = Date.now() - startedAtMs;
+        const completionLevel = result.warnings.length ? 'warn' : 'info';
+        void logAppEvent(
+          `Scan completed in ${elapsedMs}ms (mode=${mode}, games=${result.games.length}, warnings=${result.warnings.length}, parity=${shouldMirrorParity ? 'full' : 'safe-media-preserve'}).`,
+          completionLevel,
+          'scan-orchestrator',
+        );
+
+        for (const warning of result.warnings) {
+          void logAppEvent(warning, 'warn', 'scan-warning');
+        }
+
+        return result;
+      } catch (error) {
+        if (isFallbackRecoveryProbe) {
+          return null;
+        }
+
+        // Reset to empty snapshot so stale scan data is not shown after failures.
+        setScanResult(emptyScan);
+        const logMessage = toErrorMessage(error, 'Failed to scan game folders.');
+        const elapsedMs = Date.now() - startedAtMs;
+        setStatus(t('status.failedScanGameFolders'));
+        void logAppEvent(`${logMessage} (after ${elapsedMs}ms)`, 'error', 'scan-games');
+        return null;
+      } finally {
+        scanInFlightRef.current = null;
+        if (!isFallbackRecoveryProbe) {
+          setIsScanning(false);
+        }
+      }
+    })();
+
+    scanInFlightRef.current = scanPromise;
+    return scanPromise;
   }
+
+  refreshScanRef.current = refreshScan;
+
+  useEffect(() => {
+    if (!isUsingMirrorFallback || !config?.gamesRoot.trim()) {
+      return;
+    }
+
+    const runFallbackRecoveryProbe = () => {
+      const runScan = refreshScanRef.current;
+      if (!runScan) {
+        return;
+      }
+
+      void runScan('fallback-recovery-probe');
+    };
+
+    runFallbackRecoveryProbe();
+    const probeInterval = window.setInterval(runFallbackRecoveryProbe, fallbackRecoveryProbeIntervalMs);
+
+    return () => {
+      window.clearInterval(probeInterval);
+    };
+  }, [config?.gamesRoot, isUsingMirrorFallback]);
 
   const {
     activeTagSuggestions,
@@ -637,6 +858,7 @@ function App() {
     applyAppIconNow,
     openFolderInExplorer,
     setDetailGamePath,
+    canLaunch,
     supportsNativeContextMenu,
     isVaultOpen,
     hasVaultPin: Boolean(config?.vaultPin?.trim()),
@@ -644,6 +866,8 @@ function App() {
 
   useContextMenuListeners({
     games: scanResult.games,
+    canLaunch,
+    launchBlockedMessage,
     isVaultOpen,
     openGameDetailFromPath,
     openFolderInExplorer,
@@ -759,6 +983,13 @@ function App() {
   const hideTopbarForDetail = isNarrowViewport && Boolean(detailGame);
   return (
     <main className="shell">
+      {isUsingMirrorFallback ? (
+        <aside className="floating-fallback-alert" role="status" aria-live="polite">
+          <p className="floating-fallback-alert__title">{t('app.mirrorFallbackBannerTitle')}</p>
+          <p className="floating-fallback-alert__body">{t('app.mirrorFallbackBannerBody')}</p>
+        </aside>
+      ) : null}
+
       {/* Topbar flow: search + panel toggles + staged tag/filter editing surfaces. */}
       {!hideTopbarForDetail ? (
       <header className="topbar panel">
@@ -860,6 +1091,12 @@ function App() {
             onResetStagedFilters: resetStagedFilters,
           }}
         />
+        <div className={`topbar-sync-progress ${scanProgress > 0 ? 'is-visible' : ''}`} aria-hidden="true">
+          <span
+            className={`topbar-sync-progress__bar ${isScanning ? 'is-active' : ''}`}
+            style={{ transform: `scaleX(${scanProgress})` }}
+          />
+        </div>
       </header>
       ) : null}
 
@@ -870,10 +1107,16 @@ function App() {
           config={config}
           isSidebarOpen={isSidebarOpen}
           isSaving={isSaving}
+          isScanning={isScanning}
           isGamesRootEditable={isGamesRootEditable}
+          supportsFolderPicker={supportsFolderPicker}
           chooseLibraryFolderLabel={actionLabels.chooseLibraryFolder}
           onSaveConfig={saveConfig}
           onPickRoot={pickRoot}
+          onPickMetadataMirrorRoot={pickMetadataMirrorRoot}
+          onRunMirrorParitySync={() => {
+            void runMirrorParitySync();
+          }}
           onConfigChange={setConfig}
           onToggleSystemMenuBar={onToggleSystemMenuBar}
           onOpenLogViewer={onOpenLogViewer}
@@ -927,6 +1170,12 @@ function App() {
       {/* Global overlays flow: metadata/media/log/screenshot modal orchestration. */}
       <ModalHost
         games={scanResult.games}
+        isMirrorSyncConfirmOpen={isMirrorSyncConfirmOpen}
+        onConfirmMirrorSync={() => resolveInitialMirrorSyncConfirmation(true)}
+        onCancelMirrorSync={() => resolveInitialMirrorSyncConfirmation(false)}
+        isMirrorParityConfirmOpen={isMirrorParityConfirmOpen}
+        onConfirmMirrorParitySync={() => resolveMirrorParitySyncConfirmation(true)}
+        onCancelMirrorParitySync={() => resolveMirrorParitySyncConfirmation(false)}
         metadataModalGamePath={metadataModalGamePath}
         metadataDraft={metadataDraft}
         statusChoices={config.statusChoices}

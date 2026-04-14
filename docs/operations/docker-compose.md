@@ -13,6 +13,7 @@ This repository now includes a standalone HTTP service container for browser and
 - Web host port: 4173 (configurable)
 - Data directory inside container: /data
 - Games root mount inside container: /games
+- Metadata mirror mount inside container: /metadata-mirror
 
 ## Prerequisites
 
@@ -34,6 +35,7 @@ Variable guide:
 
 - LGG_DATA_ROOT: host folder to mount at /data
 - LGG_GAMES_ROOT: host folder to mount at /games
+- LGG_METADATA_MIRROR_ROOT: host folder to mount at /metadata-mirror
 - LGG_SERVICE_PUBLISHED_PORT: host port for API endpoint exposure
 - LGG_SERVICE_HOST: bind host inside container (normally 0.0.0.0)
 - LGG_SERVICE_PORT: internal API port used by service and web proxy
@@ -109,7 +111,8 @@ npm run compose:down
 
 - The service stores config at ${LGG_DATA_ROOT}/config.json.
 - In docker runtime, gamesRoot is pinned to /games automatically.
-- Setup shows this path as read-only and explains the LGG_GAMES_ROOT mount source.
+- In docker runtime, metadataMirrorRoot is pinned to /metadata-mirror automatically.
+- Setup shows both paths as read-only and explains the corresponding mount sources (LGG_GAMES_ROOT and LGG_METADATA_MIRROR_ROOT).
 - Browser clients can use http://localhost:${LGG_WEB_PORT} for the UI.
 - The compose web client routes API calls internally to gallery-service, so browsing works as long as this compose stack is up.
 - Compose intentionally does not default to repo-local runtime folders.

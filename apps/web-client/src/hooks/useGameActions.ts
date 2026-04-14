@@ -13,6 +13,8 @@ import type { GameSummary } from '../types';
 
 type UseGameActionsArgs = {
   games: GameSummary[];
+  canLaunch: boolean;
+  launchBlockedMessage?: string | null;
   setStatus: Dispatch<SetStateAction<string>>;
   setDetailGamePath: Dispatch<SetStateAction<string | null>>;
   setSelectedGamePath: Dispatch<SetStateAction<string | null>>;
@@ -23,6 +25,8 @@ type UseGameActionsArgs = {
 
 export function useGameActions({
   games,
+  canLaunch,
+  launchBlockedMessage,
   setStatus,
   setDetailGamePath,
   setSelectedGamePath,
@@ -51,6 +55,13 @@ export function useGameActions({
   }
 
   async function runPlayGame(game: GameSummary, launchMode: 'default' | 'choose-version-temporary') {
+    if (!canLaunch) {
+      if (launchBlockedMessage) {
+        setStatus(launchBlockedMessage);
+      }
+      return;
+    }
+
     try {
       const result = await galleryClient.playGame({
         gamePath: game.path,

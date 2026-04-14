@@ -11,7 +11,9 @@
 import { useEffect, type Dispatch, type SetStateAction, type SubmitEventHandler } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGalleryClient } from '../client/context';
-import type { GalleryConfig, GalleryViewMode } from '../types';
+import type { GalleryConfig, GalleryViewMode, ScanRequestOptions } from '../types';
+
+type RefreshScanMode = 'scan-only' | 'scan-and-sync' | 'parity-sync';
 
 type UseAppLifecycleHandlersArgs = {
   config: GalleryConfig | null;
@@ -21,10 +23,17 @@ type UseAppLifecycleHandlersArgs = {
   setIsSidebarOpen: Dispatch<SetStateAction<boolean>>;
   setViewMode: Dispatch<SetStateAction<GalleryViewMode>>;
   setAppVersion: Dispatch<SetStateAction<string>>;
-  refreshScan: () => Promise<unknown>;
+  confirmInitialMirrorSync: () => Promise<boolean>;
+  refreshScan: (mode?: RefreshScanMode, options?: ScanRequestOptions) => Promise<unknown>;
   logAppEvent: (message: string, level?: 'info' | 'warn' | 'error', source?: string) => Promise<void>;
   toErrorMessage: (error: unknown, fallback: string) => string;
 };
+
+function shouldPromptInitialMirrorSync(previousConfig: GalleryConfig, nextConfig: GalleryConfig) {
+  const previousMirrorRoot = String(previousConfig.metadataMirrorRoot ?? '').trim();
+  const nextMirrorRoot = String(nextConfig.metadataMirrorRoot ?? '').trim();
+  return Boolean(nextMirrorRoot) && previousMirrorRoot !== nextMirrorRoot;
+}
 
 export function useAppLifecycleHandlers({
   config,
@@ -34,6 +43,7 @@ export function useAppLifecycleHandlers({
   setIsSidebarOpen,
   setViewMode,
   setAppVersion,
+  confirmInitialMirrorSync,
   refreshScan,
   logAppEvent,
   toErrorMessage,
@@ -57,9 +67,9 @@ export function useAppLifecycleHandlers({
         setIsSidebarOpen(!loadedConfig.gamesRoot);
         setStatus(loadedConfig.gamesRoot ? t('status.readyToScan') : t('status.pickRootFirst'));
 
-        // Avoid unnecessary scan work when setup is still incomplete.
         if (loadedConfig.gamesRoot) {
-          await refreshScan();
+          // Startup performs discovery scan only; mirror sync waits for manual refresh.
+          await refreshScan('scan-only');
         }
       } catch (error) {
         const logMessage = toErrorMessage(error, 'Failed to load configuration.');
@@ -91,6 +101,40 @@ export function useAppLifecycleHandlers({
       const logMessage = toErrorMessage(error, 'Failed to open folder picker.');
       setStatus(t('status.failedOpenFolderPicker'));
       void logAppEvent(logMessage, 'error', 'pick-root');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function pickMetadataMirrorRoot() {
+    try {
+      const selectedPath = await galleryClient.pickMetadataMirrorRoot();
+      if (!selectedPath || !config) {
+        return;
+      }
+
+      setIsSaving(true);
+      const previousConfig = config;
+      const savedConfig = await galleryClient.saveConfig({
+        ...config,
+        metadataMirrorRoot: selectedPath,
+      });
+      setConfig(savedConfig);
+      setStatus(t('status.metadataMirrorFolderSaved'));
+
+      const shouldPromptSync = shouldPromptInitialMirrorSync(previousConfig, savedConfig);
+      if (!shouldPromptSync) {
+        return;
+      }
+
+      const shouldSyncNow = await confirmInitialMirrorSync();
+      if (shouldSyncNow) {
+        await refreshScan();
+      }
+    } catch (error) {
+      const logMessage = toErrorMessage(error, 'Failed to open metadata mirror folder picker.');
+      setStatus(t('status.failedOpenMirrorFolderPicker'));
+      void logAppEvent(logMessage, 'error', 'pick-metadata-mirror-root');
     } finally {
       setIsSaving(false);
     }
@@ -146,6 +190,7 @@ export function useAppLifecycleHandlers({
 
   return {
     pickRoot,
+    pickMetadataMirrorRoot,
     saveConfig,
     changeViewMode,
   };

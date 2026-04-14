@@ -2,7 +2,9 @@
   "app": {
     "title": "Local Game Gallery",
     "gamesFound": "Games found: {{count}}",
-    "loadingConfig": "Loading configuration..."
+    "loadingConfig": "Loading configuration...",
+    "mirrorFallbackBannerTitle": "Primary games root unavailable",
+    "mirrorFallbackBannerBody": "Browsing from metadata mirror fallback. Launch actions are disabled until the primary root is reachable."
   },
   "actions": {
     "play": "Play",
@@ -54,6 +56,24 @@
     "gamesRoot": "Games root",
     "gamesRootPlaceholder": "D:\\Games or /home/you/Games",
     "gamesRootLockedByDocker": "Managed by Docker mount. Update LGG_GAMES_ROOT in docker/.env (or shell env) and restart the container to change this path.",
+    "dockerManagedRootsWarning": "Games root and metadata mirror root are managed by Docker mounts. Update LGG_GAMES_ROOT and LGG_METADATA_MIRROR_ROOT in docker/.env (or shell env) and restart the container to change these paths.",
+    "folderPickerUnavailableInBrowser": "Folder picker is unavailable for this connection. Use desktop mode or a same-machine host session, or enter the host path manually.",
+    "metadataMirrorRoot": "Metadata mirror root",
+    "metadataMirrorRootPlaceholder": "D:\\Games-Metadata-Mirror or /home/you/Games-Metadata-Mirror",
+    "metadataMirrorRootLockedByDocker": "Managed by Docker mount. Update LGG_METADATA_MIRROR_ROOT in docker/.env (or shell env) and restart the container to change this path.",
+    "metadataMirrorRootHint": "Used as a synchronized metadata/pictures mirror and fallback browse source when the main games root is unavailable.",
+    "chooseMirrorFolder": "Choose metadata mirror folder",
+    "metadataMirrorSyncConfirm": "Mirror folder saved. Run initial metadata mirror sync now?",
+    "metadataMirrorSyncTitle": "Run initial metadata mirror sync now?",
+    "metadataMirrorSyncBody": "This sync reconciles mirror metadata and pictures against your current games root so fallback browsing is ready if the source root becomes unavailable.",
+    "metadataMirrorSyncNow": "Sync now",
+    "metadataMirrorSyncLater": "Later",
+    "metadataMirrorParitySyncAction": "Run complete parity sync",
+    "metadataMirrorParitySyncHint": "Runs a full mirror parity reconciliation and may remove mirror pictures that no longer exist in the primary games root.",
+    "metadataMirrorParitySyncConfirmTitle": "Run complete parity sync?",
+    "metadataMirrorParitySyncConfirmBody": "This manual sync enforces full parity between games root and metadata mirror, including removing mirror pictures that no longer exist in the source. Continue?",
+    "metadataMirrorParitySyncConfirmAction": "Run parity sync",
+    "metadataMirrorParitySyncCancel": "Cancel",
     "excludePatterns": "Exclude patterns",
     "hideDotEntries": "Hide dot-prefixed files and folders",
     "versionFolderPattern": "Version folder pattern",
@@ -237,7 +257,11 @@
     "pickRootFirst": "Pick a root folder to begin.",
     "failedLoadConfig": "Failed to load configuration.",
     "libraryFolderSaved": "Library folder saved.",
+    "metadataMirrorFolderSaved": "Metadata mirror folder saved.",
+    "metadataMirrorRootRequiredForParitySync": "Set a metadata mirror root before running parity sync.",
+    "metadataMirrorParitySyncCompleted": "Complete parity sync finished for {{count}} game folders.",
     "failedOpenFolderPicker": "Failed to open folder picker.",
+    "failedOpenMirrorFolderPicker": "Failed to open metadata mirror folder picker.",
     "configurationSaved": "Configuration saved.",
     "failedSaveConfig": "Failed to save configuration.",
     "failedPersistViewMode": "Failed to persist selected view mode.",
@@ -286,6 +310,7 @@
     "failedRemoveVaultPin": "Failed to remove vault PIN.",
     "failedUpdateVault": "Failed to update vault membership.",
     "scanCompletedNoMatches": "Scan completed. No games matched yet.",
+    "launchDisabledMirrorFallback": "Game launching is disabled while browsing from metadata mirror fallback.",
     "failedScanGameFolders": "Failed to scan game folders."
   }
 }

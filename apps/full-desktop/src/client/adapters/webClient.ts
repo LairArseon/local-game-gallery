@@ -20,6 +20,7 @@ import type {
   RemoveScreenshotPayload,
   ReorderScreenshotsPayload,
   SaveGameMetadataPayload,
+  ScanRequestOptions,
   ScanResult,
   ServiceApiVersionInfo,
   ServiceCapabilities,
@@ -464,7 +465,16 @@ export const webClient: GalleryClient = {
     });
   },
   async pickGamesRoot() {
-    return null;
+    const response = await requestApi<{ selectedPath: string | null }>('/api/pick-games-root', {
+      method: 'POST',
+    });
+    return response.selectedPath ?? null;
+  },
+  async pickMetadataMirrorRoot() {
+    const response = await requestApi<{ selectedPath: string | null }>('/api/pick-metadata-mirror-root', {
+      method: 'POST',
+    });
+    return response.selectedPath ?? null;
   },
   async pickAppIconPng() {
     return null;
@@ -487,9 +497,10 @@ export const webClient: GalleryClient = {
       message: 'Runtime icon apply is only available on the host desktop app.',
     };
   },
-  async scanGames() {
+  async scanGames(options?: ScanRequestOptions) {
     return requestApi<ScanResult>('/api/scan', {
       method: 'POST',
+      body: JSON.stringify(options ?? {}),
     });
   },
   async showGameContextMenu(payload: GameContextMenuPayload) {

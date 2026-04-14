@@ -17,6 +17,7 @@ services:
     volumes:
       - "${LGG_DATA_ROOT:?Set LGG_DATA_ROOT to an absolute host folder}:${LGG_DATA_DIR}"
       - "${LGG_GAMES_ROOT:?Set LGG_GAMES_ROOT to an absolute host folder}:/games"
+      - "${LGG_METADATA_MIRROR_ROOT:?Set LGG_METADATA_MIRROR_ROOT to an absolute host folder}:/metadata-mirror"
 
   gallery-web:
     build:

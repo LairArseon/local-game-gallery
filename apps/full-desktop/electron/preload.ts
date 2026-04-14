@@ -17,6 +17,7 @@ import type {
   PlayGamePayload,
   ReorderScreenshotsPayload,
   SaveGameMetadataPayload,
+  ScanRequestOptions,
   ServiceApiVersionInfo,
   ServiceCapabilities,
   ServiceHealthStatus,
@@ -34,6 +35,7 @@ const api: GalleryApi = {
   getConfig: () => ipcRenderer.invoke('gallery:get-config'),
   saveConfig: (config: GalleryConfig) => ipcRenderer.invoke('gallery:save-config', config),
   pickGamesRoot: () => ipcRenderer.invoke('gallery:pick-games-root'),
+  pickMetadataMirrorRoot: () => ipcRenderer.invoke('gallery:pick-metadata-mirror-root'),
   pickAppIconPng: (): Promise<string | null> => ipcRenderer.invoke('gallery:pick-app-icon-png'),
   inspectAppIconFile: (payload: AppIconInspectPayload): Promise<AppIconInspectResult> =>
     ipcRenderer.invoke('gallery:inspect-app-icon-file', payload),
@@ -41,7 +43,7 @@ const api: GalleryApi = {
     ipcRenderer.invoke('gallery:stage-dropped-app-icon', payload),
   applyRuntimeAppIcon: (payload: ApplyRuntimeAppIconPayload): Promise<ApplyRuntimeAppIconResult> =>
     ipcRenderer.invoke('gallery:apply-runtime-app-icon', payload),
-  scanGames: () => ipcRenderer.invoke('gallery:scan-games'),
+  scanGames: (options?: ScanRequestOptions) => ipcRenderer.invoke('gallery:scan-games', options),
   showGameContextMenu: (payload: GameContextMenuPayload) => ipcRenderer.invoke('gallery:show-game-context-menu', payload),
   showVersionContextMenu: (payload: VersionContextMenuPayload) => ipcRenderer.invoke('gallery:show-version-context-menu', payload),
   showVaultContextMenu: (payload: VaultContextMenuPayload) => ipcRenderer.invoke('gallery:show-vault-context-menu', payload),

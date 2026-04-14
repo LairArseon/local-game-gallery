@@ -21,6 +21,7 @@ type UseAppViewHandlersArgs = {
   applyAppIconNow: () => Promise<unknown>;
   openFolderInExplorer: (folderPath: string) => Promise<unknown>;
   setDetailGamePath: (value: string | null) => void;
+  canLaunch: boolean;
   supportsNativeContextMenu: boolean;
   isVaultOpen: boolean;
   hasVaultPin: boolean;
@@ -35,6 +36,7 @@ export function useAppViewHandlers({
   applyAppIconNow,
   openFolderInExplorer,
   setDetailGamePath,
+  canLaunch,
   supportsNativeContextMenu,
   isVaultOpen,
   hasVaultPin,
@@ -98,10 +100,11 @@ export function useAppViewHandlers({
       gameName: targetGame.name,
       isVaultOpen,
       isGameVaulted: targetGame.isVaulted,
+      canPlay: canLaunch,
       anchorX: event.clientX,
       anchorY: event.clientY,
     });
-  }, [galleryClient, isVaultOpen]);
+  }, [canLaunch, galleryClient, isVaultOpen]);
 
   const onOpenVaultContextMenu = useCallback((event: MouseEvent<HTMLButtonElement>, hasPinFromUI: boolean) => {
     event.preventDefault();

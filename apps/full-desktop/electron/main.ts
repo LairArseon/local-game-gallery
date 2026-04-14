@@ -30,6 +30,7 @@ import type {
   PlayGameResult,
   RemoveScreenshotPayload,
   ReorderScreenshotsPayload,
+  ScanRequestOptions,
   SaveGameMetadataPayload,
   ServiceApiVersionInfo,
   ServiceCapabilities,
@@ -61,6 +62,7 @@ function getServiceHealthSnapshot(): ServiceHealthStatus {
 function getDesktopServiceCapabilities(): ServiceCapabilities {
   return {
     supportsLaunch: true,
+    supportsHostFolderPicker: true,
     launchPolicy: 'host-desktop-only',
     supportsNativeContextMenu: true,
     supportsTrayLifecycle: true,
@@ -494,6 +496,21 @@ ipcMain.handle('gallery:pick-games-root', async () => {
   return result.filePaths[0] ?? null;
 });
 
+ipcMain.handle('gallery:pick-metadata-mirror-root', async () => {
+  const window = BrowserWindow.getFocusedWindow() ?? mainWindow;
+  const options: OpenDialogOptions = {
+    properties: ['openDirectory'],
+    title: 'Choose metadata mirror folder',
+  };
+  const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
+
+  if (result.canceled) {
+    return null;
+  }
+
+  return result.filePaths[0] ?? null;
+});
+
 ipcMain.handle('gallery:pick-app-icon-png', async () => {
   const window = BrowserWindow.getFocusedWindow() ?? mainWindow;
   const options: OpenDialogOptions = {
@@ -638,9 +655,19 @@ ipcMain.handle('gallery:apply-runtime-app-icon', async (_event, payload: ApplyRu
   };
 });
 
-ipcMain.handle('gallery:scan-games', async () => {
+ipcMain.handle('gallery:scan-games', async (_event, requestOptions?: ScanRequestOptions) => {
   const config = await loadConfig();
-  return scanGames(config);
+  try {
+    return await scanGames(config, requestOptions);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Scan failed.';
+    await appendLogEvent({
+      level: 'error',
+      source: 'scan-sync',
+      message: `Desktop scan request failed: ${message}`,
+    }).catch(() => undefined);
+    throw error;
+  }
 });
 
 ipcMain.handle('gallery:save-game-metadata', async (_event, payload: SaveGameMetadataPayload) => {
@@ -924,6 +951,7 @@ ipcMain.handle('gallery:show-game-context-menu', (event, payload: GameContextMen
     },
     {
       label: 'Play',
+      enabled: payload.canPlay !== false,
       click: () => {
         window.webContents.send('gallery:context-menu-action', {
           action: 'play',
