@@ -12,6 +12,12 @@ import type { GalleryConfig, GalleryViewMode } from '../types';
 import { clamp } from '../utils/app-helpers';
 
 const gridGapPx = 18;
+const narrowViewportMaxWidthPx = 760;
+const narrowViewportMinColumns = {
+  poster: 3,
+  card: 2,
+} as const;
+
 const gridMinCardWidthPx: Record<GalleryViewMode, number> = {
   poster: 210,
   card: 320,
@@ -39,7 +45,8 @@ export function useResponsiveGrid({
   setGridColumns,
 }: UseResponsiveGridArgs) {
   useEffect(() => {
-    if (viewMode !== 'poster' && viewMode !== 'card') {
+    const activeViewMode = viewMode;
+    if (activeViewMode !== 'poster' && activeViewMode !== 'card') {
       return;
     }
 
@@ -48,14 +55,18 @@ export function useResponsiveGrid({
       return;
     }
 
-    const minCardWidth = gridMinCardWidthPx[viewMode] * clamp(effectiveMediaScale, 0.7, 1.6);
+    const minCardWidth = gridMinCardWidthPx[activeViewMode] * clamp(effectiveMediaScale, 0.7, 1.6);
     const updateColumns = () => {
       const width = container.clientWidth;
       const maxFitColumns = Math.max(1, Math.floor((width + gridGapPx) / (minCardWidth + gridGapPx)));
-      const configuredColumns = viewMode === 'poster' ? config?.posterColumns : config?.cardColumns;
+      const configuredColumns = activeViewMode === 'poster' ? config?.posterColumns : config?.cardColumns;
       // Respect user preference when possible, but never exceed currently available width.
       const preferredColumns = configuredColumns && configuredColumns > 0 ? configuredColumns : maxFitColumns;
-      const nextColumns = Math.max(1, Math.min(preferredColumns, maxFitColumns));
+      const boundedColumns = Math.max(1, Math.min(preferredColumns, maxFitColumns));
+      const isNarrowViewport = window.innerWidth <= narrowViewportMaxWidthPx;
+      const nextColumns = isNarrowViewport
+        ? Math.max(narrowViewportMinColumns[activeViewMode], boundedColumns)
+        : boundedColumns;
       setGridColumns(nextColumns);
     };
 

@@ -123,6 +123,7 @@
     "cancel": "Cancelar",
     "load": "Cargar",
     "delete": "Eliminar",
+    "rename": "Renombrar",
     "noPresets": "Todavía no hay preajustes guardados.",
     "resetStaged": "Restablecer borrador",
     "apply": "Aplicar"
@@ -245,6 +246,8 @@
     "failedSaveFilterPreset": "No se pudo guardar el preajuste de filtro.",
     "removedPreset": "Se eliminó el preajuste {{name}}.",
     "failedDeleteFilterPreset": "No se pudo eliminar el preajuste de filtro.",
+    "filterPresetRenamed": "Se renombró el preajuste {{currentName}} a {{nextName}}.",
+    "failedRenameFilterPreset": "No se pudo renombrar el preajuste de filtro.",
     "metadataSaved": "Metadatos guardados.",
     "failedSaveMetadata": "No se pudieron guardar los metadatos.",
     "picturesUpdated": "Imágenes actualizadas.",

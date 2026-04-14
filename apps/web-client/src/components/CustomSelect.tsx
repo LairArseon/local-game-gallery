@@ -190,7 +190,7 @@ export function CustomSelect({ value, options, ariaLabel, onChange, className }:
   const selectedOption = options.find((option) => option.value === value) ?? options[0];
 
   return (
-    <div className={`custom-select ${className ?? ''}`.trim()} ref={rootRef}>
+    <div className={`custom-select ${isOpen ? 'custom-select--open' : ''} ${className ?? ''}`.trim()} ref={rootRef}>
       <button
         ref={triggerRef}
         type="button"

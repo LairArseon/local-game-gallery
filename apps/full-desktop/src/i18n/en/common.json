@@ -123,6 +123,7 @@
     "cancel": "Cancel",
     "load": "Load",
     "delete": "Delete",
+    "rename": "Rename",
     "noPresets": "No saved presets yet.",
     "resetStaged": "Reset staged",
     "apply": "Apply"
@@ -245,6 +246,8 @@
     "failedSaveFilterPreset": "Failed to save filter preset.",
     "removedPreset": "Removed preset {{name}}.",
     "failedDeleteFilterPreset": "Failed to delete filter preset.",
+    "filterPresetRenamed": "Renamed preset {{currentName}} to {{nextName}}.",
+    "failedRenameFilterPreset": "Failed to rename filter preset.",
     "metadataSaved": "Metadata saved.",
     "failedSaveMetadata": "Failed to save metadata.",
     "picturesUpdated": "Pictures updated.",

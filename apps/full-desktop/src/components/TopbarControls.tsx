@@ -86,70 +86,72 @@ export function TopbarControls({
           />
         </label>
       </div>
-      <button
-        className={`button button--icon-only ${isTagPoolPanelOpen ? 'is-active' : ''}`}
-        type="button"
-        onClick={onToggleTagPoolPanel}
-        aria-pressed={isTagPoolPanelOpen}
-        aria-label={isTagPoolPanelOpen ? actionLabels.hideTagPool : actionLabels.showTagPool}
-        title={isTagPoolPanelOpen ? actionLabels.hideTagPool : actionLabels.showTagPool}
-      >
-        <Tag size={16} aria-hidden="true" />
-      </button>
-      <button
-        className={`button button--primary button--icon-only ${isFilterPanelOpen ? 'is-active' : ''}`}
-        type="button"
-        onClick={onToggleFilterPanel}
-        aria-pressed={isFilterPanelOpen}
-        aria-label={isFilterPanelOpen ? actionLabels.hideFilters : actionLabels.showFilters}
-        title={isFilterPanelOpen ? actionLabels.hideFilters : actionLabels.showFilters}
-      >
-        <SlidersHorizontal size={16} aria-hidden="true" />
-      </button>
-      <button
-        className={`button button--icon-only ${isVaultOpen ? 'is-vault-open' : 'is-vault-closed'}`}
-        type="button"
-        onClick={onToggleVault}
-        onContextMenu={(event) => onOpenVaultContextMenu(event, hasVaultPin)}
-        aria-pressed={isVaultOpen}
-        aria-label={isVaultOpen ? actionLabels.hideVault : actionLabels.showVault}
-        title={isVaultOpen ? actionLabels.hideVault : actionLabels.showVault}
-      >
-        {isVaultOpen ? <LockOpen size={16} aria-hidden="true" /> : <Lock size={16} aria-hidden="true" />}
-      </button>
-      <button
-        className={`button button--icon-only topbar-notification-button ${isVersionNotificationsOpen ? 'is-active' : ''}`}
-        type="button"
-        onClick={onToggleVersionNotifications}
-        aria-pressed={isVersionNotificationsOpen}
-        aria-label={isVersionNotificationsOpen ? actionLabels.hideVersionNotifications : actionLabels.showVersionNotifications}
-        title={isVersionNotificationsOpen ? actionLabels.hideVersionNotifications : actionLabels.showVersionNotifications}
-      >
-        <Bell size={16} aria-hidden="true" />
-        {versionMismatchCount > 0 ? (
-          <span className="topbar-notification-button__count">{versionMismatchCount}</span>
-        ) : null}
-      </button>
-      <button
-        className={`button button--icon-only ${isSidebarOpen ? 'is-active' : ''}`}
-        type="button"
-        onClick={onToggleSidebar}
-        aria-pressed={isSidebarOpen}
-        aria-label={isSidebarOpen ? actionLabels.hideSetup : actionLabels.showSetup}
-        title={isSidebarOpen ? actionLabels.hideSetup : actionLabels.showSetup}
-      >
-        <Settings size={16} aria-hidden="true" />
-      </button>
-      <button
-        className={`button button--icon-only ${isScanning ? 'is-busy' : ''}`}
-        type="button"
-        onClick={onRescan}
-        disabled={isScanning}
-        aria-label={isScanning ? actionLabels.scanning : actionLabels.rescan}
-        title={isScanning ? actionLabels.scanning : actionLabels.rescan}
-      >
-        <RefreshCw size={16} aria-hidden="true" className={isScanning ? 'icon-spin' : undefined} />
-      </button>
+      <div className="topbar__action-buttons">
+        <button
+          className={`button button--icon-only ${isTagPoolPanelOpen ? 'is-active' : ''}`}
+          type="button"
+          onClick={onToggleTagPoolPanel}
+          aria-pressed={isTagPoolPanelOpen}
+          aria-label={isTagPoolPanelOpen ? actionLabels.hideTagPool : actionLabels.showTagPool}
+          title={isTagPoolPanelOpen ? actionLabels.hideTagPool : actionLabels.showTagPool}
+        >
+          <Tag size={16} aria-hidden="true" />
+        </button>
+        <button
+          className={`button button--primary button--icon-only ${isFilterPanelOpen ? 'is-active' : ''}`}
+          type="button"
+          onClick={onToggleFilterPanel}
+          aria-pressed={isFilterPanelOpen}
+          aria-label={isFilterPanelOpen ? actionLabels.hideFilters : actionLabels.showFilters}
+          title={isFilterPanelOpen ? actionLabels.hideFilters : actionLabels.showFilters}
+        >
+          <SlidersHorizontal size={16} aria-hidden="true" />
+        </button>
+        <button
+          className={`button button--icon-only ${isVaultOpen ? 'is-vault-open' : 'is-vault-closed'}`}
+          type="button"
+          onClick={onToggleVault}
+          onContextMenu={(event) => onOpenVaultContextMenu(event, hasVaultPin)}
+          aria-pressed={isVaultOpen}
+          aria-label={isVaultOpen ? actionLabels.hideVault : actionLabels.showVault}
+          title={isVaultOpen ? actionLabels.hideVault : actionLabels.showVault}
+        >
+          {isVaultOpen ? <LockOpen size={16} aria-hidden="true" /> : <Lock size={16} aria-hidden="true" />}
+        </button>
+        <button
+          className={`button button--icon-only topbar-notification-button ${isVersionNotificationsOpen ? 'is-active' : ''}`}
+          type="button"
+          onClick={onToggleVersionNotifications}
+          aria-pressed={isVersionNotificationsOpen}
+          aria-label={isVersionNotificationsOpen ? actionLabels.hideVersionNotifications : actionLabels.showVersionNotifications}
+          title={isVersionNotificationsOpen ? actionLabels.hideVersionNotifications : actionLabels.showVersionNotifications}
+        >
+          <Bell size={16} aria-hidden="true" />
+          {versionMismatchCount > 0 ? (
+            <span className="topbar-notification-button__count">{versionMismatchCount}</span>
+          ) : null}
+        </button>
+        <button
+          className={`button button--icon-only ${isSidebarOpen ? 'is-active' : ''}`}
+          type="button"
+          onClick={onToggleSidebar}
+          aria-pressed={isSidebarOpen}
+          aria-label={isSidebarOpen ? actionLabels.hideSetup : actionLabels.showSetup}
+          title={isSidebarOpen ? actionLabels.hideSetup : actionLabels.showSetup}
+        >
+          <Settings size={16} aria-hidden="true" />
+        </button>
+        <button
+          className={`button button--icon-only ${isScanning ? 'is-busy' : ''}`}
+          type="button"
+          onClick={onRescan}
+          disabled={isScanning}
+          aria-label={isScanning ? actionLabels.scanning : actionLabels.rescan}
+          title={isScanning ? actionLabels.scanning : actionLabels.rescan}
+        >
+          <RefreshCw size={16} aria-hidden="true" className={isScanning ? 'icon-spin' : undefined} />
+        </button>
+      </div>
     </div>
   );
 }

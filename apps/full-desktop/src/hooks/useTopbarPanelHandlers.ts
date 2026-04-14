@@ -34,6 +34,7 @@ type UseTopbarPanelHandlersArgs = {
   addTagToPool: () => void;
   setActiveTagPoolEditorIndex: Dispatch<SetStateAction<number | null>>;
   saveCurrentFilterPreset: () => Promise<unknown> | void;
+  renameFilterPreset: (currentName: string, nextName: string) => Promise<unknown> | void;
   deleteFilterPreset: (name: string) => Promise<unknown> | void;
   setIsPresetNamingOpen: Dispatch<SetStateAction<boolean>>;
   setDraftPresetName: Dispatch<SetStateAction<string>>;
@@ -53,6 +54,7 @@ export function useTopbarPanelHandlers({
   addTagToPool,
   setActiveTagPoolEditorIndex,
   saveCurrentFilterPreset,
+  renameFilterPreset,
   deleteFilterPreset,
   setIsPresetNamingOpen,
   setDraftPresetName,
@@ -154,6 +156,10 @@ export function useTopbarPanelHandlers({
     void deleteFilterPreset(name);
   }, [deleteFilterPreset]);
 
+  const onRenameFilterPreset = useCallback((currentName: string, nextName: string) => {
+    void renameFilterPreset(currentName, nextName);
+  }, [renameFilterPreset]);
+
   return {
     onRemoveTag,
     onFinalizeTagPoolEdit,
@@ -169,6 +175,7 @@ export function useTopbarPanelHandlers({
     onAddSuggestionTag,
     onSaveCurrentFilterPreset,
     onCancelPresetNaming,
+    onRenameFilterPreset,
     onDeleteFilterPreset,
     startTagPoolEdit,
     updateTagPoolEditorValue,

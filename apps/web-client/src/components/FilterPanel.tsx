@@ -1,15 +1,15 @@
 ﻿/**
- * Staged filter editor for rules, ordering, status constraints, and presets.
+ * Filter editor for rules, ordering, status constraints, and presets.
  *
- * The panel separates draft filter edits from applied gallery state so users can
- * experiment before committing changes. It supports tag autocomplete, exclusion
- * syntax (prefix with '-'), quick suggestions, and preset persistence actions.
- * All state mutations are delegated via callbacks, keeping this component purely
- * presentational and easy to evolve without touching business logic.
+ * The panel edits draft controls that are reflected immediately in the active
+ * gallery filter state. It supports tag autocomplete, exclusion syntax (prefix
+ * with '-'), quick suggestions, and preset persistence actions. All state
+ * mutations are delegated via callbacks, keeping this component presentational
+ * and easy to evolve without touching business logic.
  *
- * New to this project: this panel edits filter drafts before apply; trace its callbacks to useFilterManager to see how rules become the final filtered list.
+ * New to this project: trace callbacks to useFilterManager to see how draft edits drive the final filtered list instantly.
  */
-import type { KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CustomSelect } from './CustomSelect';
 import type { FilterOrderByMode, FilterPreset } from '../types';
@@ -26,6 +26,12 @@ type TopUsedSuggestion = {
   tag: string;
   count: number;
 };
+
+type PresetContextMenuState = {
+  x: number;
+  y: number;
+  presetName: string;
+} | null;
 
 type FilterPanelProps = {
   draftTagRules: string[];
@@ -58,10 +64,10 @@ type FilterPanelProps = {
   onChangeDraftPresetName: (value: string) => void;
   onSaveCurrentFilterPreset: () => void;
   onCancelPresetNaming: () => void;
+  onRenameFilterPreset: (currentName: string, nextName: string) => void;
   onLoadFilterPreset: (preset: FilterPreset) => void;
   onDeleteFilterPreset: (name: string) => void;
   onResetStagedFilters: () => void;
-  onApplyFiltersAndOrdering: () => void;
 };
 
 export function FilterPanel({
@@ -95,12 +101,76 @@ export function FilterPanel({
   onChangeDraftPresetName,
   onSaveCurrentFilterPreset,
   onCancelPresetNaming,
+  onRenameFilterPreset,
   onLoadFilterPreset,
   onDeleteFilterPreset,
   onResetStagedFilters,
-  onApplyFiltersAndOrdering,
 }: FilterPanelProps) {
   const { t } = useTranslation();
+  const [presetContextMenu, setPresetContextMenu] = useState<PresetContextMenuState>(null);
+  const [activePresetRenameName, setActivePresetRenameName] = useState<string | null>(null);
+  const [draftPresetRenameName, setDraftPresetRenameName] = useState('');
+  const presetContextMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!presetContextMenu) {
+      return;
+    }
+
+    const closeContextMenuIfOutside = (event: MouseEvent) => {
+      const targetNode = event.target as Node | null;
+      if (targetNode && presetContextMenuRef.current?.contains(targetNode)) {
+        return;
+      }
+
+      setPresetContextMenu(null);
+    };
+
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setPresetContextMenu(null);
+      }
+    };
+
+    window.addEventListener('mousedown', closeContextMenuIfOutside, true);
+    window.addEventListener('contextmenu', closeContextMenuIfOutside, true);
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      window.removeEventListener('mousedown', closeContextMenuIfOutside, true);
+      window.removeEventListener('contextmenu', closeContextMenuIfOutside, true);
+      window.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [presetContextMenu]);
+
+  useEffect(() => {
+    if (!activePresetRenameName) {
+      return;
+    }
+
+    const renameTargetExists = filterPresets.some((preset) => preset.name === activePresetRenameName);
+    if (!renameTargetExists) {
+      setActivePresetRenameName(null);
+      setDraftPresetRenameName('');
+    }
+  }, [activePresetRenameName, filterPresets]);
+
+  function beginPresetRename(name: string) {
+    setActivePresetRenameName(name);
+    setDraftPresetRenameName(name);
+    setPresetContextMenu(null);
+  }
+
+  function finalizePresetRename(currentName: string) {
+    const nextName = draftPresetRenameName.trim();
+    setActivePresetRenameName(null);
+    setDraftPresetRenameName('');
+
+    if (!nextName || nextName.toLowerCase() === currentName.trim().toLowerCase()) {
+      return;
+    }
+
+    onRenameFilterPreset(currentName, nextName);
+  }
 
   return (
     <section className="topbar-filters">
@@ -285,22 +355,99 @@ export function FilterPanel({
             {filterPresets.length ? (
               <div className="topbar-presets__list">
                 {filterPresets.map((preset) => (
-                  <div className="topbar-presets__item" key={preset.name}>
-                    <p>{preset.name}</p>
-                    <div className="topbar-presets__item-actions">
-                      <button className="button button--icon" type="button" onClick={() => onLoadFilterPreset(preset)}>
-                        {t('filters.load')}
+                  <div
+                    className="topbar-presets__item"
+                    key={preset.name}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      setPresetContextMenu({
+                        x: event.clientX,
+                        y: event.clientY,
+                        presetName: preset.name,
+                      });
+                    }}
+                  >
+                    {activePresetRenameName === preset.name ? (
+                      <input
+                        className="topbar-presets__rename-input"
+                        type="text"
+                        autoFocus
+                        value={draftPresetRenameName}
+                        onChange={(event) => setDraftPresetRenameName(event.target.value)}
+                        onBlur={() => {
+                          finalizePresetRename(preset.name);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            finalizePresetRename(preset.name);
+                          }
+
+                          if (event.key === 'Escape') {
+                            event.preventDefault();
+                            setActivePresetRenameName(null);
+                            setDraftPresetRenameName('');
+                          }
+                        }}
+                      />
+                    ) : (
+                      <button
+                        className="topbar-presets__item-main"
+                        type="button"
+                        onClick={() => onLoadFilterPreset(preset)}
+                      >
+                        <span className="topbar-presets__item-main-text">{preset.name}</span>
                       </button>
-                      <button className="button button--icon" type="button" onClick={() => onDeleteFilterPreset(preset.name)}>
-                        {t('filters.delete')}
-                      </button>
-                    </div>
+                    )}
+                    <button
+                      className="topbar-presets__item-delete"
+                      type="button"
+                      aria-label={t('filters.delete')}
+                      title={t('filters.delete')}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onDeleteFilterPreset(preset.name);
+                      }}
+                    >
+                      -
+                    </button>
                   </div>
                 ))}
               </div>
             ) : (
               <p className="topbar-filters__hint">{t('filters.noPresets')}</p>
             )}
+
+            {presetContextMenu ? (
+              <div
+                className="context-menu"
+                ref={presetContextMenuRef}
+                style={{ left: presetContextMenu.x, top: presetContextMenu.y }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                }}
+              >
+                <button
+                  className="context-menu__item"
+                  type="button"
+                  onClick={() => {
+                    beginPresetRename(presetContextMenu.presetName);
+                  }}
+                >
+                  {t('filters.rename')}
+                </button>
+                <button
+                  className="context-menu__item context-menu__item--danger"
+                  type="button"
+                  onClick={() => {
+                    onDeleteFilterPreset(presetContextMenu.presetName);
+                    setPresetContextMenu(null);
+                  }}
+                >
+                  {t('filters.delete')}
+                </button>
+              </div>
+            ) : null}
           </section>
         </div>
       </div>
@@ -308,9 +455,6 @@ export function FilterPanel({
       <div className="topbar-filters__actions">
         <button className="button topbar-filters__action-button topbar-filters__action-button--reset" type="button" onClick={onResetStagedFilters}>
           {t('filters.resetStaged')}
-        </button>
-        <button className="button button--primary topbar-filters__action-button topbar-filters__action-button--apply" type="button" onClick={onApplyFiltersAndOrdering}>
-          {t('filters.apply')}
         </button>
       </div>
     </section>

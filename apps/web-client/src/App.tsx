@@ -59,6 +59,8 @@ const dynamicScaleBaselineColumns: Record<'poster' | 'card', number> = {
   card: 4,
 };
 
+const narrowViewportMaxWidthPx = 760;
+
 const desktopCapabilities: ServiceCapabilities = {
   supportsLaunch: true,
   launchPolicy: 'host-desktop-only',
@@ -95,6 +97,9 @@ function App() {
   const [viewMode, setViewMode] = useState<GalleryViewMode>('poster');
   const [selectedGamePath, setSelectedGamePath] = useState<string | null>(null);
   const [detailGamePath, setDetailGamePath] = useState<string | null>(null);
+  const [isNarrowViewport, setIsNarrowViewport] = useState(() => (
+    typeof window !== 'undefined' ? window.innerWidth <= narrowViewportMaxWidthPx : false
+  ));
   const [gridColumns, setGridColumns] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [isTagPoolPanelOpen, setIsTagPoolPanelOpen] = useState(false);
@@ -125,6 +130,19 @@ function App() {
   }, [config?.language, i18n]);
 
   useEffect(() => {
+    const updateViewportMode = () => {
+      setIsNarrowViewport(window.innerWidth <= narrowViewportMaxWidthPx);
+    };
+
+    updateViewportMode();
+    window.addEventListener('resize', updateViewportMode);
+
+    return () => {
+      window.removeEventListener('resize', updateViewportMode);
+    };
+  }, []);
+
+  useEffect(() => {
     let isMounted = true;
 
     const loadServiceCapabilities = async () => {
@@ -144,6 +162,14 @@ function App() {
       isMounted = false;
     };
   }, [galleryClient]);
+
+  useEffect(() => {
+    if (!isNarrowViewport || !detailGamePath) {
+      return;
+    }
+
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [detailGamePath, isNarrowViewport]);
 
   const canLaunch = serviceCapabilities.supportsLaunch;
   const canOpenFolders = serviceCapabilities.supportsLaunch;
@@ -275,8 +301,8 @@ function App() {
     beginSavePreset,
     saveCurrentFilterPreset,
     loadFilterPresetToDraft,
+    renameFilterPreset,
     deleteFilterPreset,
-    applyFiltersAndOrdering,
   } = useFilterManager({
     config,
     setConfig,
@@ -381,6 +407,15 @@ function App() {
     toErrorMessage,
   });
 
+  const handleGameSelection = (gamePath: string) => {
+    if (isNarrowViewport) {
+      openGameDetailFromPath(gamePath);
+      return;
+    }
+
+    toggleGameSelection(gamePath);
+  };
+
   // Every status-bar message is mirrored to logs for time-ordered event history.
   useEffect(() => {
     // Mirror user-facing status updates into logs for postmortem troubleshooting.
@@ -456,6 +491,7 @@ function App() {
     onAddSuggestionTag,
     onSaveCurrentFilterPreset,
     onCancelPresetNaming,
+    onRenameFilterPreset,
     onDeleteFilterPreset,
   } = useTopbarPanelHandlers({
     draftTagRules,
@@ -471,6 +507,7 @@ function App() {
     addTagToPool,
     setActiveTagPoolEditorIndex,
     saveCurrentFilterPreset,
+    renameFilterPreset,
     deleteFilterPreset,
     setIsPresetNamingOpen,
     setDraftPresetName,
@@ -626,13 +663,15 @@ function App() {
     renderInlinePosterCardFocus,
   } = useGalleryRenderers({
     viewMode,
+    isNarrowViewport,
+    enableInlineFocus: !isNarrowViewport,
     selectedGamePath,
     filteredGames: visibleFilteredGames,
     gridColumns,
     canLaunch,
     actionLabels,
     getImageSrc: filePathToSrc,
-    onToggleSelection: toggleGameSelection,
+    onToggleSelection: handleGameSelection,
     onPlayClick: handlePlayClick,
     onPlayWithVersionPromptClick: handlePlayWithVersionPromptClick,
     onOpenDetail: handleOpenDetail,
@@ -648,8 +687,8 @@ function App() {
 
   // Derived selection state for list/focus panes and detail page routing.
   const selectedGame = useMemo(
-    () => visibleFilteredGames.find((game) => game.path === selectedGamePath) ?? null,
-    [visibleFilteredGames, selectedGamePath],
+    () => (isNarrowViewport ? null : visibleFilteredGames.find((game) => game.path === selectedGamePath) ?? null),
+    [isNarrowViewport, visibleFilteredGames, selectedGamePath],
   );
 
   const detailGame = useMemo(
@@ -718,9 +757,11 @@ function App() {
   }
 
   const detailBackgroundSrc = detailGame ? filePathToSrc(detailGame.media.background) : null;
+  const hideTopbarForDetail = isNarrowViewport && Boolean(detailGame);
   return (
     <main className="shell">
       {/* Topbar flow: search + panel toggles + staged tag/filter editing surfaces. */}
+      {!hideTopbarForDetail ? (
       <header className="topbar panel">
         <div className="topbar__title">
           <p className="eyebrow">{t('app.title')}</p>
@@ -814,13 +855,14 @@ function App() {
             onChangeDraftPresetName: setDraftPresetName,
             onSaveCurrentFilterPreset: onSaveCurrentFilterPreset,
             onCancelPresetNaming: onCancelPresetNaming,
+            onRenameFilterPreset: onRenameFilterPreset,
             onLoadFilterPreset: loadFilterPresetToDraft,
             onDeleteFilterPreset: onDeleteFilterPreset,
             onResetStagedFilters: resetStagedFilters,
-            onApplyFiltersAndOrdering: applyFiltersAndOrdering,
           }}
         />
       </header>
+      ) : null}
 
       {/* Main split flow: setup/config controls on the left, library/detail on the right. */}
       <section className={`layout ${detailGame ? 'layout--detail' : ''}`}>

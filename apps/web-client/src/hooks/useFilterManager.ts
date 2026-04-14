@@ -6,9 +6,9 @@
  * Centralizing this logic avoids duplicated query/tag/status/score semantics and
  * keeps filter behavior consistent across UI entry points.
  *
- * New to this project: this hook defines filtering semantics (draft vs applied, presets, ordering); start with filteredGames and applyFiltersAndOrdering outputs.
+ * New to this project: this hook defines filtering semantics (draft vs applied, presets, ordering); start with filteredGames output.
  */
-import { useMemo, useState, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGalleryClient } from '../client/context';
 import type { FilterOrderByMode, FilterPreset, GalleryConfig, GameSummary } from '../types';
@@ -154,6 +154,45 @@ export function useFilterManager({
     setDraftOrderBy(preset.orderBy);
   }
 
+  async function renameFilterPreset(currentName: string, nextNameRaw: string) {
+    if (!config) {
+      return;
+    }
+
+    const nextName = nextNameRaw.trim();
+    if (!nextName || nextName.toLowerCase() === currentName.trim().toLowerCase()) {
+      return;
+    }
+
+    const sourcePreset = config.filterPresets.find((entry) => entry.name === currentName);
+    if (!sourcePreset) {
+      return;
+    }
+
+    const nextPreset: FilterPreset = {
+      ...sourcePreset,
+      name: nextName,
+    };
+
+    const nextPresets = [
+      ...config.filterPresets.filter((entry) => entry.name !== currentName && entry.name.toLowerCase() !== nextName.toLowerCase()),
+      nextPreset,
+    ];
+
+    try {
+      const savedConfig = await galleryClient.saveConfig({
+        ...config,
+        filterPresets: nextPresets,
+      });
+      setConfig(savedConfig);
+      setStatus(t('status.filterPresetRenamed', { currentName, nextName }));
+    } catch (error) {
+      const logMessage = toErrorMessage(error, 'Failed to rename filter preset.');
+      setStatus(t('status.failedRenameFilterPreset'));
+      void logAppEvent(logMessage, 'error', 'rename-filter-preset');
+    }
+  }
+
   async function deleteFilterPreset(name: string) {
     if (!config) {
       return;
@@ -173,8 +212,8 @@ export function useFilterManager({
     }
   }
 
-  function applyFiltersAndOrdering() {
-    // Apply copies staged editor inputs into the active filter state in one shot.
+  useEffect(() => {
+    // Filters now apply immediately as users edit staged controls.
     const normalizedRules = normalizeTagRules(draftTagRules);
     setAppliedTagRules(normalizedRules);
 
@@ -183,7 +222,7 @@ export function useFilterManager({
 
     setAppliedStatus(draftStatus.trim());
     setAppliedOrderBy(draftOrderBy);
-  }
+  }, [draftTagRules, draftMinScore, draftStatus, draftOrderBy]);
 
   const filteredGames = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -273,8 +312,8 @@ export function useFilterManager({
     beginSavePreset,
     saveCurrentFilterPreset,
     loadFilterPresetToDraft,
+    renameFilterPreset,
     deleteFilterPreset,
-    applyFiltersAndOrdering,
   };
 }
 

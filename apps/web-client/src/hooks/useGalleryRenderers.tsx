@@ -21,6 +21,8 @@ type ActionLabels = {
 
 type UseGalleryRenderersArgs = {
   viewMode: GalleryViewMode;
+  isNarrowViewport: boolean;
+  enableInlineFocus: boolean;
   selectedGamePath: string | null;
   filteredGames: GameSummary[];
   gridColumns: number;
@@ -40,6 +42,8 @@ type UseGalleryRenderersArgs = {
 
 export function useGalleryRenderers({
   viewMode,
+  isNarrowViewport,
+  enableInlineFocus,
   selectedGamePath,
   filteredGames,
   gridColumns,
@@ -100,7 +104,8 @@ export function useGalleryRenderers({
         key={game.path}
         game={game}
         viewMode={viewMode}
-        isSelected={selectedGamePath === game.path}
+        isSelected={!isNarrowViewport && selectedGamePath === game.path}
+        isNarrowViewport={isNarrowViewport}
         canLaunch={canLaunch}
         actionLabels={actionLabels}
         getImageSrc={getImageSrc}
@@ -111,9 +116,13 @@ export function useGalleryRenderers({
         onContextMenu={onGameCardContextMenu}
       />
     );
-  }, [actionLabels, canLaunch, getImageSrc, onGameCardContextMenu, onOpenDetail, onPlayClick, onResolveVersionMismatch, onToggleSelection, selectedGamePath, viewMode]);
+  }, [actionLabels, canLaunch, getImageSrc, isNarrowViewport, onGameCardContextMenu, onOpenDetail, onPlayClick, onResolveVersionMismatch, onToggleSelection, selectedGamePath, viewMode]);
 
   const renderInlinePosterCardFocus = useCallback(() => {
+    if (!enableInlineFocus) {
+      return filteredGames.map((game) => renderGame(game));
+    }
+
     const rows: GameSummary[][] = [];
     // Chunk by active grid columns so inline focus inserts beneath the correct visual row.
     for (let index = 0; index < filteredGames.length; index += gridColumns) {
@@ -130,7 +139,7 @@ export function useGalleryRenderers({
         </Fragment>
       );
     });
-  }, [filteredGames, gridColumns, renderFocusCard, renderGame, selectedGamePath]);
+  }, [enableInlineFocus, filteredGames, gridColumns, renderFocusCard, renderGame, selectedGamePath]);
 
   return {
     renderFocusCard,

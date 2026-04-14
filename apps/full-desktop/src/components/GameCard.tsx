@@ -9,7 +9,7 @@
  *
  * New to this project: this is the shared tile for all view modes; inspect mode-specific branches here, then trace emitted events to selection/play/context-menu handlers.
  */
-import type { MouseEvent, ReactNode } from 'react';
+import type { MouseEvent } from 'react';
 import { ArrowRight, Play } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { GalleryViewMode, GameSummary } from '../types';
@@ -18,6 +18,7 @@ type GameCardProps = {
   game: GameSummary;
   viewMode: GalleryViewMode;
   isSelected: boolean;
+  isNarrowViewport: boolean;
   canLaunch: boolean;
   actionLabels: {
     play: string;
@@ -35,6 +36,7 @@ export function GameCard({
   game,
   viewMode,
   isSelected,
+  isNarrowViewport,
   canLaunch,
   actionLabels,
   getImageSrc,
@@ -45,6 +47,9 @@ export function GameCard({
   onContextMenu,
 }: GameCardProps) {
   const { t } = useTranslation();
+  const isNarrowPosterCardLayout = isNarrowViewport && (viewMode === 'poster' || viewMode === 'card');
+  const scoreValue = game.metadata.score.trim() || '-';
+  const statusValue = game.metadata.status || t('detail.notSet');
 
   const artImgSrc = getImageSrc(viewMode === 'poster' ? game.media.poster : game.media.card);
   const art = (
@@ -52,13 +57,25 @@ export function GameCard({
       {artImgSrc ? (
         <img src={artImgSrc} alt={game.name} className="media-preview media-preview--cover" />
       ) : null}
-      <span>{game.usesPlaceholderArt ? t('gameView.usingPlaceholderArt') : t('gameView.imageCount', { count: game.imageCount })}</span>
+      {!isNarrowPosterCardLayout ? <span>{game.usesPlaceholderArt ? t('gameView.usingPlaceholderArt') : t('gameView.imageCount', { count: game.imageCount })}</span> : null}
     </div>
   );
 
   const bootstrapText = `${game.createdPicturesFolder ? 'pictures folder ' : ''}${game.createdGameNfo ? 'game.nfo ' : ''}${
     game.createdVersionNfoCount > 0 ? `${game.createdVersionNfoCount} version nfo files` : ''
   }`.trim();
+
+  const renderOpenButton = (className = '') => (
+    <button
+      className={`button button--icon button--icon-only game-card__open-fab ${className}`.trim()}
+      type="button"
+      onClick={(event) => onOpenDetail(game, event)}
+      aria-label={actionLabels.open}
+      title={actionLabels.open}
+    >
+      <ArrowRight size={16} aria-hidden="true" />
+    </button>
+  );
 
   const commonActions = (
     <div className="game-card__actions">
@@ -73,15 +90,7 @@ export function GameCard({
           <Play size={16} aria-hidden="true" />
         </button>
       ) : null}
-      <button
-        className="button button--icon button--icon-only"
-        type="button"
-        onClick={(event) => onOpenDetail(game, event)}
-        aria-label={actionLabels.open}
-        title={actionLabels.open}
-      >
-        <ArrowRight size={16} aria-hidden="true" />
-      </button>
+      {renderOpenButton()}
     </div>
   );
 
@@ -113,6 +122,32 @@ export function GameCard({
   };
   const versionMismatchClass = game.hasVersionMismatch ? 'game-card--version-mismatch' : '';
   const vaultedClass = game.isVaulted ? 'game-card--vaulted' : '';
+
+  if (viewMode === 'card' && isNarrowPosterCardLayout) {
+    return (
+      <article className={`game-card game-card--card game-card--narrow ${versionMismatchClass} ${vaultedClass}`} data-game-path={game.path} onClick={commonProps.onClick} onContextMenu={commonProps.onContextMenu}>
+        {art}
+        <div className="game-card__body game-card__body--narrow">
+          <h3>{game.name}</h3>
+          <div className="game-card__narrow-meta-line">
+            <p className="game-card__status-inline">{statusValue}</p>
+            <span className="game-card__score-bubble">{scoreValue}</span>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  if (viewMode === 'poster' && isNarrowPosterCardLayout) {
+    return (
+      <article className={`game-card game-card--poster game-card--narrow ${versionMismatchClass} ${vaultedClass}`} data-game-path={game.path} onClick={commonProps.onClick} onContextMenu={commonProps.onContextMenu}>
+        {art}
+        <div className="game-card__narrow-overlay">
+          <span className="game-card__score-bubble">{scoreValue}</span>
+        </div>
+      </article>
+    );
+  }
 
   if (viewMode === 'compact') {
     const compactDescription = game.metadata.description.trim();
