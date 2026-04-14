@@ -1,0 +1,37 @@
+{
+  "appId": "com.localgamegallery.client",
+  "productName": "Local Game Gallery Client",
+  "asar": true,
+  "directories": {
+    "output": "release/standalone-client"
+  },
+  "files": [
+    "dist-standalone-client/**/*",
+    "dist-standalone-electron/**/*",
+    "package.json"
+  ],
+  "extraMetadata": {
+    "main": "dist-standalone-electron/electron/main.js"
+  },
+  "win": {
+    "signAndEditExecutable": true,
+    "icon": "icon/standalone-client-icon/icon.ico",
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ]
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "shortcutName": "Local Game Gallery Client",
+    "installerIcon": "icon/standalone-client-icon/icon.ico",
+    "uninstallerIcon": "icon/standalone-client-icon/icon.ico",
+    "installerHeaderIcon": "icon/standalone-client-icon/icon.ico"
+  }
+}

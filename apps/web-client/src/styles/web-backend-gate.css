@@ -1,0 +1,125 @@
+.web-backend-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.web-backend-panel {
+  width: min(760px, 100%);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: linear-gradient(160deg, rgba(19, 24, 34, 0.92), rgba(10, 14, 21, 0.92));
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.45);
+  padding: 26px;
+}
+
+.web-backend-eyebrow {
+  margin: 0 0 4px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(247, 246, 242, 0.72);
+  font-size: 0.78rem;
+}
+
+.web-backend-title {
+  margin: 0 0 12px;
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
+}
+
+.web-backend-status {
+  margin: 0;
+  color: rgba(247, 246, 242, 0.9);
+  line-height: 1.5;
+}
+
+.web-backend-status--error {
+  color: #ff9a9a;
+}
+
+.web-backend-form {
+  margin-top: 8px;
+  display: grid;
+  gap: 12px;
+}
+
+.web-backend-form label {
+  color: rgba(247, 246, 242, 0.84);
+  font-size: 0.9rem;
+}
+
+.web-backend-form input {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(9, 13, 21, 0.76);
+  color: inherit;
+  padding: 0.8rem 0.95rem;
+}
+
+.web-backend-form input:focus-visible {
+  outline: 2px solid rgba(118, 166, 224, 0.82);
+  outline-offset: 2px;
+}
+
+.web-backend-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.web-backend-button {
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  padding: 0.58rem 0.86rem;
+}
+
+.web-backend-button:hover:enabled {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.web-backend-button:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.web-backend-button--primary {
+  border-color: rgba(114, 171, 255, 0.78);
+  background: linear-gradient(145deg, rgba(71, 127, 211, 0.92), rgba(44, 103, 191, 0.94));
+}
+
+.web-backend-attempts {
+  margin-top: 16px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.2);
+  padding-top: 12px;
+}
+
+.web-backend-attempts summary {
+  cursor: pointer;
+  color: rgba(247, 246, 242, 0.8);
+}
+
+.web-backend-attempts ul {
+  margin: 10px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+}
+
+.web-backend-attempts li {
+  display: grid;
+  gap: 2px;
+}
+
+.web-backend-attempts span {
+  color: rgba(247, 246, 242, 0.72);
+  font-size: 0.86rem;
+}
+
+@media (max-width: 640px) {
+  .web-backend-panel {
+    padding: 22px;
+  }
+}

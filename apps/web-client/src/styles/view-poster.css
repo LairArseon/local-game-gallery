@@ -1,0 +1,23 @@
+.cards--poster {
+  grid-template-columns: repeat(var(--grid-columns, 1), minmax(0, 1fr));
+}
+
+.game-card--poster {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.game-card--poster .game-card__art {
+  aspect-ratio: 2 / 3;
+  min-height: 0;
+}
+
+.game-card--poster .game-card__body {
+  display: flex;
+  flex-direction: column;
+}
+
+.game-card--poster .game-card__actions {
+  margin-top: auto;
+  padding-top: calc(8px * var(--metadata-gap-scale, 1));
+}

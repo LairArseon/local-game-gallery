@@ -1,0 +1,47 @@
+.game-card--compact {
+  padding: 14px 18px;
+}
+
+.game-card__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.game-card__row p {
+  margin: 0;
+}
+
+.game-card__row--muted p {
+  color: rgba(247, 246, 242, 0.72);
+  font-size: 0.88em;
+}
+
+.game-card__compact-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 14px;
+  margin-top: 8px;
+}
+
+.game-card__compact-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.game-card__compact-meta p {
+  margin: 0;
+  color: rgba(247, 246, 242, 0.78);
+  font-size: 0.88em;
+}
+
+.game-card__compact-meta strong {
+  color: rgba(247, 246, 242, 0.95);
+  font-weight: 600;
+}
+
+.game-card__compact-description {
+  grid-column: 1 / -1;
+}

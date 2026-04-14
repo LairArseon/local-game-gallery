@@ -1,6 +1,13 @@
 node_modules/
 dist/
+dist-web-client/
+dist-standalone-client/
+dist-standalone-electron/
 dist-electron/
 release/*
 !release/*.exe
 *.log
+docker-data/
+docker/.env
+games/
+installer/bundle/*
