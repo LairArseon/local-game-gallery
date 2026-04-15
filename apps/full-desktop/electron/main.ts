@@ -11,7 +11,7 @@ import { spawn } from 'node:child_process';
 import { loadConfig, saveConfig } from './config';
 import { appendLogEvent, clearLogContents, openLogFolder, readLogContents } from './logger';
 import { getLatestVersionName, importDroppedGameMedia, readGameMetadata, removeScreenshot, reorderScreenshots, saveGameMetadata } from './game-library';
-import { scanGames } from './scanner';
+import { scanGame, scanGames } from './scanner';
 import { startGalleryHttpService, type GalleryHttpService } from './service';
 import type {
   ApplyRuntimeAppIconPayload,
@@ -667,6 +667,26 @@ ipcMain.handle('gallery:scan-games', async (_event, requestOptions?: ScanRequest
       message: `Desktop scan request failed: ${message}`,
     }).catch(() => undefined);
     throw error;
+  }
+});
+
+ipcMain.handle('gallery:scan-game', async (_event, payload: { gamePath: string }) => {
+  const config = await loadConfig();
+  const gamePath = String(payload?.gamePath ?? '').trim();
+  if (!gamePath) {
+    return null;
+  }
+
+  try {
+    return await scanGame(config, gamePath);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Single game scan failed.';
+    await appendLogEvent({
+      level: 'warn',
+      source: 'scan-single-game',
+      message: `Desktop single game scan failed for "${gamePath}": ${message}`,
+    }).catch(() => undefined);
+    return null;
   }
 });
 

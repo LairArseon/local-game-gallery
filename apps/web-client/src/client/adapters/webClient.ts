@@ -8,6 +8,7 @@ import type {
   AppIconInspectPayload,
   AppIconInspectResult,
   GalleryConfig,
+  GameSummary,
   GameContextMenuAction,
   GameContextMenuPayload,
   ImportDroppedGameMediaPayload,
@@ -54,6 +55,12 @@ type UploadMediaRequestPayload = {
   gamePath: string;
   target: 'poster' | 'card' | 'background' | 'screenshot';
   files: UploadMediaFilePayload[];
+};
+
+export type BrowserMediaUploadProgress = {
+  completed: number;
+  total: number;
+  phase: 'preparing' | 'uploading' | 'finalizing';
 };
 
 type BrowserContextMenuItem = {
@@ -117,13 +124,57 @@ function pickBrowserImageFiles(allowMultiple: boolean): Promise<File[]> {
     input.accept = 'image/png,image/jpeg,image/webp,image/gif,image/bmp';
     input.multiple = allowMultiple;
 
+    let settled = false;
+    let didBlurAfterOpen = false;
+    let focusFallbackTimer: number | null = null;
+    const settle = (files: File[]) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      if (focusFallbackTimer !== null) {
+        window.clearTimeout(focusFallbackTimer);
+        focusFallbackTimer = null;
+      }
+      window.removeEventListener('blur', handleWindowBlur, true);
+      window.removeEventListener('focus', handleWindowFocus, true);
+      resolve(files);
+    };
+
+    const handleWindowBlur = () => {
+      // Native file dialogs usually move focus away from the window.
+      didBlurAfterOpen = true;
+    };
+
+    const handleWindowFocus = () => {
+      // Only settle on focus if the picker actually stole focus first.
+      if (!didBlurAfterOpen) {
+        return;
+      }
+
+      // Some Chromium/Electron environments do not emit input cancel/change on dialog close.
+      // Delay fallback slightly so normal change events win when files were selected.
+      if (focusFallbackTimer !== null) {
+        window.clearTimeout(focusFallbackTimer);
+      }
+
+      focusFallbackTimer = window.setTimeout(() => {
+        const files = Array.from(input.files ?? []);
+        settle(files);
+      }, 220);
+    };
+
     input.addEventListener('change', () => {
-      resolve(Array.from(input.files ?? []));
+      settle(Array.from(input.files ?? []));
     }, { once: true });
 
     input.addEventListener('cancel', () => {
-      resolve([]);
+      settle([]);
     }, { once: true });
+
+    window.addEventListener('blur', handleWindowBlur, true);
+    window.addEventListener('focus', handleWindowFocus, true);
 
     input.click();
   });
@@ -541,17 +592,63 @@ function promptContextAction<TAction extends string>(title: string, options: Arr
   return options[selectedIndex]?.action ?? null;
 }
 
-async function uploadBrowserMediaFiles(payload: ImportGameMediaPayload, files: File[]) {
+async function uploadBrowserMediaFiles(
+  payload: ImportGameMediaPayload,
+  files: File[],
+  onProgress?: (progress: BrowserMediaUploadProgress) => void,
+) {
   if (!files.length) {
+    onProgress?.({ completed: 0, total: 0, phase: 'finalizing' });
     return;
   }
 
-  const encodedFiles = await Promise.all(files.map(async (file): Promise<UploadMediaFilePayload> => ({
-    name: file.name,
-    mimeType: file.type,
-    dataBase64: arrayBufferToBase64(await file.arrayBuffer()),
-  })));
+  if (payload.target === 'screenshot') {
+    const total = files.length;
+    let completed = 0;
 
+    onProgress?.({ completed, total, phase: 'preparing' });
+
+    for (const file of files) {
+      const encoded: UploadMediaFilePayload = {
+        name: file.name,
+        mimeType: file.type,
+        dataBase64: arrayBufferToBase64(await file.arrayBuffer()),
+      };
+
+      onProgress?.({ completed, total, phase: 'uploading' });
+
+      await requestApi<{ importedCount: number }>('/api/media/upload', {
+        method: 'POST',
+        body: JSON.stringify({
+          gamePath: payload.gamePath,
+          target: payload.target,
+          files: [encoded],
+        } satisfies UploadMediaRequestPayload),
+      });
+
+      completed += 1;
+      onProgress?.({ completed, total, phase: 'uploading' });
+    }
+
+    onProgress?.({ completed: total, total, phase: 'finalizing' });
+    return;
+  }
+
+  const total = 1;
+  const firstFile = files[0];
+  if (!firstFile) {
+    onProgress?.({ completed: 0, total, phase: 'finalizing' });
+    return;
+  }
+
+  onProgress?.({ completed: 0, total, phase: 'preparing' });
+  const encodedFiles: UploadMediaFilePayload[] = [{
+    name: firstFile.name,
+    mimeType: firstFile.type,
+    dataBase64: arrayBufferToBase64(await firstFile.arrayBuffer()),
+  }];
+
+  onProgress?.({ completed: 0, total, phase: 'uploading' });
   const requestPayload: UploadMediaRequestPayload = {
     gamePath: payload.gamePath,
     target: payload.target,
@@ -562,12 +659,17 @@ async function uploadBrowserMediaFiles(payload: ImportGameMediaPayload, files: F
     method: 'POST',
     body: JSON.stringify(requestPayload),
   });
+
+  onProgress?.({ completed: 1, total, phase: 'finalizing' });
 }
 
-async function importMediaFromBrowserPicker(payload: ImportGameMediaPayload) {
+export async function importMediaFromBrowserPickerWithProgress(
+  payload: ImportGameMediaPayload,
+  onProgress?: (progress: BrowserMediaUploadProgress) => void,
+) {
   const allowMultiple = payload.target === 'screenshot';
   const files = await pickBrowserImageFiles(allowMultiple);
-  await uploadBrowserMediaFiles(payload, files);
+  await uploadBrowserMediaFiles(payload, files, onProgress);
 }
 
 async function getRuntimeCapabilities() {
@@ -643,6 +745,14 @@ export const webClient: GalleryClient = {
       method: 'POST',
       body: JSON.stringify(options ?? {}),
     });
+  },
+  async scanGame(gamePath: string) {
+    const response = await requestApi<{ game: GameSummary | null }>('/api/scan-game', {
+      method: 'POST',
+      body: JSON.stringify({ gamePath }),
+    });
+
+    return response.game;
   },
   async showGameContextMenu(payload: GameContextMenuPayload) {
     const capabilities = await getRuntimeCapabilities();
@@ -828,12 +938,12 @@ export const webClient: GalleryClient = {
     });
   },
   async importGameMediaFromDialog(payload: ImportGameMediaPayload) {
-    await importMediaFromBrowserPicker(payload);
+    await importMediaFromBrowserPickerWithProgress(payload);
   },
   async importDroppedGameMedia(payload: ImportDroppedGameMediaPayload) {
     // Browser drops do not include trusted filesystem paths, so use picker-based upload.
     if (!payload.filePaths.length) {
-      await importMediaFromBrowserPicker(payload);
+      await importMediaFromBrowserPickerWithProgress(payload);
       return;
     }
 

@@ -8,6 +8,7 @@
   "files": [
     "dist-standalone-client/**/*",
     "dist-standalone-electron/**/*",
+    "icon/standalone-client-icon/**/*",
     "package.json"
   ],
   "extraMetadata": {

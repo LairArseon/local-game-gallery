@@ -12,6 +12,7 @@ import type { Dispatch, DragEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, ArrowRight, X } from 'lucide-react';
 import type { GameSummary } from '../types';
+import type { BrowserMediaUploadProgress } from '../client/adapters/webClient';
 
 type FeaturedTarget = 'poster' | 'card' | 'background' | null;
 type DragSection = 'featured' | 'gallery' | null;
@@ -21,6 +22,7 @@ type MediaModalProps = {
   game: GameSummary | null;
   isOpen: boolean;
   isMediaSaving: boolean;
+  mediaUploadProgress: BrowserMediaUploadProgress | null;
   featuredImportTarget: FeaturedTarget;
   pendingFeaturedDropPaths: string[];
   dragSection: DragSection;
@@ -55,6 +57,7 @@ export function MediaModal({
   game,
   isOpen,
   isMediaSaving,
+  mediaUploadProgress,
   featuredImportTarget,
   pendingFeaturedDropPaths,
   dragSection,
@@ -169,13 +172,25 @@ export function MediaModal({
                     return;
                   }
 
-                  void onImportMedia('screenshot', extractDroppedFilePaths(event));
+                  const droppedPaths = extractDroppedFilePaths(event);
+                  if (!droppedPaths.length) {
+                    return;
+                  }
+
+                  void onImportMedia('screenshot', droppedPaths);
                 }}
               >
                 <div className="modal-group__header">
                   <strong>{t('media.galleryMedia')}</strong>
                   <button className="button button--icon" type="button" disabled={isMediaSaving} onClick={() => void onImportMedia('screenshot')}>{t('media.addScreenshot')}</button>
                 </div>
+                {isMediaSaving && mediaUploadProgress ? (
+                  <small className="field__hint">
+                    Uploading screenshots: {mediaUploadProgress.completed}/{mediaUploadProgress.total || 0}
+                    {' '}
+                    ({mediaUploadProgress.phase})
+                  </small>
+                ) : null}
                 <div className="media-grid">
                   {game.media.screenshots.length ? game.media.screenshots.map((imagePath, index) => (
                     <div

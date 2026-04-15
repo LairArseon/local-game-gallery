@@ -266,6 +266,7 @@ export type GalleryApi = {
   stageDroppedAppIcon: (payload: StageDroppedAppIconPayload) => Promise<string>;
   applyRuntimeAppIcon: (payload: ApplyRuntimeAppIconPayload) => Promise<ApplyRuntimeAppIconResult>;
   scanGames: (options?: ScanRequestOptions) => Promise<ScanResult>;
+  scanGame: (gamePath: string) => Promise<GameSummary | null>;
   showGameContextMenu: (payload: GameContextMenuPayload) => Promise<void>;
   onGameContextMenuAction: (callback: (payload: GameContextMenuAction) => void) => () => void;
   showVersionContextMenu: (payload: VersionContextMenuPayload) => Promise<void>;

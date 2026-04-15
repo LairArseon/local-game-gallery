@@ -10,12 +10,17 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGalleryClient } from '../client/context';
-import { resolvePreferredServiceBaseUrl } from '../client/adapters/webClient';
+import {
+  importMediaFromBrowserPickerWithProgress,
+  resolvePreferredServiceBaseUrl,
+  type BrowserMediaUploadProgress,
+} from '../client/adapters/webClient';
 
 type UseMediaManagerArgs = {
   setStatus: Dispatch<SetStateAction<string>>;
   logAppEvent: (message: string, level?: 'info' | 'warn' | 'error', source?: string) => Promise<void>;
   toErrorMessage: (error: unknown, fallback: string) => string;
+  refreshGame: (gamePath: string) => Promise<unknown>;
   refreshScan: () => Promise<unknown>;
 };
 
@@ -23,13 +28,16 @@ export function useMediaManager({
   setStatus,
   logAppEvent,
   toErrorMessage,
+  refreshGame,
   refreshScan,
 }: UseMediaManagerArgs) {
   const { t } = useTranslation();
   const galleryClient = useGalleryClient();
+  const isBrowserMode = typeof window !== 'undefined' && !('gallery' in window);
 
   const [mediaModalGamePath, setMediaModalGamePath] = useState<string | null>(null);
   const [isMediaSaving, setIsMediaSaving] = useState(false);
+  const [mediaUploadProgress, setMediaUploadProgress] = useState<BrowserMediaUploadProgress | null>(null);
   const [mediaRenderVersion, setMediaRenderVersion] = useState(0);
   const [featuredImportTarget, setFeaturedImportTarget] = useState<'poster' | 'card' | 'background' | null>(null);
   const [pendingFeaturedDropPaths, setPendingFeaturedDropPaths] = useState<string[]>([]);
@@ -84,15 +92,29 @@ export function useMediaManager({
       return;
     }
 
+    // Distinguish explicit drop payloads from picker flow.
+    if (Array.isArray(filePaths) && filePaths.length === 0) {
+      return;
+    }
+
     setIsMediaSaving(true);
+    setMediaUploadProgress(null);
     try {
       // If drag/drop paths were supplied, bypass the file dialog and import directly.
-      if (filePaths?.length) {
+      if (Array.isArray(filePaths)) {
         await galleryClient.importDroppedGameMedia({
           gamePath: mediaModalGamePath,
           target,
           filePaths,
         });
+      } else if (isBrowserMode) {
+        await importMediaFromBrowserPickerWithProgress(
+          {
+            gamePath: mediaModalGamePath,
+            target,
+          },
+          setMediaUploadProgress,
+        );
       } else {
         await galleryClient.importGameMediaFromDialog({
           gamePath: mediaModalGamePath,
@@ -100,7 +122,16 @@ export function useMediaManager({
         });
       }
 
-      await refreshScan();
+      void refreshGame(mediaModalGamePath).then((result) => {
+        if (result) {
+          return;
+        }
+
+        return refreshScan();
+      }).catch((error) => {
+        const logMessage = toErrorMessage(error, 'Background media refresh failed.');
+        void logAppEvent(logMessage, 'warn', 'import-media-refresh');
+      });
   // Force image URL cache-busting so changed assets are visible immediately.
       setMediaRenderVersion((current) => current + 1);
       setFeaturedImportTarget(null);
@@ -112,6 +143,7 @@ export function useMediaManager({
       void logAppEvent(logMessage, 'error', 'import-media');
     } finally {
       setIsMediaSaving(false);
+      setMediaUploadProgress(null);
     }
   }
 
@@ -123,7 +155,16 @@ export function useMediaManager({
     setIsMediaSaving(true);
     try {
       await galleryClient.reorderScreenshots({ fromPath, toPath });
-      await refreshScan();
+      void refreshGame(mediaModalGamePath).then((result) => {
+        if (result) {
+          return;
+        }
+
+        return refreshScan();
+      }).catch((error) => {
+        const logMessage = toErrorMessage(error, 'Background screenshot reorder refresh failed.');
+        void logAppEvent(logMessage, 'warn', 'reorder-screenshots-refresh');
+      });
       setMediaRenderVersion((current) => current + 1);
       setStatus(t('status.screenshotsReordered'));
     } catch (error) {
@@ -144,7 +185,16 @@ export function useMediaManager({
     setIsMediaSaving(true);
     try {
       await galleryClient.removeScreenshot({ screenshotPath: imagePath });
-      await refreshScan();
+      void refreshGame(mediaModalGamePath).then((result) => {
+        if (result) {
+          return;
+        }
+
+        return refreshScan();
+      }).catch((error) => {
+        const logMessage = toErrorMessage(error, 'Background screenshot removal refresh failed.');
+        void logAppEvent(logMessage, 'warn', 'remove-screenshot-refresh');
+      });
       setMediaRenderVersion((current) => current + 1);
       setStatus(t('status.screenshotRemoved'));
     } catch (error) {
@@ -173,6 +223,7 @@ export function useMediaManager({
   return {
     mediaModalGamePath,
     isMediaSaving,
+    mediaUploadProgress,
     featuredImportTarget,
     pendingFeaturedDropPaths,
     dragSection,

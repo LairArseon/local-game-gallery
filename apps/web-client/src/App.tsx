@@ -44,6 +44,8 @@ import { useAppLifecycleHandlers } from './hooks/useAppLifecycleHandlers';
 import { useGameActions } from './hooks/useGameActions';
 import { useVersionMismatchManager } from './hooks/useVersionMismatchManager';
 import { useVaultManager } from './hooks/useVaultManager';
+import { useScanOrchestrator, type RefreshScanMode } from './hooks/useScanOrchestrator';
+import { useFallbackRecoveryProbe } from './hooks/useFallbackRecoveryProbe';
 import { clamp } from './utils/app-helpers';
 import { useGalleryClient } from './client/context';
 
@@ -62,7 +64,6 @@ const dynamicScaleBaselineColumns: Record<'poster' | 'card', number> = {
 
 const narrowViewportMaxWidthPx = 760;
 const fallbackRecoveryProbeIntervalMs = 12000;
-type RefreshScanMode = 'scan-only' | 'scan-and-sync' | 'parity-sync' | 'fallback-recovery-probe';
 
 const desktopCapabilities: ServiceCapabilities = {
   supportsLaunch: true,
@@ -126,8 +127,6 @@ function App() {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const mirrorSyncConfirmResolveRef = useRef<((shouldSync: boolean) => void) | null>(null);
   const mirrorParityConfirmResolveRef = useRef<((shouldSync: boolean) => void) | null>(null);
-  const scanInFlightRef = useRef<Promise<ScanResult | null> | null>(null);
-  const refreshScanRef = useRef<((mode?: RefreshScanMode) => Promise<ScanResult | null>) | null>(null);
 
   useEffect(() => {
     if (!config?.language) {
@@ -322,10 +321,34 @@ function App() {
     toErrorMessage,
   });
 
+  const {
+    refreshScan,
+    refreshGame,
+    refreshScanRef,
+  } = useScanOrchestrator({
+    galleryClient,
+    emptyScan,
+    t,
+    setScanResult,
+    setStatus,
+    setIsScanning,
+    setScanProgress,
+    logAppEvent,
+    toErrorMessage,
+  });
+
+  useFallbackRecoveryProbe({
+    isUsingMirrorFallback,
+    gamesRoot: config?.gamesRoot,
+    refreshScanRef,
+    intervalMs: fallbackRecoveryProbeIntervalMs,
+  });
+
   // Domain manager: media modal state + image import/reorder/remove orchestration.
   const {
     mediaModalGamePath,
     isMediaSaving,
+    mediaUploadProgress,
     featuredImportTarget,
     pendingFeaturedDropPaths,
     dragSection,
@@ -348,6 +371,7 @@ function App() {
     setStatus,
     logAppEvent,
     toErrorMessage,
+    refreshGame,
     refreshScan,
   });
 
@@ -402,6 +426,7 @@ function App() {
     setConfig,
     games: scanResult.games,
     setStatus,
+    refreshGame,
     refreshScan,
     logAppEvent,
     toErrorMessage,
@@ -572,114 +597,6 @@ function App() {
     screenshotModalPath,
     setScreenshotModalPath,
   });
-
-  async function refreshScan(mode: RefreshScanMode = 'scan-and-sync') {
-    if (scanInFlightRef.current) {
-      return scanInFlightRef.current;
-    }
-
-    const isFallbackRecoveryProbe = mode === 'fallback-recovery-probe';
-    const shouldSyncMirror = mode === 'scan-and-sync' || mode === 'parity-sync';
-    const shouldMirrorParity = mode === 'parity-sync';
-    if (!isFallbackRecoveryProbe) {
-      setScanProgress(0.06);
-    }
-
-    // Central scan gateway used by setup save, manual refresh, and post-action sync.
-    const startedAtMs = Date.now();
-    const scanPromise = (async () => {
-      if (!isFallbackRecoveryProbe) {
-        setIsScanning(true);
-        void logAppEvent(
-          `Scan started (mode=${mode}, sync=${shouldSyncMirror ? 'enabled' : 'disabled'}, parity=${shouldMirrorParity ? 'full' : 'safe-media-preserve'}).`,
-          'info',
-          'scan-orchestrator',
-        );
-      }
-
-      try {
-        const result = await galleryClient.scanGames({
-          syncMirror: shouldSyncMirror,
-          mirrorParity: shouldMirrorParity,
-        });
-
-        if (isFallbackRecoveryProbe) {
-          if (!result.usingMirrorFallback) {
-            setScanResult(result);
-            setStatus(result.games.length ? t('status.foundGameFolders', { count: result.games.length }) : t('status.scanCompletedNoMatches'));
-            void logAppEvent(
-              `Primary game folder recovered automatically (games=${result.games.length}).`,
-              'info',
-              'fallback-probe',
-            );
-          }
-
-          return result;
-        }
-
-        setScanResult(result);
-        setStatus(result.games.length ? t('status.foundGameFolders', { count: result.games.length }) : t('status.scanCompletedNoMatches'));
-
-        const elapsedMs = Date.now() - startedAtMs;
-        const completionLevel = result.warnings.length ? 'warn' : 'info';
-        void logAppEvent(
-          `Scan completed in ${elapsedMs}ms (mode=${mode}, games=${result.games.length}, warnings=${result.warnings.length}, parity=${shouldMirrorParity ? 'full' : 'safe-media-preserve'}).`,
-          completionLevel,
-          'scan-orchestrator',
-        );
-
-        for (const warning of result.warnings) {
-          void logAppEvent(warning, 'warn', 'scan-warning');
-        }
-
-        return result;
-      } catch (error) {
-        if (isFallbackRecoveryProbe) {
-          return null;
-        }
-
-        // Reset to empty snapshot so stale scan data is not shown after failures.
-        setScanResult(emptyScan);
-        const logMessage = toErrorMessage(error, 'Failed to scan game folders.');
-        const elapsedMs = Date.now() - startedAtMs;
-        setStatus(t('status.failedScanGameFolders'));
-        void logAppEvent(`${logMessage} (after ${elapsedMs}ms)`, 'error', 'scan-games');
-        return null;
-      } finally {
-        scanInFlightRef.current = null;
-        if (!isFallbackRecoveryProbe) {
-          setIsScanning(false);
-        }
-      }
-    })();
-
-    scanInFlightRef.current = scanPromise;
-    return scanPromise;
-  }
-
-  refreshScanRef.current = refreshScan;
-
-  useEffect(() => {
-    if (!isUsingMirrorFallback || !config?.gamesRoot.trim()) {
-      return;
-    }
-
-    const runFallbackRecoveryProbe = () => {
-      const runScan = refreshScanRef.current;
-      if (!runScan) {
-        return;
-      }
-
-      void runScan('fallback-recovery-probe');
-    };
-
-    runFallbackRecoveryProbe();
-    const probeInterval = window.setInterval(runFallbackRecoveryProbe, fallbackRecoveryProbeIntervalMs);
-
-    return () => {
-      window.clearInterval(probeInterval);
-    };
-  }, [config?.gamesRoot, isUsingMirrorFallback]);
 
   const {
     activeTagSuggestions,
@@ -1122,6 +1039,7 @@ function App() {
           onToggleSystemMenuBar={onToggleSystemMenuBar}
           onOpenLogViewer={onOpenLogViewer}
           onOpenLogFolder={onOpenLogFolder}
+          supportsAppIconPicker={hasDesktopBridge}
           appIconPreviewSrc={appIconPreviewSrc}
           appIconSummary={appIconSummary}
           appIconPath={config.appIconPngPath}
@@ -1194,6 +1112,7 @@ function App() {
         mediaModalGame={mediaModalGame}
         mediaModalGamePath={mediaModalGamePath}
         isMediaSaving={isMediaSaving}
+        mediaUploadProgress={mediaUploadProgress}
         featuredImportTarget={featuredImportTarget}
         pendingFeaturedDropPaths={pendingFeaturedDropPaths}
         dragSection={dragSection}

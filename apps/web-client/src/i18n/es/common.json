@@ -86,6 +86,7 @@
     "defaultIconInUse": "Se usa el icono predeterminado",
     "appIconDropHint": "Suelta un archivo PNG o haz clic para elegir uno para futuras compilaciones del instalador.",
     "appIconSizeHint": "Usa al menos un PNG de 256x256. Los iconos no cuadrados se rellenan automáticamente a cuadrado.",
+    "appIconDesktopOnlyHint": "La selección y aplicación en caliente del icono solo están disponibles en la ventana de la app de escritorio.",
     "applyNow": "Aplicar ahora",
     "resetToDefault": "Restablecer predeterminado",
     "statusChoices": "Opciones de estado",

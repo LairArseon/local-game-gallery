@@ -86,6 +86,7 @@
     "defaultIconInUse": "Default icon in use",
     "appIconDropHint": "Drop a PNG file or click to choose one for future installer builds.",
     "appIconSizeHint": "Use at least 256x256 PNG. Non-square icons are padded to square automatically.",
+    "appIconDesktopOnlyHint": "App icon picking and runtime apply are available only in the desktop app window.",
     "applyNow": "Apply now",
     "resetToDefault": "Reset to default",
     "statusChoices": "Status choices",

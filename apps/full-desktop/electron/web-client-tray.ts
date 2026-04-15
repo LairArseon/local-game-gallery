@@ -1,5 +1,5 @@
 import { app, Menu, Tray, nativeImage, shell } from 'electron';
-import { existsSync } from 'node:fs';
+import { existsSync, unlinkSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -65,6 +65,93 @@ function resolveWebClientPort() {
   }
 
   return defaultWebClientPort;
+}
+
+function canManageStartupAtLogin() {
+  return process.platform === 'win32';
+}
+
+function resolveLoginItemArgs() {
+  const entryScriptPath = String(process.argv[1] ?? '').trim();
+  if (!entryScriptPath) {
+    return [];
+  }
+
+  return [path.resolve(entryScriptPath)];
+}
+
+function resolveStartupFolderPath() {
+  const appDataPath = String(process.env.APPDATA ?? app.getPath('appData')).trim();
+  return path.join(appDataPath, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
+}
+
+function resolveStartupShortcutPath() {
+  return path.join(resolveStartupFolderPath(), 'Web Client Tray Host.lnk');
+}
+
+function resolveStartupShortcutIconPath() {
+  const scriptInstallRoot = path.resolve(__dirname, '..', '..');
+  const runtimeInstallRoot = path.resolve(path.dirname(process.execPath), '..', '..');
+  const iconCandidates = [
+    path.join(scriptInstallRoot, 'icon', 'web-client-icon', 'icon.ico'),
+    path.join(scriptInstallRoot, 'icon', 'icon.ico'),
+    path.join(runtimeInstallRoot, 'icon', 'web-client-icon', 'icon.ico'),
+    path.join(runtimeInstallRoot, 'icon', 'icon.ico'),
+    path.join(app.getAppPath(), 'icon', 'web-client-icon', 'icon.ico'),
+    path.join(app.getAppPath(), 'icon', 'icon.ico'),
+    path.join(process.cwd(), 'icon', 'web-client-icon', 'icon.ico'),
+    path.join(process.cwd(), 'icon', 'icon.ico'),
+    process.execPath,
+  ];
+
+  return iconCandidates.find((candidate) => existsSync(candidate)) ?? process.execPath;
+}
+
+function clearLegacyLoginItemAutostart() {
+  app.setLoginItemSettings({
+    openAtLogin: false,
+    path: process.execPath,
+    args: resolveLoginItemArgs(),
+  });
+}
+
+function isStartWithWindowsEnabled() {
+  if (!canManageStartupAtLogin()) {
+    return false;
+  }
+
+  return existsSync(resolveStartupShortcutPath());
+}
+
+function setStartWithWindowsEnabled(enabled: boolean) {
+  if (!canManageStartupAtLogin()) {
+    return;
+  }
+
+  const startupShortcutPath = resolveStartupShortcutPath();
+  const scriptEntryPath = resolveLoginItemArgs()[0] ?? '';
+  clearLegacyLoginItemAutostart();
+
+  if (enabled) {
+    if (!scriptEntryPath) {
+      refreshTray();
+      return;
+    }
+
+    shell.writeShortcutLink(startupShortcutPath, 'create', {
+      target: process.execPath,
+      args: `"${scriptEntryPath}"`,
+      cwd: path.dirname(process.execPath),
+      description: 'Local Game Gallery Web Client Tray Host',
+      icon: resolveStartupShortcutIconPath(),
+      iconIndex: 0,
+      appUserModelId: 'com.localgamegallery.web-client',
+    });
+  } else if (existsSync(startupShortcutPath)) {
+    unlinkSync(startupShortcutPath);
+  }
+
+  refreshTray();
 }
 
 function resolveBundledWebClientRoot() {
@@ -162,6 +249,8 @@ async function probeServiceSnapshot() {
 function buildTrayMenu() {
   const startedAtLabel = new Date(trayStartedAt).toLocaleString();
   const checkedAtLabel = new Date(serviceSnapshot.checkedAt).toLocaleTimeString();
+  const startupSupported = canManageStartupAtLogin();
+  const startupEnabled = startupSupported && isStartWithWindowsEnabled();
 
   return Menu.buildFromTemplate([
     { label: 'Local Game Gallery Web Client', enabled: false },
@@ -191,6 +280,15 @@ function buildTrayMenu() {
       enabled: serviceSnapshot.healthy,
       click: () => {
         void shell.openExternal(`${serviceSnapshot.endpoint}/api/health`);
+      },
+    },
+    {
+      label: 'Start with Windows',
+      type: 'checkbox',
+      enabled: startupSupported,
+      checked: startupEnabled,
+      click: () => {
+        setStartWithWindowsEnabled(!isStartWithWindowsEnabled());
       },
     },
     { type: 'separator' },

@@ -18,6 +18,7 @@ import { MetadataModal } from './MetadataModal';
 import { VaultPinModal } from './VaultPinModal';
 import { VaultUnlockModal } from './VaultUnlockModal';
 import type { GameMetadata, GameSummary } from '../types';
+import type { BrowserMediaUploadProgress } from '../client/adapters/webClient';
 
 type TagAutocompleteState = {
   scope: 'pool' | 'filter' | 'metadata';
@@ -54,6 +55,7 @@ type ModalHostProps = {
   mediaModalGame: GameSummary | null;
   mediaModalGamePath: string | null;
   isMediaSaving: boolean;
+  mediaUploadProgress: BrowserMediaUploadProgress | null;
   featuredImportTarget: 'poster' | 'card' | 'background' | null;
   pendingFeaturedDropPaths: string[];
   dragSection: 'featured' | 'gallery' | null;
@@ -125,6 +127,7 @@ export function ModalHost({
   mediaModalGame,
   mediaModalGamePath,
   isMediaSaving,
+  mediaUploadProgress,
   featuredImportTarget,
   pendingFeaturedDropPaths,
   dragSection,
@@ -306,6 +309,7 @@ export function ModalHost({
         // Require both path and resolved game object to avoid partially-initialized modal renders.
         isOpen={Boolean(mediaModalGamePath && mediaModalGame)}
         isMediaSaving={isMediaSaving}
+        mediaUploadProgress={mediaUploadProgress}
         featuredImportTarget={featuredImportTarget}
         pendingFeaturedDropPaths={pendingFeaturedDropPaths}
         dragSection={dragSection}

@@ -40,6 +40,7 @@ type SetupPanelProps = {
   onToggleSystemMenuBar: (visible: boolean) => void;
   onOpenLogViewer: () => void;
   onOpenLogFolder: () => void;
+  supportsAppIconPicker: boolean;
   appIconPreviewSrc: string | null;
   appIconSummary: AppIconSummary | null;
   appIconPath: string;
@@ -69,6 +70,7 @@ export function SetupPanel({
   onToggleSystemMenuBar,
   onOpenLogViewer,
   onOpenLogFolder,
+  supportsAppIconPicker,
   appIconPreviewSrc,
   appIconSummary,
   appIconPath,
@@ -94,6 +96,7 @@ export function SetupPanel({
     t('setup.metadataMirrorParitySyncAction'),
     t('setup.metadataMirrorParitySyncHint'),
   ].join(' ');
+  const appIconPickerUnavailableHint = t('setup.appIconDesktopOnlyHint');
   const [hoverTooltip, setHoverTooltip] = useState<{
     text: string;
     left: number;
@@ -323,13 +326,19 @@ export function SetupPanel({
             className={`app-icon-dropzone ${isAppIconDragActive ? 'app-icon-dropzone--dragover' : ''}`}
             onDragOver={(event) => {
               // Prevent browser file-open navigation and expose copy intent feedback.
+              if (!supportsAppIconPicker) {
+                return;
+              }
               event.preventDefault();
               event.stopPropagation();
               event.dataTransfer.dropEffect = 'copy';
             }}
-            onDragEnter={onAppIconDragEnter}
-            onDragLeave={onAppIconDragLeave}
+            onDragEnter={supportsAppIconPicker ? onAppIconDragEnter : undefined}
+            onDragLeave={supportsAppIconPicker ? onAppIconDragLeave : undefined}
             onDrop={(event) => {
+              if (!supportsAppIconPicker) {
+                return;
+              }
               event.preventDefault();
               event.stopPropagation();
               onDropAppIconFile(event);
@@ -337,14 +346,17 @@ export function SetupPanel({
             role="button"
             tabIndex={0}
             onKeyDown={(event) => {
+              if (!supportsAppIconPicker) {
+                return;
+              }
               if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
                 onPickAppIcon();
               }
             }}
-            onClick={onPickAppIcon}
+            onClick={supportsAppIconPicker ? onPickAppIcon : undefined}
             aria-label={t('setup.appIconDropAria')}
-            title={t('setup.appIconDropAria')}
+            title={supportsAppIconPicker ? t('setup.appIconDropAria') : appIconPickerUnavailableHint}
           >
             {appIconPreviewSrc ? (
               <img src={appIconPreviewSrc} alt={t('setup.selectedAppIconPreviewAlt')} className="app-icon-preview" />
@@ -367,11 +379,14 @@ export function SetupPanel({
           ) : (
             <small className="field__hint">{t('setup.appIconSizeHint')}</small>
           )}
+          {!supportsAppIconPicker ? (
+            <small className="field__hint">{appIconPickerUnavailableHint}</small>
+          ) : null}
           <div className="app-icon-actions">
-            <button className="button button--icon" type="button" onClick={onApplyAppIconNow} disabled={!appIconPath}>
+            <button className="button button--icon" type="button" onClick={onApplyAppIconNow} disabled={!appIconPath || !supportsAppIconPicker}>
               {t('setup.applyNow')}
             </button>
-            <button className="button button--icon" type="button" onClick={onResetAppIcon} disabled={!appIconPath}>
+            <button className="button button--icon" type="button" onClick={onResetAppIcon} disabled={!appIconPath || !supportsAppIconPicker}>
               {t('setup.resetToDefault')}
             </button>
           </div>

@@ -552,3 +552,125 @@ export async function scanGames(config: GalleryConfig, requestOptions: ScanReque
     usingMirrorFallback,
   };
 }
+
+export async function scanGame(config: GalleryConfig, gamePath: string): Promise<GameSummary | null> {
+  const configuredGamesRoot = String(config.gamesRoot ?? '').trim();
+  if (!configuredGamesRoot) {
+    throw new Error('Choose a games root folder before scanning.');
+  }
+
+  const sourceRootPath = path.resolve(configuredGamesRoot);
+  const configuredMirrorRoot = String(config.metadataMirrorRoot ?? '').trim();
+  const mirrorRootPath = configuredMirrorRoot ? path.resolve(configuredMirrorRoot) : '';
+  const mirrorValidationError = mirrorRootPath
+    ? getMirrorRootValidationError(sourceRootPath, mirrorRootPath)
+    : '';
+
+  const sourceRootStats = await stat(sourceRootPath).catch(() => null);
+  const canScanSourceRoot = Boolean(sourceRootStats?.isDirectory());
+
+  let scanRootPath = sourceRootPath;
+  let usingMirrorFallback = false;
+
+  if (!canScanSourceRoot) {
+    if (!mirrorRootPath || mirrorValidationError) {
+      throw new Error('The configured games root is not a valid folder.');
+    }
+
+    const mirrorRootStats = await stat(mirrorRootPath).catch(() => null);
+    if (!mirrorRootStats?.isDirectory()) {
+      throw new Error('The configured games root is not a valid folder, and the metadata mirror root is not a valid folder.');
+    }
+
+    scanRootPath = mirrorRootPath;
+    usingMirrorFallback = true;
+  }
+
+  const resolvedGamePath = path.resolve(String(gamePath ?? '').trim());
+  if (!resolvedGamePath || !isPathInside(scanRootPath, resolvedGamePath)) {
+    return null;
+  }
+
+  const gameStats = await stat(resolvedGamePath).catch(() => null);
+  if (!gameStats?.isDirectory()) {
+    return null;
+  }
+
+  const gameName = path.basename(resolvedGamePath);
+  if ((config.hideDotEntries && gameName.startsWith('.')) || matchesExcludePatterns(gameName, config.excludePatterns)) {
+    return null;
+  }
+
+  const sourceEquivalentGamePath = usingMirrorFallback
+    ? path.join(sourceRootPath, gameName)
+    : resolvedGamePath;
+
+  const versionPattern = new RegExp(config.versionFolderPattern);
+  const gameEntries = await readDirectoryEntriesSafe(resolvedGamePath);
+  const createdGameNfo = await ensureDefaultGameNfo(resolvedGamePath, gameName);
+  const versions = gameEntries
+    .filter((child) => child.isDirectory() && versionPattern.test(child.name))
+    .map((child) => ({
+      name: child.name,
+      path: path.join(resolvedGamePath, child.name),
+      hasNfo: false,
+    }));
+
+  let createdVersionNfoCount = 0;
+  for (const version of versions) {
+    const createdVersionNfo = await ensureDefaultVersionNfo(version.path, version.name);
+    createdVersionNfoCount += createdVersionNfo ? 1 : 0;
+    version.hasNfo = true;
+  }
+
+  const picturesPath = path.join(resolvedGamePath, config.picturesFolderName);
+  const hadPicturesFolder = await pathExists(picturesPath);
+  if (!hadPicturesFolder) {
+    await mkdir(picturesPath, { recursive: true });
+  }
+
+  const picturesStats = await stat(picturesPath).catch(() => null);
+  const imageCount = picturesStats?.isDirectory() ? await countImages(picturesPath) : 0;
+  const usesPlaceholderArt = imageCount === 0;
+  const metadata = await readGameMetadata(resolvedGamePath, gameName, versions);
+  const detectedLatestVersion = getLatestVersionName(versions);
+  if (!metadata.latestVersion) {
+    metadata.latestVersion = detectedLatestVersion;
+  }
+
+  const hasVersionMismatch = Boolean(
+    detectedLatestVersion
+    && metadata.latestVersion
+    && detectedLatestVersion !== metadata.latestVersion,
+  );
+
+  const dismissedDetectedVersion = config.dismissedVersionMismatches?.[resolvedGamePath]
+    ?? (usingMirrorFallback ? config.dismissedVersionMismatches?.[sourceEquivalentGamePath] : undefined);
+  const isVersionMismatchDismissed = hasVersionMismatch && dismissedDetectedVersion === detectedLatestVersion;
+  const media = picturesStats?.isDirectory()
+    ? await scanGameMedia(picturesPath)
+    : { poster: null, card: null, background: null, screenshots: [] };
+  const lastPlayedAt = await readLastPlayedAt(resolvedGamePath);
+
+  return {
+    name: gameName,
+    path: resolvedGamePath,
+    isVaulted: (config.vaultedGamePaths ?? []).includes(resolvedGamePath)
+      || (usingMirrorFallback && (config.vaultedGamePaths ?? []).includes(sourceEquivalentGamePath)),
+    lastPlayedAt,
+    hasNfo: true,
+    picturesPath: picturesStats?.isDirectory() ? picturesPath : null,
+    imageCount,
+    usesPlaceholderArt,
+    createdPicturesFolder: !hadPicturesFolder,
+    createdGameNfo,
+    createdVersionNfoCount,
+    metadata,
+    detectedLatestVersion,
+    hasVersionMismatch,
+    isVersionMismatchDismissed,
+    media,
+    versionCount: versions.length,
+    versions,
+  };
+}

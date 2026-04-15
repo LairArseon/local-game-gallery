@@ -29,7 +29,7 @@ import {
 import { loadConfig, saveConfig } from './config';
 import { getLatestVersionName, readGameMetadata, reorderScreenshots, removeScreenshot, saveGameMetadata } from './game-library';
 import { appendLogEvent, clearLogContents, readLogContents } from './logger';
-import { scanGames } from './scanner';
+import { scanGame, scanGames } from './scanner';
 
 type ApiSuccess<T> = {
   ok: true;
@@ -833,6 +833,29 @@ export async function startGalleryHttpService({
             message: `HTTP scan request failed: ${message}`,
           }).catch(() => undefined);
           sendError(response, 400, 'scan_failed', message);
+        }
+        return;
+      }
+
+      if (method === 'POST' && route === '/api/scan-game') {
+        try {
+          const payload = await readJsonBody<{ gamePath: string }>(request);
+          const config = await loadRuntimeConfig();
+          const resolvedGamePath = path.resolve(String(payload.gamePath ?? '').trim());
+          if (!resolvedGamePath) {
+            sendError(response, 400, 'invalid_game_path', 'Game path is required.');
+            return;
+          }
+
+          if (!isPathInsideAllowedGalleryRoots(resolvedGamePath, config)) {
+            sendError(response, 403, 'forbidden_game_path', 'Target game path is outside allowed gallery roots.');
+            return;
+          }
+
+          const game = await scanGame(config, resolvedGamePath);
+          sendOk(response, { game });
+        } catch (error) {
+          sendError(response, 400, 'scan_game_failed', toErrorMessage(error, 'Failed to refresh game.'));
         }
         return;
       }

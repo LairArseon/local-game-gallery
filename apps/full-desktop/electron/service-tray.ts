@@ -1,4 +1,5 @@
 import { app, Menu, Tray, nativeImage, shell } from 'electron';
+import { existsSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { appendLogEvent } from './logger';
@@ -19,6 +20,93 @@ function resolveWebClientUrl() {
   }
 
   return 'http://127.0.0.1:4173';
+}
+
+function canManageStartupAtLogin() {
+  return process.platform === 'win32';
+}
+
+function resolveLoginItemArgs() {
+  const entryScriptPath = String(process.argv[1] ?? '').trim();
+  if (!entryScriptPath) {
+    return [];
+  }
+
+  return [path.resolve(entryScriptPath)];
+}
+
+function resolveStartupFolderPath() {
+  const appDataPath = String(process.env.APPDATA ?? app.getPath('appData')).trim();
+  return path.join(appDataPath, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
+}
+
+function resolveStartupShortcutPath() {
+  return path.join(resolveStartupFolderPath(), 'Gallery Service Tray.lnk');
+}
+
+function resolveStartupShortcutIconPath() {
+  const scriptInstallRoot = path.resolve(__dirname, '..', '..');
+  const runtimeInstallRoot = path.resolve(path.dirname(process.execPath), '..', '..');
+  const iconCandidates = [
+    path.join(scriptInstallRoot, 'icon', 'service-icon', 'icon.ico'),
+    path.join(scriptInstallRoot, 'icon', 'icon.ico'),
+    path.join(runtimeInstallRoot, 'icon', 'service-icon', 'icon.ico'),
+    path.join(runtimeInstallRoot, 'icon', 'icon.ico'),
+    path.join(app.getAppPath(), 'icon', 'service-icon', 'icon.ico'),
+    path.join(app.getAppPath(), 'icon', 'icon.ico'),
+    path.join(process.cwd(), 'icon', 'service-icon', 'icon.ico'),
+    path.join(process.cwd(), 'icon', 'icon.ico'),
+    process.execPath,
+  ];
+
+  return iconCandidates.find((candidate) => existsSync(candidate)) ?? process.execPath;
+}
+
+function clearLegacyLoginItemAutostart() {
+  app.setLoginItemSettings({
+    openAtLogin: false,
+    path: process.execPath,
+    args: resolveLoginItemArgs(),
+  });
+}
+
+function isStartWithWindowsEnabled() {
+  if (!canManageStartupAtLogin()) {
+    return false;
+  }
+
+  return existsSync(resolveStartupShortcutPath());
+}
+
+function setStartWithWindowsEnabled(enabled: boolean) {
+  if (!canManageStartupAtLogin()) {
+    return;
+  }
+
+  const startupShortcutPath = resolveStartupShortcutPath();
+  const scriptEntryPath = resolveLoginItemArgs()[0] ?? '';
+  clearLegacyLoginItemAutostart();
+
+  if (enabled) {
+    if (!scriptEntryPath) {
+      refreshTray();
+      return;
+    }
+
+    shell.writeShortcutLink(startupShortcutPath, 'create', {
+      target: process.execPath,
+      args: `"${scriptEntryPath}"`,
+      cwd: path.dirname(process.execPath),
+      description: 'Local Game Gallery Service Tray',
+      icon: resolveStartupShortcutIconPath(),
+      iconIndex: 0,
+      appUserModelId: 'com.localgamegallery.service',
+    });
+  } else if (existsSync(startupShortcutPath)) {
+    unlinkSync(startupShortcutPath);
+  }
+
+  refreshTray();
 }
 
 function resolveTrayIcon() {
@@ -82,6 +170,8 @@ function getServiceSnapshot() {
 function buildTrayMenu() {
   const snapshot = getServiceSnapshot();
   const startedAtLabel = new Date(serviceTrayStartedAt).toLocaleString();
+  const startupSupported = canManageStartupAtLogin();
+  const startupEnabled = startupSupported && isStartWithWindowsEnabled();
 
   return Menu.buildFromTemplate([
     { label: 'Local Game Gallery Service', enabled: false },
@@ -110,6 +200,15 @@ function buildTrayMenu() {
         }
 
         void shell.openExternal(`http://${health.host}:${health.port}/api/health`);
+      },
+    },
+    {
+      label: 'Start with Windows',
+      type: 'checkbox',
+      enabled: startupSupported,
+      checked: startupEnabled,
+      click: () => {
+        setStartWithWindowsEnabled(!isStartWithWindowsEnabled());
       },
     },
     { type: 'separator' },

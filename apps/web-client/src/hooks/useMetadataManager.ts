@@ -25,6 +25,7 @@ type UseMetadataManagerArgs = {
   setConfig: Dispatch<SetStateAction<GalleryConfig | null>>;
   games: GameSummary[];
   setStatus: Dispatch<SetStateAction<string>>;
+  refreshGame: (gamePath: string) => Promise<unknown>;
   refreshScan: () => Promise<unknown>;
   logAppEvent: (message: string, level?: 'info' | 'warn' | 'error', source?: string) => Promise<void>;
   toErrorMessage: (error: unknown, fallback: string) => string;
@@ -36,6 +37,7 @@ export function useMetadataManager({
   setConfig,
   games,
   setStatus,
+  refreshGame,
   refreshScan,
   logAppEvent,
   toErrorMessage,
@@ -119,9 +121,19 @@ export function useMetadataManager({
         }
       }
 
-      await refreshScan();
       closeMetadataModal();
       setStatus(t('status.metadataSaved'));
+      // Refresh edited game first for responsive UI updates, then fallback to full scan if needed.
+      void refreshGame(game.path).then((result) => {
+        if (result) {
+          return;
+        }
+
+        return refreshScan();
+      }).catch((error) => {
+        const logMessage = toErrorMessage(error, 'Background metadata refresh failed.');
+        void logAppEvent(logMessage, 'warn', 'save-metadata-refresh');
+      });
     } catch (error) {
       const logMessage = toErrorMessage(error, 'Failed to save metadata.');
       setStatus(t('status.failedSaveMetadata'));

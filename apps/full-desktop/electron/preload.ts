@@ -44,6 +44,7 @@ const api: GalleryApi = {
   applyRuntimeAppIcon: (payload: ApplyRuntimeAppIconPayload): Promise<ApplyRuntimeAppIconResult> =>
     ipcRenderer.invoke('gallery:apply-runtime-app-icon', payload),
   scanGames: (options?: ScanRequestOptions) => ipcRenderer.invoke('gallery:scan-games', options),
+  scanGame: (gamePath: string) => ipcRenderer.invoke('gallery:scan-game', { gamePath }),
   showGameContextMenu: (payload: GameContextMenuPayload) => ipcRenderer.invoke('gallery:show-game-context-menu', payload),
   showVersionContextMenu: (payload: VersionContextMenuPayload) => ipcRenderer.invoke('gallery:show-version-context-menu', payload),
   showVaultContextMenu: (payload: VaultContextMenuPayload) => ipcRenderer.invoke('gallery:show-vault-context-menu', payload),
