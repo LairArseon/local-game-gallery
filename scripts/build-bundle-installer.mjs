@@ -202,12 +202,8 @@ function createNsisScript({ outputExePath, payloadDirPath, appVersion }) {
     'SectionEnd',
     '',
     'Function EnsureRuntimePayload',
-    '  IfFileExists "$INSTDIR\\runtime\\electron\\electron.exe" runtime_done',
-    '',
     '  SetOutPath "$INSTDIR\\runtime\\electron"',
     '  File /r "${PAYLOAD_DIR}\\runtime\\electron-dist\\*"',
-
-    'runtime_done:',
     '',
     '  SetOutPath "$INSTDIR\\icon"',
     '  File /r "${PAYLOAD_DIR}\\icon\\*"',
