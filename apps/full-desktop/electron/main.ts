@@ -5,9 +5,10 @@
  */
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from 'electron';
 import type { OpenDialogOptions } from 'electron';
-import { access, appendFile, mkdir, readdir, writeFile } from 'node:fs/promises';
+import { access, appendFile, copyFile, mkdir, mkdtemp, readdir, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import os from 'node:os';
 import { loadConfig, saveConfig } from './config';
 import { appendLogEvent, clearLogContents, openLogFolder, readLogContents } from './logger';
 import { getLatestVersionName, importDroppedGameMedia, readGameMetadata, removeScreenshot, reorderScreenshots, saveGameMetadata } from './game-library';
@@ -32,6 +33,10 @@ import type {
   ReorderScreenshotsPayload,
   ScanRequestOptions,
   SaveGameMetadataPayload,
+  SaveExtraDownloadPayload,
+  SaveExtraDownloadResult,
+  SaveVersionDownloadPayload,
+  SaveVersionDownloadResult,
   ServiceApiVersionInfo,
   ServiceCapabilities,
   ServiceHealthStatus,
@@ -265,6 +270,66 @@ function toExecutableAbsolutePath(gamePath: string, storedPath: string) {
   }
 
   return path.join(gamePath, storedPath);
+}
+
+function toDownloadSafeFileName(value: string) {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) {
+    return 'download';
+  }
+
+  return normalized.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_');
+}
+
+function isPathInside(parentPath: string, targetPath: string) {
+  const relative = path.relative(parentPath, targetPath);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+async function createZipFromFolder(folderPath: string, outputZipPath: string) {
+  if (process.platform !== 'win32') {
+    throw new Error('Folder download compression is currently supported on Windows hosts only.');
+  }
+
+  const folderArg = `'${folderPath.replace(/'/g, "''")}'`;
+  const outputArg = `'${outputZipPath.replace(/'/g, "''")}'`;
+  const command = [
+    "$ErrorActionPreference = 'Stop'",
+    'Add-Type -AssemblyName System.IO.Compression.FileSystem',
+    `if (Test-Path -LiteralPath ${outputArg}) { Remove-Item -LiteralPath ${outputArg} -Force }`,
+    `[System.IO.Compression.ZipFile]::CreateFromDirectory(${folderArg}, ${outputArg}, [System.IO.Compression.CompressionLevel]::Optimal, $true)`,
+  ].join('; ');
+
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command], {
+      windowsHide: true,
+    });
+
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => {
+      stdout += String(chunk ?? '');
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += String(chunk ?? '');
+    });
+
+    child.on('error', reject);
+    child.on('exit', (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      const stdoutText = stdout.trim();
+      const stderrText = stderr.trim();
+      reject(new Error(
+        stderrText
+        || stdoutText
+        || `Compression failed with exit code ${code}.`,
+      ));
+    });
+  });
 }
 
 function launchExecutable(executablePath: string) {
@@ -723,6 +788,287 @@ ipcMain.handle('gallery:reorder-screenshots', async (_event, payload: ReorderScr
 
 ipcMain.handle('gallery:remove-screenshot', async (_event, payload: RemoveScreenshotPayload) => {
   await removeScreenshot(payload.screenshotPath);
+});
+
+ipcMain.handle('gallery:save-extra-download', async (_event, payload: SaveExtraDownloadPayload): Promise<SaveExtraDownloadResult> => {
+  const gamePath = String(payload?.gamePath ?? '').trim();
+  const relativePath = String(payload?.relativePath ?? '').trim();
+  const suggestedName = String(payload?.suggestedName ?? '').trim();
+
+  if (!gamePath || !relativePath) {
+    const message = 'Game path and extra path are required for download.';
+    await appendLogEvent({
+      level: 'warn',
+      source: 'main-save-extra-download',
+      message,
+    }).catch(() => undefined);
+    return {
+      saved: false,
+      canceled: false,
+      savedPath: null,
+      message,
+    };
+  }
+
+  const extrasRoot = path.resolve(gamePath, 'extras');
+  const resolvedTargetPath = path.resolve(extrasRoot, relativePath);
+
+  if (!isPathInside(extrasRoot, resolvedTargetPath)) {
+    const message = 'Invalid extra download path.';
+    await appendLogEvent({
+      level: 'warn',
+      source: 'main-save-extra-download',
+      message: `Blocked extras download path traversal attempt for "${relativePath}" in game "${gamePath}".`,
+    }).catch(() => undefined);
+    return {
+      saved: false,
+      canceled: false,
+      savedPath: null,
+      message,
+    };
+  }
+
+  let targetStats: Awaited<ReturnType<typeof stat>>;
+  try {
+    targetStats = await stat(resolvedTargetPath);
+  } catch {
+    const message = 'Selected extra was not found on disk.';
+    await appendLogEvent({
+      level: 'warn',
+      source: 'main-save-extra-download',
+      message: `Extras download target missing: "${resolvedTargetPath}"`,
+    }).catch(() => undefined);
+    return {
+      saved: false,
+      canceled: false,
+      savedPath: null,
+      message,
+    };
+  }
+
+  const baseName = toDownloadSafeFileName(suggestedName || path.basename(resolvedTargetPath));
+  const defaultFileName = targetStats.isDirectory() ? `${baseName}.zip` : baseName;
+  const window = BrowserWindow.getFocusedWindow() ?? mainWindow;
+  const saveDialogResult = window
+    ? await dialog.showSaveDialog(window, {
+      title: 'Save extra as',
+      defaultPath: defaultFileName,
+      buttonLabel: 'Save',
+    })
+    : await dialog.showSaveDialog({
+      title: 'Save extra as',
+      defaultPath: defaultFileName,
+      buttonLabel: 'Save',
+    });
+
+  if (saveDialogResult.canceled || !saveDialogResult.filePath) {
+    await appendLogEvent({
+      level: 'warn',
+      source: 'main-save-extra-download',
+      message: `Extras save dialog canceled for "${relativePath}".`,
+    }).catch(() => undefined);
+    return {
+      saved: false,
+      canceled: true,
+      savedPath: null,
+      message: 'Download cancelled.',
+    };
+  }
+
+  const destinationPath = path.resolve(saveDialogResult.filePath);
+  try {
+    if (targetStats.isDirectory()) {
+      await appendLogEvent({
+        level: 'info',
+        source: 'main-save-extra-download',
+        message: `Preparing folder extra download for "${relativePath}".`,
+      }).catch(() => undefined);
+
+      const tempDir = await mkdtemp(path.join(os.tmpdir(), 'lgg-extra-'));
+      const tempZipPath = path.join(tempDir, defaultFileName);
+      try {
+        await appendLogEvent({
+          level: 'info',
+          source: 'main-save-extra-download',
+          message: `Creating temporary zip "${tempZipPath}" from "${resolvedTargetPath}".`,
+        }).catch(() => undefined);
+        await createZipFromFolder(resolvedTargetPath, tempZipPath);
+        await appendLogEvent({
+          level: 'info',
+          source: 'main-save-extra-download',
+          message: `Temporary zip created. Copying to "${destinationPath}".`,
+        }).catch(() => undefined);
+        await copyFile(tempZipPath, destinationPath);
+      } finally {
+        await unlink(tempZipPath).catch(() => undefined);
+        await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+      }
+    } else {
+      await copyFile(resolvedTargetPath, destinationPath);
+    }
+
+    await appendLogEvent({
+      level: 'info',
+      source: 'main-save-extra-download',
+      message: `Saved extra "${relativePath}" to "${destinationPath}".`,
+    }).catch(() => undefined);
+
+    return {
+      saved: true,
+      canceled: false,
+      savedPath: destinationPath,
+      message: `Saved to ${destinationPath}`,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to save extra.';
+    await appendLogEvent({
+      level: 'error',
+      source: 'main-save-extra-download',
+      message: `Failed saving extra "${relativePath}" to "${destinationPath}": ${message}`,
+    }).catch(() => undefined);
+
+    return {
+      saved: false,
+      canceled: false,
+      savedPath: null,
+      message,
+    };
+  }
+});
+
+ipcMain.handle('gallery:save-version-download', async (_event, payload: SaveVersionDownloadPayload): Promise<SaveVersionDownloadResult> => {
+  const gamePath = String(payload?.gamePath ?? '').trim();
+  const versionPath = String(payload?.versionPath ?? '').trim();
+  const suggestedName = String(payload?.suggestedName ?? '').trim();
+
+  if (!gamePath || !versionPath) {
+    const message = 'Game path and version path are required for download.';
+    await appendLogEvent({
+      level: 'warn',
+      source: 'main-save-version-download',
+      message,
+    }).catch(() => undefined);
+    return {
+      saved: false,
+      canceled: false,
+      savedPath: null,
+      message,
+    };
+  }
+
+  const resolvedGamePath = path.resolve(gamePath);
+  const resolvedVersionPath = path.resolve(versionPath);
+  if (!isPathInside(resolvedGamePath, resolvedVersionPath)) {
+    const message = 'Invalid version download path.';
+    await appendLogEvent({
+      level: 'warn',
+      source: 'main-save-version-download',
+      message: `Blocked version download path traversal attempt for "${versionPath}" in game "${gamePath}".`,
+    }).catch(() => undefined);
+    return {
+      saved: false,
+      canceled: false,
+      savedPath: null,
+      message,
+    };
+  }
+
+  let targetStats: Awaited<ReturnType<typeof stat>>;
+  try {
+    targetStats = await stat(resolvedVersionPath);
+  } catch {
+    const message = 'Selected version folder was not found on disk.';
+    await appendLogEvent({
+      level: 'warn',
+      source: 'main-save-version-download',
+      message: `Version download target missing: "${resolvedVersionPath}"`,
+    }).catch(() => undefined);
+    return {
+      saved: false,
+      canceled: false,
+      savedPath: null,
+      message,
+    };
+  }
+
+  if (!targetStats.isDirectory()) {
+    const message = 'Selected version path is not a folder.';
+    return {
+      saved: false,
+      canceled: false,
+      savedPath: null,
+      message,
+    };
+  }
+
+  const baseName = toDownloadSafeFileName(suggestedName || path.basename(resolvedVersionPath));
+  const defaultFileName = `${baseName}.zip`;
+  const window = BrowserWindow.getFocusedWindow() ?? mainWindow;
+  const saveDialogResult = window
+    ? await dialog.showSaveDialog(window, {
+      title: 'Save version as',
+      defaultPath: defaultFileName,
+      buttonLabel: 'Save',
+    })
+    : await dialog.showSaveDialog({
+      title: 'Save version as',
+      defaultPath: defaultFileName,
+      buttonLabel: 'Save',
+    });
+
+  if (saveDialogResult.canceled || !saveDialogResult.filePath) {
+    await appendLogEvent({
+      level: 'warn',
+      source: 'main-save-version-download',
+      message: `Version save dialog canceled for "${versionPath}".`,
+    }).catch(() => undefined);
+    return {
+      saved: false,
+      canceled: true,
+      savedPath: null,
+      message: 'Download cancelled.',
+    };
+  }
+
+  const destinationPath = path.resolve(saveDialogResult.filePath);
+  try {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), 'lgg-version-'));
+    const tempZipPath = path.join(tempDir, defaultFileName);
+    try {
+      await createZipFromFolder(resolvedVersionPath, tempZipPath);
+      await copyFile(tempZipPath, destinationPath);
+    } finally {
+      await unlink(tempZipPath).catch(() => undefined);
+      await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+    }
+
+    await appendLogEvent({
+      level: 'info',
+      source: 'main-save-version-download',
+      message: `Saved version "${versionPath}" to "${destinationPath}".`,
+    }).catch(() => undefined);
+
+    return {
+      saved: true,
+      canceled: false,
+      savedPath: destinationPath,
+      message: `Saved to ${destinationPath}`,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to save version download.';
+    await appendLogEvent({
+      level: 'error',
+      source: 'main-save-version-download',
+      message: `Failed saving version "${versionPath}" to "${destinationPath}": ${message}`,
+    }).catch(() => undefined);
+
+    return {
+      saved: false,
+      canceled: false,
+      savedPath: null,
+      message,
+    };
+  }
 });
 
 ipcMain.handle('gallery:log-event', async (_event, payload: LogEventPayload) => {

@@ -46,6 +46,8 @@ import { useVersionMismatchManager } from './hooks/useVersionMismatchManager';
 import { useVaultManager } from './hooks/useVaultManager';
 import { useScanOrchestrator, type RefreshScanMode } from './hooks/useScanOrchestrator';
 import { useFallbackRecoveryProbe } from './hooks/useFallbackRecoveryProbe';
+import { useExtraDownloads } from './hooks/useExtraDownloads';
+import { useVersionDownloads } from './hooks/useVersionDownloads';
 import { clamp } from './utils/app-helpers';
 import { useGalleryClient } from './client/context';
 
@@ -844,6 +846,22 @@ function App() {
     [scanResult.games, detailGamePath, isVaultOpen],
   );
 
+  const { onDownloadExtra, extraDownloadProgress } = useExtraDownloads({
+    hasDesktopBridge,
+    galleryClient,
+    setStatus,
+    t,
+    logAppEvent,
+  });
+
+  const { onDownloadVersion, versionDownloadProgress } = useVersionDownloads({
+    hasDesktopBridge,
+    galleryClient,
+    setStatus,
+    t,
+    logAppEvent,
+  });
+
   // Dynamic scale layer: adapts typography/spacing/media to current grid density.
   const dynamicUiScaleFactor = useMemo(() => {
     if (!config?.uiDynamicGridScaling) {
@@ -899,12 +917,42 @@ function App() {
 
   const detailBackgroundSrc = detailGame ? filePathToSrc(detailGame.media.background) : null;
   const hideTopbarForDetail = isNarrowViewport && Boolean(detailGame);
+  const activeDownloadProgress = extraDownloadProgress ?? versionDownloadProgress;
+  const downloadProgressLabel = activeDownloadProgress
+    ? activeDownloadProgress.phase === 'compressing'
+      ? t('detail.downloadProgressCompressing')
+      : activeDownloadProgress.phase === 'downloading'
+        ? t('detail.downloadProgressDownloading')
+        : t('detail.downloadProgressSaving')
+    : '';
   return (
     <main className="shell">
       {isUsingMirrorFallback ? (
         <aside className="floating-fallback-alert" role="status" aria-live="polite">
           <p className="floating-fallback-alert__title">{t('app.mirrorFallbackBannerTitle')}</p>
           <p className="floating-fallback-alert__body">{t('app.mirrorFallbackBannerBody')}</p>
+        </aside>
+      ) : null}
+
+      {activeDownloadProgress ? (
+        <aside className="floating-extra-download" role="status" aria-live="polite">
+          <p className="floating-extra-download__title">{downloadProgressLabel}</p>
+          <p className="floating-extra-download__body">{activeDownloadProgress.fileName}</p>
+          {activeDownloadProgress.phase === 'downloading' ? (
+            <div className="floating-extra-download__meter" aria-hidden="true">
+              <span
+                className="floating-extra-download__meter-fill"
+                style={{ transform: `scaleX(${Math.max(0, Math.min(1, (activeDownloadProgress.percent ?? 15) / 100))})` }}
+              />
+            </div>
+          ) : null}
+          {activeDownloadProgress.phase === 'downloading' ? (
+            <p className="floating-extra-download__percent">
+              {activeDownloadProgress.percent !== null
+                ? t('detail.downloadProgressPercent', { percent: activeDownloadProgress.percent })
+                : t('detail.downloadProgressUnknown')}
+            </p>
+          ) : null}
         </aside>
       ) : null}
 
@@ -1069,6 +1117,8 @@ function App() {
           onOpenGameFolder={onOpenGameFolder}
           onOpenVersionFolder={onOpenVersionFolder}
           onOpenVersionContextMenu={onOpenVersionContextMenu}
+          onDownloadExtra={onDownloadExtra}
+          onDownloadVersion={onDownloadVersion}
           onOpenPictures={openPicturesModal}
           onOpenScreenshot={setScreenshotModalPath}
           scanResult={scanResult}

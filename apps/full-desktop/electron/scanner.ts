@@ -142,6 +142,33 @@ async function countImages(folderPath: string) {
   }
 }
 
+async function scanGameExtras(gamePath: string, hideDotEntries: boolean) {
+  const extrasPath = path.join(gamePath, 'extras');
+  const extrasStats = await stat(extrasPath).catch(() => null);
+  if (!extrasStats?.isDirectory()) {
+    return [] as GameSummary['extras'];
+  }
+
+  const extrasEntries = await readDirectoryEntriesSafe(extrasPath);
+  const extras = extrasEntries
+    .filter((entry) => entry.isFile() || entry.isDirectory())
+    .filter((entry) => !(hideDotEntries && entry.name.startsWith('.')))
+    .map((entry) => ({
+      name: entry.name,
+      relativePath: entry.name,
+      isDirectory: entry.isDirectory(),
+    }))
+    .sort((left, right) => {
+      if (left.isDirectory !== right.isDirectory) {
+        return left.isDirectory ? -1 : 1;
+      }
+
+      return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
+    });
+
+  return extras;
+}
+
 async function readLastPlayedAt(gamePath: string) {
   const activityLogPath = path.join(gamePath, activityLogFileName);
   try {
@@ -488,6 +515,7 @@ export async function scanGames(config: GalleryConfig, requestOptions: ScanReque
     const media = picturesStats?.isDirectory()
       ? await scanGameMedia(picturesPath)
       : { poster: null, card: null, background: null, screenshots: [] };
+    const extras = await scanGameExtras(gamePath, config.hideDotEntries);
     const lastPlayedAt = await readLastPlayedAt(gamePath);
 
     games.push({
@@ -508,6 +536,7 @@ export async function scanGames(config: GalleryConfig, requestOptions: ScanReque
       hasVersionMismatch,
       isVersionMismatchDismissed,
       media,
+      extras,
       versionCount: versions.length,
       versions,
     });
@@ -650,6 +679,7 @@ export async function scanGame(config: GalleryConfig, gamePath: string): Promise
   const media = picturesStats?.isDirectory()
     ? await scanGameMedia(picturesPath)
     : { poster: null, card: null, background: null, screenshots: [] };
+  const extras = await scanGameExtras(resolvedGamePath, config.hideDotEntries);
   const lastPlayedAt = await readLastPlayedAt(resolvedGamePath);
 
   return {
@@ -670,6 +700,7 @@ export async function scanGame(config: GalleryConfig, gamePath: string): Promise
     hasVersionMismatch,
     isVersionMismatchDismissed,
     media,
+    extras,
     versionCount: versions.length,
     versions,
   };

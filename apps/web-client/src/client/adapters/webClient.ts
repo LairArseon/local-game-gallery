@@ -20,6 +20,10 @@ import type {
   PlayGameResult,
   RemoveScreenshotPayload,
   ReorderScreenshotsPayload,
+  SaveExtraDownloadPayload,
+  SaveExtraDownloadResult,
+  SaveVersionDownloadPayload,
+  SaveVersionDownloadResult,
   SaveGameMetadataPayload,
   ScanRequestOptions,
   ScanResult,
@@ -921,7 +925,9 @@ export const webClient: GalleryClient = {
     return response.contents;
   },
   async openLogFolder() {
-    return unsupportedOpenFolderResult();
+    return requestApi<OpenFolderResult>('/api/open-log-folder', {
+      method: 'POST',
+    });
   },
   async clearLogContents() {
     await requestApi<{ cleared: boolean }>('/api/logs', {
@@ -970,5 +976,17 @@ export const webClient: GalleryClient = {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  },
+  async saveExtraDownload(_payload: SaveExtraDownloadPayload): Promise<SaveExtraDownloadResult> {
+    return unsupportedOperation<SaveExtraDownloadResult>(
+      'saveExtraDownload',
+      'Desktop save dialog is only available on the host desktop app.',
+    );
+  },
+  async saveVersionDownload(_payload: SaveVersionDownloadPayload): Promise<SaveVersionDownloadResult> {
+    return unsupportedOperation<SaveVersionDownloadResult>(
+      'saveVersionDownload',
+      'Desktop save dialog is only available on the host desktop app.',
+    );
   },
 };

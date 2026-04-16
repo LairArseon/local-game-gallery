@@ -157,6 +157,65 @@ button {
   line-height: 1.38;
 }
 
+.floating-extra-download {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 225;
+  min-width: 260px;
+  max-width: min(360px, calc(100vw - 28px));
+  border-radius: 12px;
+  border: 1px solid rgba(117, 208, 196, 0.34);
+  background: linear-gradient(150deg, rgba(10, 22, 30, 0.95), rgba(10, 14, 22, 0.95));
+  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.42);
+  padding: 11px 13px;
+  display: grid;
+  gap: 6px;
+}
+
+.floating-extra-download__title,
+.floating-extra-download__body,
+.floating-extra-download__percent {
+  margin: 0;
+}
+
+.floating-extra-download__title {
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: rgba(153, 235, 221, 0.95);
+  font-weight: 700;
+}
+
+.floating-extra-download__body {
+  font-size: 0.78rem;
+  color: rgba(234, 242, 246, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.floating-extra-download__meter {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(120, 189, 214, 0.22);
+  overflow: hidden;
+}
+
+.floating-extra-download__meter-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  background: linear-gradient(90deg, rgba(100, 209, 187, 0.92), rgba(112, 195, 243, 0.92));
+  transition: transform 170ms ease;
+}
+
+.floating-extra-download__percent {
+  font-size: 0.72rem;
+  color: rgba(190, 223, 240, 0.85);
+}
+
 .topbar-sync-progress {
   position: absolute;
   left: 20px;

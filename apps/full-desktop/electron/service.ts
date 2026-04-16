@@ -7,7 +7,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { spawn } from 'node:child_process';
-import { appendFile, mkdir, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
+import { appendFile, mkdtemp, mkdir, readFile, readdir, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {
@@ -28,7 +28,7 @@ import {
 } from '../src/types';
 import { loadConfig, saveConfig } from './config';
 import { getLatestVersionName, readGameMetadata, reorderScreenshots, removeScreenshot, saveGameMetadata } from './game-library';
-import { appendLogEvent, clearLogContents, readLogContents } from './logger';
+import { appendLogEvent, clearLogContents, openLogFolder, readLogContents } from './logger';
 import { scanGame, scanGames } from './scanner';
 
 type ApiSuccess<T> = {
@@ -234,6 +234,77 @@ function toErrorMessage(error: unknown, fallback: string) {
 function parseRequestUrl(request: IncomingMessage, fallbackHost: string, fallbackPort: number) {
   const hostHeader = request.headers.host?.trim() || `${fallbackHost}:${fallbackPort}`;
   return new URL(request.url ?? '/', `http://${hostHeader}`);
+}
+
+function toDownloadSafeFileName(value: string) {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) {
+    return 'download';
+  }
+
+  return normalized.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_');
+}
+
+function toAsciiHeaderFileName(value: string) {
+  const normalized = toDownloadSafeFileName(value)
+    .replace(/[^\x20-\x7E]/g, '_')
+    .replace(/"/g, '_')
+    .trim();
+
+  return normalized || 'download';
+}
+
+function buildAttachmentContentDisposition(fileName: string) {
+  const safeName = toDownloadSafeFileName(fileName);
+  const asciiFallback = toAsciiHeaderFileName(fileName);
+  const encodedUtf8 = encodeURIComponent(safeName).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodedUtf8}`;
+}
+
+async function createZipFromFolder(folderPath: string, outputZipPath: string) {
+  if (process.platform !== 'win32') {
+    throw new Error('Folder download compression is currently supported on Windows hosts only.');
+  }
+
+  const folderArg = `'${folderPath.replace(/'/g, "''")}'`;
+  const outputArg = `'${outputZipPath.replace(/'/g, "''")}'`;
+  const command = [
+    "$ErrorActionPreference = 'Stop'",
+    'Add-Type -AssemblyName System.IO.Compression.FileSystem',
+    `if (Test-Path -LiteralPath ${outputArg}) { Remove-Item -LiteralPath ${outputArg} -Force }`,
+    `[System.IO.Compression.ZipFile]::CreateFromDirectory(${folderArg}, ${outputArg}, [System.IO.Compression.CompressionLevel]::Optimal, $true)`,
+  ].join('; ');
+
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command], {
+      windowsHide: true,
+    });
+
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => {
+      stdout += String(chunk ?? '');
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += String(chunk ?? '');
+    });
+
+    child.on('error', reject);
+    child.on('exit', (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      const stdoutText = stdout.trim();
+      const stderrText = stderr.trim();
+      reject(new Error(
+        stderrText
+        || stdoutText
+        || `Compression failed with exit code ${code}.`,
+      ));
+    });
+  });
 }
 
 function isPathInside(parentPath: string, targetPath: string) {
@@ -699,6 +770,22 @@ export async function startGalleryHttpService({
         return;
       }
 
+      if (method === 'POST' && route === '/api/open-log-folder') {
+        const capabilities = resolveRequestCapabilities(request);
+        if (!capabilities.supportsLaunch) {
+          sendError(response, 403, 'forbidden_host_action', 'Opening folders is allowed only for same-machine clients.');
+          return;
+        }
+
+        try {
+          const result = await openLogFolder();
+          sendOk(response, result);
+        } catch (error) {
+          sendError(response, 400, 'open_log_folder_failed', toErrorMessage(error, 'Failed to open logs folder.'));
+        }
+        return;
+      }
+
       if (method === 'POST' && route === '/api/play-game') {
         const capabilities = resolveRequestCapabilities(request);
         if (!capabilities.supportsLaunch) {
@@ -783,6 +870,143 @@ export async function startGalleryHttpService({
           response.end(fileContents);
         } catch {
           sendError(response, 404, 'media_not_found', 'Media file not found.');
+        }
+
+        return;
+      }
+
+      if (method === 'GET' && route === '/api/extras/download') {
+        const gamePath = String(requestUrl.searchParams.get('gamePath') ?? '').trim();
+        const relativePath = String(requestUrl.searchParams.get('relativePath') ?? '').trim();
+        if (!gamePath || !relativePath) {
+          sendError(response, 400, 'missing_extra_path', 'Query params gamePath and relativePath are required.');
+          return;
+        }
+
+        const config = await loadRuntimeConfig();
+        const resolvedGamePath = path.resolve(gamePath);
+        if (!isPathInsideAllowedGalleryRoots(resolvedGamePath, config)) {
+          sendError(response, 403, 'forbidden_game_path', 'Target game path is outside allowed gallery roots.');
+          return;
+        }
+
+        const extrasRoot = path.resolve(resolvedGamePath, 'extras');
+        const extrasRootStats = await stat(extrasRoot).catch(() => null);
+        if (!extrasRootStats?.isDirectory()) {
+          sendError(response, 404, 'extras_not_found', 'Extras folder was not found for this game.');
+          return;
+        }
+
+        const resolvedTargetPath = path.resolve(extrasRoot, relativePath);
+        if (!isPathInside(extrasRoot, resolvedTargetPath)) {
+          sendError(response, 403, 'forbidden_extra_path', 'Requested extras path is outside the extras folder.');
+          return;
+        }
+
+        const targetStats = await stat(resolvedTargetPath).catch(() => null);
+        if (!targetStats) {
+          sendError(response, 404, 'extra_not_found', 'Requested extras item was not found.');
+          return;
+        }
+
+        if (targetStats.isFile()) {
+          const fileName = toDownloadSafeFileName(path.basename(resolvedTargetPath));
+          const fileContents = await readFile(resolvedTargetPath);
+          withCorsHeaders(response);
+          response.statusCode = 200;
+          response.setHeader('Content-Type', 'application/octet-stream');
+          response.setHeader('Content-Disposition', buildAttachmentContentDisposition(fileName));
+          response.setHeader('Cache-Control', 'no-store');
+          response.end(fileContents);
+          return;
+        }
+
+        if (targetStats.isDirectory()) {
+          const tempDir = await mkdtemp(path.join(os.tmpdir(), 'lgg-extra-zip-'));
+          const zipFileName = `${toDownloadSafeFileName(path.basename(resolvedTargetPath))}.zip`;
+          const zipPath = path.join(tempDir, zipFileName);
+
+          try {
+            await createZipFromFolder(resolvedTargetPath, zipPath);
+            const zipContents = await readFile(zipPath);
+
+            withCorsHeaders(response);
+            response.statusCode = 200;
+            response.setHeader('Content-Type', 'application/zip');
+            response.setHeader('Content-Disposition', buildAttachmentContentDisposition(zipFileName));
+            response.setHeader('Cache-Control', 'no-store');
+            response.end(zipContents);
+          } catch (error) {
+            const message = toErrorMessage(error, 'Failed to package folder for download.');
+            await appendLogEvent({
+              level: 'error',
+              source: 'http-service-extras-download',
+              message: `Folder extras download failed for "${resolvedTargetPath}": ${message}`,
+            }).catch(() => undefined);
+            sendError(response, 500, 'extras_folder_download_failed', message);
+          } finally {
+            await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+          }
+
+          return;
+        }
+
+        sendError(response, 400, 'unsupported_extra_item', 'Requested extras item must be a file or folder.');
+        return;
+      }
+
+      if (method === 'GET' && route === '/api/versions/download') {
+        const gamePath = String(requestUrl.searchParams.get('gamePath') ?? '').trim();
+        const versionPath = String(requestUrl.searchParams.get('versionPath') ?? '').trim();
+        const versionName = String(requestUrl.searchParams.get('versionName') ?? '').trim();
+        if (!gamePath || !versionPath) {
+          sendError(response, 400, 'missing_version_path', 'Query params gamePath and versionPath are required.');
+          return;
+        }
+
+        const config = await loadRuntimeConfig();
+        const resolvedGamePath = path.resolve(gamePath);
+        if (!isPathInsideAllowedGalleryRoots(resolvedGamePath, config)) {
+          sendError(response, 403, 'forbidden_game_path', 'Target game path is outside allowed gallery roots.');
+          return;
+        }
+
+        const resolvedVersionPath = path.resolve(versionPath);
+        if (!isPathInside(resolvedGamePath, resolvedVersionPath)) {
+          sendError(response, 403, 'forbidden_version_path', 'Requested version path is outside the game folder.');
+          return;
+        }
+
+        const targetStats = await stat(resolvedVersionPath).catch(() => null);
+        if (!targetStats?.isDirectory()) {
+          sendError(response, 404, 'version_not_found', 'Requested version folder was not found.');
+          return;
+        }
+
+        const tempDir = await mkdtemp(path.join(os.tmpdir(), 'lgg-version-zip-'));
+        const zipFileName = `${toDownloadSafeFileName(versionName || path.basename(resolvedVersionPath))}.zip`;
+        const zipPath = path.join(tempDir, zipFileName);
+
+        try {
+          await createZipFromFolder(resolvedVersionPath, zipPath);
+          const zipContents = await readFile(zipPath);
+
+          withCorsHeaders(response);
+          response.statusCode = 200;
+          response.setHeader('Content-Type', 'application/zip');
+          response.setHeader('Content-Disposition', buildAttachmentContentDisposition(zipFileName));
+          response.setHeader('Cache-Control', 'no-store');
+          response.end(zipContents);
+        } catch (error) {
+          const message = toErrorMessage(error, 'Failed to package version for download.');
+          await appendLogEvent({
+            level: 'error',
+            source: 'http-service-versions-download',
+            message: `Version download failed for "${resolvedVersionPath}": ${message}`,
+          }).catch(() => undefined);
+          sendError(response, 500, 'version_download_failed', message);
+        } finally {
+          await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
         }
 
         return;

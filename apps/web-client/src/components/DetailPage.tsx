@@ -9,9 +9,10 @@
  *
  * New to this project: this is the single-game workspace; follow its action callbacks (play, metadata, media, folders) to hooks that perform side effects.
  */
-import type { CSSProperties, MouseEvent, ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 import { ArrowLeft, ListVideo, Play } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { createPortal } from 'react-dom';
 import type { GameSummary } from '../types';
 
 type DetailPageProps = {
@@ -34,6 +35,8 @@ type DetailPageProps = {
   onOpenGameFolder: (gamePath: string) => void;
   onOpenVersionFolder: (versionPath: string) => void;
   onOpenVersionContextMenu: (versionPath: string, versionName: string) => void;
+  onDownloadVersion: (gamePath: string, versionPath: string, versionName: string) => void;
+  onDownloadExtra: (gamePath: string, relativePath: string, itemName: string, isDirectory: boolean) => void;
   onOpenPictures: (gamePath: string) => void;
   onOpenScreenshot: (imagePath: string) => void;
 };
@@ -53,11 +56,79 @@ export function DetailPage({
   onOpenGameFolder,
   onOpenVersionFolder,
   onOpenVersionContextMenu,
+  onDownloadVersion,
+  onDownloadExtra,
   onOpenPictures,
   onOpenScreenshot,
   onPlayWithVersionPrompt,
 }: DetailPageProps) {
   const { t } = useTranslation();
+  const contextMenuWidth = 220;
+  const contextMenuHeight = 52;
+  const versionContextMenuRef = useRef<HTMLDivElement | null>(null);
+  const extrasContextMenuRef = useRef<HTMLDivElement | null>(null);
+  const [versionContextMenu, setVersionContextMenu] = useState<{
+    x: number;
+    y: number;
+    versionPath: string;
+    versionName: string;
+  } | null>(null);
+  const [extrasContextMenu, setExtrasContextMenu] = useState<{
+    x: number;
+    y: number;
+    relativePath: string;
+    itemName: string;
+    isDirectory: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!extrasContextMenu && !versionContextMenu) {
+      return;
+    }
+
+    const closeMenuFromPointer = (event: MouseEvent | globalThis.MouseEvent) => {
+      const targetNode = event.target as Node | null;
+      if (targetNode && versionContextMenuRef.current?.contains(targetNode)) {
+        return;
+      }
+      if (targetNode && extrasContextMenuRef.current?.contains(targetNode)) {
+        return;
+      }
+
+      setVersionContextMenu(null);
+      setExtrasContextMenu(null);
+    };
+
+    const closeMenuFromContextMenu = (event: globalThis.MouseEvent) => {
+      const targetNode = event.target as Node | null;
+      if (targetNode && versionContextMenuRef.current?.contains(targetNode)) {
+        return;
+      }
+      if (targetNode && extrasContextMenuRef.current?.contains(targetNode)) {
+        return;
+      }
+
+      setVersionContextMenu(null);
+      setExtrasContextMenu(null);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setVersionContextMenu(null);
+        setExtrasContextMenu(null);
+      }
+    };
+
+    window.addEventListener('mousedown', closeMenuFromPointer, true);
+    window.addEventListener('contextmenu', closeMenuFromContextMenu, true);
+    window.addEventListener('keydown', handleEscape, true);
+
+    return () => {
+      window.removeEventListener('mousedown', closeMenuFromPointer, true);
+      window.removeEventListener('contextmenu', closeMenuFromContextMenu, true);
+      window.removeEventListener('keydown', handleEscape, true);
+    };
+  }, [extrasContextMenu, versionContextMenu]);
 
   return (
     <section className="detail-page" style={contentScaleStyle}>
@@ -148,13 +219,15 @@ export function DetailPage({
                       type="button"
                       disabled={!canOpenFolders}
                       onContextMenu={(event) => {
-                        if (!supportsNativeContextMenu) {
-                          return;
-                        }
-
                         event.preventDefault();
-                        // Right-click opens Electron menu with version-specific actions.
-                        onOpenVersionContextMenu(version.path, version.name);
+                        const left = Math.max(8, Math.min(event.clientX, window.innerWidth - contextMenuWidth - 8));
+                        const top = Math.max(8, Math.min(event.clientY, window.innerHeight - contextMenuHeight - 8));
+                        setVersionContextMenu({
+                          x: left,
+                          y: top,
+                          versionPath: version.path,
+                          versionName: version.name,
+                        });
                       }}
                       onClick={() => {
                         if (canOpenFolders) {
@@ -171,6 +244,39 @@ export function DetailPage({
               </ul>
             ) : (
               <p>{t('detail.noVersions')}</p>
+            )}
+
+            <div className="detail-versions__header">
+              <strong>{t('detail.extras')}</strong>
+            </div>
+            {game.extras.length ? (
+              <ul className="detail-versions__list">
+                {game.extras.map((extra) => (
+                  <li key={extra.relativePath}>
+                    <button
+                      className="detail-versions__item"
+                      type="button"
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        const left = Math.max(8, Math.min(event.clientX, window.innerWidth - contextMenuWidth - 8));
+                        const top = Math.max(8, Math.min(event.clientY, window.innerHeight - contextMenuHeight - 8));
+                        setExtrasContextMenu({
+                          x: left,
+                          y: top,
+                          relativePath: extra.relativePath,
+                          itemName: extra.name,
+                          isDirectory: extra.isDirectory,
+                        });
+                      }}
+                    >
+                      <span>{extra.name}</span>
+                      <span>{extra.isDirectory ? t('detail.folder') : t('detail.file')}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>{t('detail.noExtras')}</p>
             )}
           </aside>
         </div>
@@ -199,6 +305,68 @@ export function DetailPage({
           <p>{t('detail.noScreenshots')}</p>
         )}
       </section>
+      {extrasContextMenu ? createPortal(
+        <div
+          ref={extrasContextMenuRef}
+          className="context-menu"
+          style={{ left: extrasContextMenu.x, top: extrasContextMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            className="context-menu__item"
+            type="button"
+            onClick={() => {
+              setExtrasContextMenu(null);
+              onDownloadExtra(game.path, extrasContextMenu.relativePath, extrasContextMenu.itemName, extrasContextMenu.isDirectory);
+            }}
+          >
+            {t('detail.downloadExtra')}
+          </button>
+        </div>,
+        document.body,
+      ) : null}
+      {versionContextMenu ? createPortal(
+        <div
+          ref={versionContextMenuRef}
+          className="context-menu"
+          style={{ left: versionContextMenu.x, top: versionContextMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            className="context-menu__item"
+            type="button"
+            onClick={() => {
+              setVersionContextMenu(null);
+              onOpenVersionFolder(versionContextMenu.versionPath);
+            }}
+          >
+            {t('detail.openVersionFolder')}
+          </button>
+          <button
+            className="context-menu__item"
+            type="button"
+            onClick={() => {
+              setVersionContextMenu(null);
+              onDownloadVersion(game.path, versionContextMenu.versionPath, `${game.name}_${versionContextMenu.versionName}`);
+            }}
+          >
+            {t('detail.downloadVersion')}
+          </button>
+          {supportsNativeContextMenu ? (
+            <button
+              className="context-menu__item"
+              type="button"
+              onClick={() => {
+                setVersionContextMenu(null);
+                onOpenVersionContextMenu(versionContextMenu.versionPath, versionContextMenu.versionName);
+              }}
+            >
+              {t('detail.moreVersionActions')}
+            </button>
+          ) : null}
+        </div>,
+        document.body,
+      ) : null}
     </section>
   );
 }

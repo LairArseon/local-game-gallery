@@ -21,6 +21,10 @@ import type {
   ServiceApiVersionInfo,
   ServiceCapabilities,
   ServiceHealthStatus,
+  SaveExtraDownloadPayload,
+  SaveExtraDownloadResult,
+  SaveVersionDownloadPayload,
+  SaveVersionDownloadResult,
   VaultContextMenuAction,
   VaultContextMenuPayload,
   VersionContextMenuAction,
@@ -60,6 +64,8 @@ const api: GalleryApi = {
   playGame: (payload: PlayGamePayload) => ipcRenderer.invoke('gallery:play-game', payload),
   reorderScreenshots: (payload: ReorderScreenshotsPayload) => ipcRenderer.invoke('gallery:reorder-screenshots', payload),
   removeScreenshot: (payload: RemoveScreenshotPayload) => ipcRenderer.invoke('gallery:remove-screenshot', payload),
+  saveExtraDownload: (payload: SaveExtraDownloadPayload): Promise<SaveExtraDownloadResult> => ipcRenderer.invoke('gallery:save-extra-download', payload),
+  saveVersionDownload: (payload: SaveVersionDownloadPayload): Promise<SaveVersionDownloadResult> => ipcRenderer.invoke('gallery:save-version-download', payload),
   onGameContextMenuAction: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: GameContextMenuAction) => {
       callback(payload);

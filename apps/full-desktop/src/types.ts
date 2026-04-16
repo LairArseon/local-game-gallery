@@ -130,6 +130,12 @@ export type GameMediaAssets = {
   screenshots: string[];
 };
 
+export type GameExtraEntry = {
+  name: string;
+  relativePath: string;
+  isDirectory: boolean;
+};
+
 export type GameSummary = {
   name: string;
   path: string;
@@ -147,6 +153,7 @@ export type GameSummary = {
   hasVersionMismatch: boolean;
   isVersionMismatchDismissed: boolean;
   media: GameMediaAssets;
+  extras: GameExtraEntry[];
   versionCount: number;
   versions: VersionSummary[];
 };
@@ -252,6 +259,32 @@ export type RemoveScreenshotPayload = {
   screenshotPath: string;
 };
 
+export type SaveExtraDownloadPayload = {
+  gamePath: string;
+  relativePath: string;
+  suggestedName?: string;
+};
+
+export type SaveExtraDownloadResult = {
+  saved: boolean;
+  canceled: boolean;
+  savedPath: string | null;
+  message: string;
+};
+
+export type SaveVersionDownloadPayload = {
+  gamePath: string;
+  versionPath: string;
+  suggestedName?: string;
+};
+
+export type SaveVersionDownloadResult = {
+  saved: boolean;
+  canceled: boolean;
+  savedPath: string | null;
+  message: string;
+};
+
 export type GalleryApi = {
   getAppVersion: () => Promise<string>;
   getServiceCapabilities: () => Promise<ServiceCapabilities>;
@@ -285,6 +318,8 @@ export type GalleryApi = {
   playGame: (payload: PlayGamePayload) => Promise<PlayGameResult>;
   reorderScreenshots: (payload: ReorderScreenshotsPayload) => Promise<void>;
   removeScreenshot: (payload: RemoveScreenshotPayload) => Promise<void>;
+  saveExtraDownload: (payload: SaveExtraDownloadPayload) => Promise<SaveExtraDownloadResult>;
+  saveVersionDownload: (payload: SaveVersionDownloadPayload) => Promise<SaveVersionDownloadResult>;
 };
 
 declare global {
