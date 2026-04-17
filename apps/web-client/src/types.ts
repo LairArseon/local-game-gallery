@@ -285,6 +285,44 @@ export type SaveVersionDownloadResult = {
   message: string;
 };
 
+export type StageGameArchiveUploadPayload = {
+  fileName: string;
+  mimeType?: string;
+  dataBase64?: string;
+  filePath?: string;
+};
+
+export type StageGameArchiveUploadResult = {
+  uploadId: string;
+  originalFileName: string;
+  sizeBytes: number;
+};
+
+export type PickArchiveUploadFileResult = {
+  filePath: string;
+  fileName: string;
+  sizeBytes: number;
+};
+
+export type CancelStagedGameArchiveUploadPayload = {
+  uploadId: string;
+};
+
+export type ImportStagedGameArchivePayload = {
+  uploadId: string;
+  gameName: string;
+  versionName: string;
+  existingGamePath?: string;
+  metadata?: GameMetadata;
+};
+
+export type ImportStagedGameArchiveResult = {
+  imported: boolean;
+  gamePath: string | null;
+  versionPath: string | null;
+  message: string;
+};
+
 export type GalleryApi = {
   getAppVersion: () => Promise<string>;
   getServiceCapabilities: () => Promise<ServiceCapabilities>;
@@ -320,6 +358,10 @@ export type GalleryApi = {
   removeScreenshot: (payload: RemoveScreenshotPayload) => Promise<void>;
   saveExtraDownload: (payload: SaveExtraDownloadPayload) => Promise<SaveExtraDownloadResult>;
   saveVersionDownload: (payload: SaveVersionDownloadPayload) => Promise<SaveVersionDownloadResult>;
+  pickArchiveUploadFile: () => Promise<PickArchiveUploadFileResult | null>;
+  stageGameArchiveUpload: (payload: StageGameArchiveUploadPayload) => Promise<StageGameArchiveUploadResult>;
+  cancelStagedGameArchiveUpload: (payload: CancelStagedGameArchiveUploadPayload) => Promise<void>;
+  importStagedGameArchive: (payload: ImportStagedGameArchivePayload) => Promise<ImportStagedGameArchiveResult>;
 };
 
 declare global {

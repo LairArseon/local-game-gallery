@@ -17,13 +17,19 @@ import type {
   OpenFolderPayload,
   OpenFolderResult,
   PlayGamePayload,
+  PickArchiveUploadFileResult,
   PlayGameResult,
   RemoveScreenshotPayload,
   ReorderScreenshotsPayload,
+  CancelStagedGameArchiveUploadPayload,
+  ImportStagedGameArchivePayload,
+  ImportStagedGameArchiveResult,
   SaveExtraDownloadPayload,
   SaveExtraDownloadResult,
   SaveVersionDownloadPayload,
   SaveVersionDownloadResult,
+  StageGameArchiveUploadPayload,
+  StageGameArchiveUploadResult,
   SaveGameMetadataPayload,
   ScanRequestOptions,
   ScanResult,
@@ -988,5 +994,31 @@ export const webClient: GalleryClient = {
       'saveVersionDownload',
       'Desktop save dialog is only available on the host desktop app.',
     );
+  },
+  async pickArchiveUploadFile(): Promise<PickArchiveUploadFileResult | null> {
+    const response = await requestApi<{ selectedFile: PickArchiveUploadFileResult | null }>('/api/pick-archive-upload-file', {
+      method: 'POST',
+      body: '{}',
+    });
+
+    return response.selectedFile;
+  },
+  async stageGameArchiveUpload(payload: StageGameArchiveUploadPayload): Promise<StageGameArchiveUploadResult> {
+    return requestApi<StageGameArchiveUploadResult>('/api/archive-upload/stage', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+  async cancelStagedGameArchiveUpload(payload: CancelStagedGameArchiveUploadPayload): Promise<void> {
+    await requestApi<{ cancelled: boolean }>('/api/archive-upload/stage', {
+      method: 'DELETE',
+      body: JSON.stringify(payload),
+    });
+  },
+  async importStagedGameArchive(payload: ImportStagedGameArchivePayload): Promise<ImportStagedGameArchiveResult> {
+    return requestApi<ImportStagedGameArchiveResult>('/api/archive-upload/import', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
 };

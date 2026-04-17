@@ -34,6 +34,7 @@ type LibraryPanelProps = {
   onPlay: (game: GameSummary, event: React.MouseEvent<HTMLButtonElement>) => void;
   onPlayWithVersionPrompt: (game: GameSummary, event: React.MouseEvent<HTMLButtonElement>) => void;
   onOpenMetadata: (gamePath: string) => void;
+  onOpenArchiveUploadForGame: (gamePath: string, gameName: string) => void;
   onOpenGameFolder: (gamePath: string) => void;
   onOpenVersionFolder: (versionPath: string) => void;
   onOpenVersionContextMenu: (versionPath: string, versionName: string) => void;
@@ -67,6 +68,7 @@ export function LibraryPanel({
   onPlay,
   onPlayWithVersionPrompt,
   onOpenMetadata,
+  onOpenArchiveUploadForGame,
   onOpenGameFolder,
   onOpenVersionFolder,
   onOpenVersionContextMenu,
@@ -140,6 +142,7 @@ export function LibraryPanel({
           onPlay={onPlay}
           onPlayWithVersionPrompt={onPlayWithVersionPrompt}
           onOpenMetadata={onOpenMetadata}
+          onOpenArchiveUploadForGame={onOpenArchiveUploadForGame}
           onOpenGameFolder={onOpenGameFolder}
           onOpenVersionFolder={onOpenVersionFolder}
           onOpenVersionContextMenu={onOpenVersionContextMenu}

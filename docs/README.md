@@ -36,6 +36,7 @@ Use [Bare-Metal Service and Local Stack](operations/baremetal-service.md) for:
 
 - [Stage 2 Browser Plan](plans/stage2-browser-plan.md)
 - [Stage 2 Phase 1 Checklist](plans/stage2-phase1-checklist.md)
+- [Stage 2.5 Game Upload Plan](plans/stage2-5-game-upload-plan.md)
 - [Stage 3 Mobile Plan](plans/stage3-mobile-plan.md)
 - [Componentized Delivery Plan](plans/componentized-delivery-plan.md)
 

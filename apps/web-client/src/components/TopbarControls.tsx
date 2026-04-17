@@ -10,7 +10,7 @@
  */
 import type { RefObject } from 'react';
 import type { MouseEvent } from 'react';
-import { Bell, Lock, LockOpen, RefreshCw, Settings, SlidersHorizontal, Tag } from 'lucide-react';
+import { Bell, Lock, LockOpen, RefreshCw, Settings, SlidersHorizontal, Tag, Upload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 type TopbarControlsProps = {
@@ -32,8 +32,10 @@ type TopbarControlsProps = {
   onToggleVault: () => void;
   onOpenVaultContextMenu: (event: MouseEvent<HTMLButtonElement>, hasVaultPin: boolean) => void;
   onToggleVersionNotifications: () => void;
+  onOpenArchiveUpload: () => void;
   onRescan: () => void;
   actionLabels: {
+    openUpload: string;
     rescan: string;
     scanning: string;
     showTagPool: string;
@@ -68,6 +70,7 @@ export function TopbarControls({
   onToggleVault,
   onOpenVaultContextMenu,
   onToggleVersionNotifications,
+  onOpenArchiveUpload,
   onRescan,
   actionLabels,
 }: TopbarControlsProps) {
@@ -87,6 +90,15 @@ export function TopbarControls({
         </label>
       </div>
       <div className="topbar__action-buttons">
+        <button
+          className="button button--icon-only"
+          type="button"
+          onClick={onOpenArchiveUpload}
+          aria-label={actionLabels.openUpload}
+          title={actionLabels.openUpload}
+        >
+          <Upload size={16} aria-hidden="true" />
+        </button>
         <button
           className={`button button--icon-only ${isTagPoolPanelOpen ? 'is-active' : ''}`}
           type="button"

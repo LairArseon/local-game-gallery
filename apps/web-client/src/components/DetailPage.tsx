@@ -32,6 +32,7 @@ type DetailPageProps = {
   onPlay: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
   onPlayWithVersionPrompt: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
   onOpenMetadata: (gamePath: string) => void;
+  onOpenArchiveUploadForGame: (gamePath: string, gameName: string) => void;
   onOpenGameFolder: (gamePath: string) => void;
   onOpenVersionFolder: (versionPath: string) => void;
   onOpenVersionContextMenu: (versionPath: string, versionName: string) => void;
@@ -53,6 +54,7 @@ export function DetailPage({
   onBack,
   onPlay,
   onOpenMetadata,
+  onOpenArchiveUploadForGame,
   onOpenGameFolder,
   onOpenVersionFolder,
   onOpenVersionContextMenu,
@@ -204,6 +206,13 @@ export function DetailPage({
           <aside className="detail-versions">
             <div className="detail-versions__header">
               <strong>{t('detail.versions')}</strong>
+              <button
+                className="button button--icon"
+                type="button"
+                onClick={() => onOpenArchiveUploadForGame(game.path, game.name)}
+              >
+                {t('detail.addVersionFromArchive')}
+              </button>
               {canOpenFolders ? (
                 <button className="button button--icon" type="button" onClick={() => onOpenGameFolder(game.path)}>
                   {t('detail.openGameFolder')}

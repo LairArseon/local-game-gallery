@@ -1,6 +1,6 @@
 {
   "name": "local-game-gallery",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "private": true,
   "author": "Lair Arseon",
   "license": "CC0-1.0",
@@ -32,7 +32,7 @@
     "start:service:headless": "node dist-electron/electron/service-cli.js",
     "start:web-client": "electron dist-electron/electron/web-client-tray.js",
     "up:baremetal": "node scripts/up-baremetal.mjs",
-    "up:baremetal:stack": "concurrently -k \"npm:start:service\" \"npm:start:web-client\" \"npm:start:standalone-client\"",
+    "up:baremetal:stack": "concurrently --kill-others-on-fail \"npm:start:service\" \"npm:start:web-client\" \"npm:start:standalone-client\"",
     "down:baremetal": "node scripts/down-baremetal.mjs",
     "compose:up": "docker compose --env-file docker/.env -f docker/compose.yml up --build",
     "compose:down": "docker compose --env-file docker/.env -f docker/compose.yml down",
@@ -46,10 +46,10 @@
     "start:full-desktop": "electron .",
     "start:standalone-client": "electron dist-standalone-electron/electron/main.js",
     "pack:win": "npm run build && npm run build:icon && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --dir",
-    "dist:win": "npm run build && npm run build:icon && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win nsis",
-    "dist:bundle-installer:win": "npm run build:electron && npm run build:web-client && npm run build:standalone-client && npm run build:icon && node scripts/build-bundle-installer.mjs",
+    "dist:win": "npm run build && npm run build:icon && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win nsis && node scripts/prune-installer-artifacts.mjs --target full",
+    "dist:bundle-installer:win": "npm run build:electron && npm run build:web-client && npm run build:standalone-client && npm run build:icon && node scripts/build-bundle-installer.mjs && node scripts/prune-installer-artifacts.mjs --target bundle",
     "pack:standalone-client:win": "npm run build:standalone-client && npm run build:icon && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config apps/standalone-client/builder.json --win --dir",
-    "dist:standalone-client:win": "npm run build:standalone-client && npm run build:icon && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config apps/standalone-client/builder.json --win nsis"
+    "dist:standalone-client:win": "npm run build:standalone-client && npm run build:icon && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config apps/standalone-client/builder.json --win nsis && node scripts/prune-installer-artifacts.mjs --target standalone"
   },
   "dependencies": {
     "i18next": "^26.0.4",

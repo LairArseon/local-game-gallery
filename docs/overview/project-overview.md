@@ -188,6 +188,8 @@ Main renderer-available operations include:
 - Scanning: scan games
 - Metadata: save metadata
 - Media: import from dialog, import dropped files, reorder screenshots, remove screenshot
+- Downloads: save extras downloads and version downloads to a user-selected location
+- Game uploads: pick archive, stage upload, cancel staged upload, import staged archive into library
 - Execution: play game
 - Menus/events: show context menu, subscribe to context menu actions
 
@@ -200,6 +202,8 @@ Main renderer-available operations include:
 - Filtering: tags include/exclude, minimum score, status, ordering
 - Presets for filter configurations
 - Image management: add, reorder, remove screenshots
+- File downloading for extras and game versions
+- Game archive upload/import workflow with staging, progress, and cancel support
 - Game launching with executable selection + persistence
 
 ## 9. Output Structure

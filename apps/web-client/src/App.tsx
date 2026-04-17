@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import type { FilterOrderByMode, GalleryConfig, GalleryViewMode, ScanResult, ServiceCapabilities } from './types';
 import { LibraryPanel } from './components/LibraryPanel';
 import { ModalHost } from './components/ModalHost';
+import { GameArchiveUploadModal } from './components/GameArchiveUploadModal';
 import { SetupPanel } from './components/SetupPanel';
 import { TopbarControls } from './components/TopbarControls';
 import { TopbarPanels } from './components/TopbarPanels';
@@ -48,6 +49,7 @@ import { useScanOrchestrator, type RefreshScanMode } from './hooks/useScanOrches
 import { useFallbackRecoveryProbe } from './hooks/useFallbackRecoveryProbe';
 import { useExtraDownloads } from './hooks/useExtraDownloads';
 import { useVersionDownloads } from './hooks/useVersionDownloads';
+import { useGameArchiveUpload } from './hooks/useGameArchiveUpload';
 import { clamp } from './utils/app-helpers';
 import { useGalleryClient } from './client/context';
 
@@ -250,6 +252,7 @@ function App() {
   const supportsFolderPicker = hasDesktopBridge || serviceCapabilities.supportsHostFolderPicker;
 
   const actionLabels = useMemo(() => ({
+    openUpload: t('actions.openUpload'),
     play: t('actions.play'),
     playByVersion: t('actions.playByVersion'),
     open: t('actions.open'),
@@ -862,6 +865,22 @@ function App() {
     logAppEvent,
   });
 
+  const archiveUpload = useGameArchiveUpload({
+    galleryClient,
+    statusChoices: config?.statusChoices ?? [],
+    setStatus,
+    t,
+    logAppEvent,
+    onImported: async (gamePath) => {
+      if (gamePath) {
+        setDetailGamePath(gamePath);
+        setSelectedGamePath(gamePath);
+      }
+
+      await refreshScan();
+    },
+  });
+
   // Dynamic scale layer: adapts typography/spacing/media to current grid density.
   const dynamicUiScaleFactor = useMemo(() => {
     if (!config?.uiDynamicGridScaling) {
@@ -982,6 +1001,7 @@ function App() {
           onToggleVault={requestVaultToggle}
           onOpenVaultContextMenu={onOpenVaultContextMenu}
           onToggleVersionNotifications={() => setIsVersionNotificationsOpen((current) => !current)}
+          onOpenArchiveUpload={() => archiveUpload.openModal()}
           onRescan={() => {
             void refreshScan();
           }}
@@ -1114,6 +1134,7 @@ function App() {
           onPlay={handlePlayClick}
           onPlayWithVersionPrompt={handlePlayWithVersionPromptClick}
           onOpenMetadata={openMetadataModal}
+          onOpenArchiveUploadForGame={(gamePath, gameName) => archiveUpload.openModal(gameName, gamePath)}
           onOpenGameFolder={onOpenGameFolder}
           onOpenVersionFolder={onOpenVersionFolder}
           onOpenVersionContextMenu={onOpenVersionContextMenu}
@@ -1137,6 +1158,45 @@ function App() {
       </section>
 
       {/* Global overlays flow: metadata/media/log/screenshot modal orchestration. */}
+      <GameArchiveUploadModal
+        isOpen={archiveUpload.isOpen}
+        gameName={archiveUpload.gameName}
+        isGameNameLocked={archiveUpload.isGameNameLocked}
+        versionName={archiveUpload.versionName}
+        tagPool={config.tagPool}
+        statusChoices={archiveUpload.statusChoices}
+        isAdvancedOpen={archiveUpload.isAdvancedOpen}
+        score={archiveUpload.score}
+        metadataStatus={archiveUpload.metadataStatus}
+        description={archiveUpload.description}
+        notesText={archiveUpload.notesText}
+        tagsText={archiveUpload.tagsText}
+        stagedFileName={archiveUpload.stagedFileName}
+        isStagingFile={archiveUpload.isStagingFile}
+        isImporting={archiveUpload.isImporting}
+        uploadProgress={archiveUpload.uploadProgress}
+        uploadPhase={archiveUpload.uploadPhase}
+        isDragActive={archiveUpload.isDragActive}
+        onClose={() => {
+          void archiveUpload.closeModal();
+        }}
+        onSetGameName={archiveUpload.setGameName}
+        onSetVersionName={archiveUpload.setVersionName}
+        onSetIsAdvancedOpen={archiveUpload.setIsAdvancedOpen}
+        onSetScore={archiveUpload.setScore}
+        onSetMetadataStatus={archiveUpload.setMetadataStatus}
+        onSetDescription={archiveUpload.setDescription}
+        onSetNotesText={archiveUpload.setNotesText}
+        onSetTagsText={archiveUpload.setTagsText}
+        onSetIsDragActive={archiveUpload.setIsDragActive}
+        onFileInputChange={archiveUpload.onFileInputChange}
+        onRequestPickArchive={archiveUpload.onRequestPickArchive}
+        onDropArchive={archiveUpload.onDropArchive}
+        onSubmitImport={() => {
+          void archiveUpload.onSubmitImport();
+        }}
+      />
+
       <ModalHost
         games={scanResult.games}
         isMirrorSyncConfirmOpen={isMirrorSyncConfirmOpen}

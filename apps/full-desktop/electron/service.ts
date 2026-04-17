@@ -7,11 +7,14 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { spawn } from 'node:child_process';
-import { appendFile, mkdtemp, mkdir, readFile, readdir, rm, stat, unlink, writeFile } from 'node:fs/promises';
+import { appendFile, copyFile, cp, mkdtemp, mkdir, readFile, readdir, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import {
+  type GameMetadata,
   type GalleryConfig,
+  type ImportStagedGameArchiveResult,
   type LogEventPayload,
   type OpenFolderPayload,
   type OpenFolderResult,
@@ -63,9 +66,32 @@ type UploadGameMediaPayload = {
   files: UploadMediaFilePayload[];
 };
 
+type StageArchiveUploadPayload = {
+  fileName: string;
+  mimeType?: string;
+  dataBase64?: string;
+  filePath?: string;
+};
+
+type CancelArchiveUploadPayload = {
+  uploadId: string;
+};
+
+type ImportArchiveUploadPayload = {
+  uploadId: string;
+  gameName: string;
+  versionName: string;
+  existingGamePath?: string;
+  metadata?: GameMetadata;
+};
+
 type HostDialogOptions = {
   properties: string[];
   title: string;
+  filters?: Array<{
+    name: string;
+    extensions: string[];
+  }>;
 };
 
 type HostDialogResult = {
@@ -114,6 +140,7 @@ const imageMimeToExtension = new Map<string, string>([
   ['image/gif', '.gif'],
   ['image/bmp', '.bmp'],
 ]);
+const stagedArchiveUploads = new Map<string, { filePath: string; originalFileName: string }>();
 
 function normalizeIpAddress(value: string | undefined) {
   const raw = String(value ?? '').trim().toLowerCase();
@@ -305,6 +332,107 @@ async function createZipFromFolder(folderPath: string, outputZipPath: string) {
       ));
     });
   });
+}
+
+async function extractZipToFolder(zipPath: string, outputFolderPath: string) {
+  if (process.platform !== 'win32') {
+    throw new Error('Archive extraction is currently supported on Windows hosts only.');
+  }
+
+  const zipArg = `'${zipPath.replace(/'/g, "''")}'`;
+  const outputArg = `'${outputFolderPath.replace(/'/g, "''")}'`;
+  const command = [
+    "$ErrorActionPreference = 'Stop'",
+    'Add-Type -AssemblyName System.IO.Compression.FileSystem',
+    `if (Test-Path -LiteralPath ${outputArg}) { Remove-Item -LiteralPath ${outputArg} -Recurse -Force }`,
+    `New-Item -ItemType Directory -Path ${outputArg} -Force | Out-Null`,
+    `[System.IO.Compression.ZipFile]::ExtractToDirectory(${zipArg}, ${outputArg})`,
+  ].join('; ');
+
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command], {
+      windowsHide: true,
+    });
+
+    let stderr = '';
+    child.stderr.on('data', (chunk) => {
+      stderr += String(chunk ?? '');
+    });
+
+    child.on('error', reject);
+    child.on('exit', (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      reject(new Error(stderr.trim() || `Extraction failed with exit code ${code}.`));
+    });
+  });
+}
+
+function toSafeFolderName(value: string, fallback: string) {
+  const safe = toDownloadSafeFileName(value)
+    .replace(/[. ]+$/g, '')
+    .trim();
+
+  return safe || fallback;
+}
+
+function toDefaultImportMetadata(versionName: string) {
+  return {
+    latestVersion: versionName,
+    score: '',
+    status: '',
+    description: '',
+    notes: [] as string[],
+    tags: [] as string[],
+    launchExecutable: '',
+    customTags: [] as Array<{ key: string; value: string }>,
+  };
+}
+
+async function removeStagedArchiveUpload(uploadId: string) {
+  const staged = stagedArchiveUploads.get(uploadId);
+  if (!staged) {
+    return;
+  }
+
+  stagedArchiveUploads.delete(uploadId);
+  await unlink(staged.filePath).catch(() => undefined);
+}
+
+async function copyExtractedArchiveIntoVersion(extractedRootPath: string, targetVersionPath: string) {
+  const extractedEntries = (await readdir(extractedRootPath, { withFileTypes: true }))
+    .filter((entry) => entry.name !== '__MACOSX');
+
+  if (!extractedEntries.length) {
+    throw new Error('Archive does not contain importable files.');
+  }
+
+  let sourceRoot = extractedRootPath;
+  if (extractedEntries.length === 1 && extractedEntries[0]?.isDirectory()) {
+    sourceRoot = path.join(extractedRootPath, extractedEntries[0].name);
+  }
+
+  const existingEntries = await readdir(targetVersionPath).catch(() => []);
+  if (existingEntries.length > 0) {
+    throw new Error('Target version folder already contains files. Choose another version name.');
+  }
+
+  const entriesToCopy = await readdir(sourceRoot, { withFileTypes: true });
+  for (const entry of entriesToCopy) {
+    const sourcePath = path.join(sourceRoot, entry.name);
+    const destinationPath = path.join(targetVersionPath, entry.name);
+    if (entry.isDirectory()) {
+      await cp(sourcePath, destinationPath, { recursive: true, force: true, errorOnExist: false });
+      continue;
+    }
+
+    if (entry.isFile()) {
+      await copyFile(sourcePath, destinationPath);
+    }
+  }
 }
 
 function isPathInside(parentPath: string, targetPath: string) {
@@ -550,6 +678,47 @@ async function pickFolderFromHostDialog(title: string) {
   return result.filePaths[0] ?? null;
 }
 
+async function pickArchiveUploadFileFromHostDialog() {
+  if (!process.versions.electron) {
+    throw new Error('Host archive picker is unavailable in this runtime.');
+  }
+
+  const electronModule = await import('electron') as HostDialogModule;
+  const dialogApi = resolveHostDialogApi(electronModule);
+  if (!dialogApi) {
+    throw new Error('Host archive picker API is unavailable.');
+  }
+
+  const result = await dialogApi.showOpenDialog({
+    properties: ['openFile'],
+    filters: [
+      { name: 'ZIP archives', extensions: ['zip'] },
+      { name: 'All files', extensions: ['*'] },
+    ],
+    title: 'Choose game archive',
+  });
+
+  if (result.canceled) {
+    return null;
+  }
+
+  const selectedPath = String(result.filePaths[0] ?? '').trim();
+  if (!selectedPath) {
+    return null;
+  }
+
+  const fileStats = await stat(selectedPath);
+  if (!fileStats.isFile()) {
+    throw new Error('Selected archive path is not a file.');
+  }
+
+  return {
+    filePath: selectedPath,
+    fileName: path.basename(selectedPath),
+    sizeBytes: fileStats.size,
+  };
+}
+
 async function launchGameFromService(payload: PlayGamePayload): Promise<PlayGameResult> {
   const rawGamePath = String(payload.gamePath ?? '').trim();
   if (!rawGamePath) {
@@ -786,6 +955,220 @@ export async function startGalleryHttpService({
         return;
       }
 
+      if (method === 'POST' && route === '/api/archive-upload/stage') {
+        const capabilities = resolveRequestCapabilities(request);
+        if (!capabilities.supportsLaunch) {
+          sendError(response, 403, 'forbidden_host_action', 'Archive upload is allowed only for same-machine clients.');
+          return;
+        }
+
+        try {
+          const payload = await readJsonBody<StageArchiveUploadPayload>(request);
+          const requestedFileName = String(payload.fileName ?? '').trim();
+          const filePath = String(payload.filePath ?? '').trim();
+          const sourceFileName = requestedFileName || (filePath ? path.basename(filePath) : '');
+          if (!sourceFileName) {
+            sendError(response, 400, 'invalid_archive_payload', 'Archive file name is required.');
+            return;
+          }
+
+          const uploadId = randomUUID();
+          const extension = path.extname(sourceFileName).toLowerCase() || '.zip';
+          const stagedFilePath = path.join(os.tmpdir(), `lgg-archive-upload-${uploadId}${extension}`);
+          let sizeBytes = 0;
+          let transport = 'base64';
+
+          if (filePath) {
+            const sourceStats = await stat(filePath);
+            if (!sourceStats.isFile()) {
+              sendError(response, 400, 'invalid_archive_payload', 'Selected archive path is not a file.');
+              return;
+            }
+
+            sizeBytes = sourceStats.size;
+            if (!sizeBytes) {
+              sendError(response, 400, 'invalid_archive_payload', 'Uploaded archive is empty or invalid.');
+              return;
+            }
+
+            await copyFile(filePath, stagedFilePath);
+            transport = 'path';
+          } else {
+            const dataBase64 = String(payload.dataBase64 ?? '').trim();
+            if (!dataBase64) {
+              sendError(response, 400, 'invalid_archive_payload', 'Archive content is required.');
+              return;
+            }
+
+            const contents = Buffer.from(dataBase64, 'base64');
+            if (!contents.length) {
+              sendError(response, 400, 'invalid_archive_payload', 'Uploaded archive is empty or invalid.');
+              return;
+            }
+
+            sizeBytes = contents.length;
+            await writeFile(stagedFilePath, contents);
+          }
+
+          stagedArchiveUploads.set(uploadId, {
+            filePath: stagedFilePath,
+            originalFileName: sourceFileName,
+          });
+
+          await appendLogEvent({
+            level: 'info',
+            source: 'service-game-upload',
+            message: `Staged archive upload "${sourceFileName}" as ${uploadId} (${sizeBytes} bytes, transport=${transport}).`,
+          }).catch(() => undefined);
+
+          sendOk(response, {
+            uploadId,
+            originalFileName: sourceFileName,
+            sizeBytes,
+          });
+        } catch (error) {
+          await appendLogEvent({
+            level: 'error',
+            source: 'service-game-upload',
+            message: `Failed to stage archive upload: ${toErrorMessage(error, 'Unknown stage error.')}`,
+          }).catch(() => undefined);
+          sendError(response, 400, 'archive_stage_failed', toErrorMessage(error, 'Failed to stage archive upload.'));
+        }
+
+        return;
+      }
+
+      if (method === 'DELETE' && route === '/api/archive-upload/stage') {
+        try {
+          const payload = await readJsonBody<CancelArchiveUploadPayload>(request);
+          const uploadId = String(payload.uploadId ?? '').trim();
+          if (!uploadId) {
+            await appendLogEvent({
+              level: 'warn',
+              source: 'service-game-upload',
+              message: 'Cancel staged archive requested without an uploadId.',
+            }).catch(() => undefined);
+            sendOk(response, { cancelled: false });
+            return;
+          }
+
+          await removeStagedArchiveUpload(uploadId);
+          await appendLogEvent({
+            level: 'info',
+            source: 'service-game-upload',
+            message: `Cancelled staged archive upload ${uploadId}.`,
+          }).catch(() => undefined);
+          sendOk(response, { cancelled: true });
+        } catch (error) {
+          await appendLogEvent({
+            level: 'error',
+            source: 'service-game-upload',
+            message: `Failed to cancel staged archive upload: ${toErrorMessage(error, 'Unknown cancel error.')}`,
+          }).catch(() => undefined);
+          sendError(response, 400, 'archive_cancel_failed', toErrorMessage(error, 'Failed to cancel staged archive upload.'));
+        }
+
+        return;
+      }
+
+      if (method === 'POST' && route === '/api/archive-upload/import') {
+        const capabilities = resolveRequestCapabilities(request);
+        if (!capabilities.supportsLaunch) {
+          sendError(response, 403, 'forbidden_host_action', 'Archive import is allowed only for same-machine clients.');
+          return;
+        }
+
+        try {
+          const payload = await readJsonBody<ImportArchiveUploadPayload>(request);
+          const uploadId = String(payload.uploadId ?? '').trim();
+          const gameName = String(payload.gameName ?? '').trim();
+          const versionName = String(payload.versionName ?? '').trim();
+
+          if (!uploadId || !gameName || !versionName) {
+            sendError(response, 400, 'invalid_archive_import_payload', 'Game name, version, and staged archive are required.');
+            return;
+          }
+
+          const staged = stagedArchiveUploads.get(uploadId);
+          if (!staged) {
+            sendError(response, 404, 'staged_archive_not_found', 'Staged archive not found. Re-select file and try again.');
+            return;
+          }
+
+          const config = await loadRuntimeConfig();
+          const gamesRoot = String(config.gamesRoot ?? '').trim();
+          if (!gamesRoot) {
+            sendError(response, 400, 'missing_games_root', 'Games root is not configured on host.');
+            return;
+          }
+
+          const resolvedGamesRoot = path.resolve(gamesRoot);
+          const existingGamePath = String(payload.existingGamePath ?? '').trim();
+          const fallbackGamePath = path.join(resolvedGamesRoot, toSafeFolderName(gameName, 'Imported Game'));
+          const targetGamePath = existingGamePath ? path.resolve(existingGamePath) : fallbackGamePath;
+          if (!isPathInside(resolvedGamesRoot, targetGamePath)) {
+            sendError(response, 403, 'forbidden_game_path', 'Target game path is outside allowed gallery roots.');
+            return;
+          }
+
+          const targetVersionPath = path.join(targetGamePath, toSafeFolderName(versionName, 'Version'));
+          const extractRoot = await mkdtemp(path.join(os.tmpdir(), `lgg-archive-extract-${uploadId}-`));
+
+          try {
+            await appendLogEvent({
+              level: 'info',
+              source: 'service-game-upload',
+              message: `Importing staged archive ${uploadId} into "${targetVersionPath}".`,
+            }).catch(() => undefined);
+
+            await mkdir(targetVersionPath, { recursive: true });
+            await extractZipToFolder(staged.filePath, extractRoot);
+            await copyExtractedArchiveIntoVersion(extractRoot, targetVersionPath);
+
+            const mergedMetadata = {
+              ...toDefaultImportMetadata(versionName),
+              ...(payload.metadata ?? {}),
+              latestVersion: String(payload.metadata?.latestVersion ?? versionName).trim() || versionName,
+            };
+
+            await saveGameMetadata({
+              gamePath: targetGamePath,
+              title: gameName,
+              metadata: mergedMetadata,
+            });
+
+            const result: ImportStagedGameArchiveResult = {
+              imported: true,
+              gamePath: targetGamePath,
+              versionPath: targetVersionPath,
+              message: `Imported ${gameName} (${versionName}).`,
+            };
+
+            await appendLogEvent({
+              level: 'info',
+              source: 'service-game-upload',
+              message: `Imported staged archive ${uploadId} into "${targetVersionPath}".`,
+            }).catch(() => undefined);
+
+            sendOk(response, result);
+          } catch (error) {
+            await appendLogEvent({
+              level: 'error',
+              source: 'service-game-upload',
+              message: `Failed to import staged archive ${uploadId}: ${toErrorMessage(error, 'Unknown import error.')}`,
+            }).catch(() => undefined);
+            throw error;
+          } finally {
+            await rm(extractRoot, { recursive: true, force: true }).catch(() => undefined);
+            await removeStagedArchiveUpload(uploadId);
+          }
+        } catch (error) {
+          sendError(response, 400, 'archive_import_failed', toErrorMessage(error, 'Failed to import staged archive.'));
+        }
+
+        return;
+      }
+
       if (method === 'POST' && route === '/api/play-game') {
         const capabilities = resolveRequestCapabilities(request);
         if (!capabilities.supportsLaunch) {
@@ -831,6 +1214,22 @@ export async function startGalleryHttpService({
           sendOk(response, { selectedPath });
         } catch (error) {
           sendError(response, 400, 'pick_metadata_mirror_root_failed', toErrorMessage(error, 'Failed to pick metadata mirror folder.'));
+        }
+        return;
+      }
+
+      if (method === 'POST' && route === '/api/pick-archive-upload-file') {
+        const capabilities = resolveRequestCapabilities(request);
+        if (!capabilities.supportsLaunch) {
+          sendError(response, 403, 'forbidden_host_action', 'Picking archive files is allowed only for same-machine clients.');
+          return;
+        }
+
+        try {
+          const selectedFile = await pickArchiveUploadFileFromHostDialog();
+          sendOk(response, { selectedFile });
+        } catch (error) {
+          sendError(response, 400, 'pick_archive_upload_file_failed', toErrorMessage(error, 'Failed to pick archive upload file.'));
         }
         return;
       }

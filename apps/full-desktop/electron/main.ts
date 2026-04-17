@@ -5,10 +5,11 @@
  */
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from 'electron';
 import type { OpenDialogOptions } from 'electron';
-import { access, appendFile, copyFile, mkdir, mkdtemp, readdir, rm, stat, unlink, writeFile } from 'node:fs/promises';
+import { access, appendFile, copyFile, cp, mkdir, mkdtemp, readdir, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import os from 'node:os';
+import { randomUUID } from 'node:crypto';
 import { loadConfig, saveConfig } from './config';
 import { appendLogEvent, clearLogContents, openLogFolder, readLogContents } from './logger';
 import { getLatestVersionName, importDroppedGameMedia, readGameMetadata, removeScreenshot, reorderScreenshots, saveGameMetadata } from './game-library';
@@ -22,12 +23,16 @@ import type {
   StageDroppedAppIconPayload,
   GameContextMenuPayload,
   GalleryConfig,
+  CancelStagedGameArchiveUploadPayload,
   ImportDroppedGameMediaPayload,
   ImportGameMediaPayload,
+  ImportStagedGameArchivePayload,
+  ImportStagedGameArchiveResult,
   LogEventPayload,
   OpenFolderPayload,
   OpenFolderResult,
   PlayGamePayload,
+  PickArchiveUploadFileResult,
   PlayGameResult,
   RemoveScreenshotPayload,
   ReorderScreenshotsPayload,
@@ -35,6 +40,8 @@ import type {
   SaveGameMetadataPayload,
   SaveExtraDownloadPayload,
   SaveExtraDownloadResult,
+  StageGameArchiveUploadPayload,
+  StageGameArchiveUploadResult,
   SaveVersionDownloadPayload,
   SaveVersionDownloadResult,
   ServiceApiVersionInfo,
@@ -49,6 +56,7 @@ let tray: Tray | null = null;
 let galleryHttpService: GalleryHttpService | null = null;
 let isQuitRequested = false;
 const mainProcessStartedAt = new Date().toISOString();
+const stagedGameArchiveUploads = new Map<string, { filePath: string; originalFileName: string }>();
 
 function getServiceHealthSnapshot(): ServiceHealthStatus {
   if (galleryHttpService) {
@@ -332,6 +340,107 @@ async function createZipFromFolder(folderPath: string, outputZipPath: string) {
   });
 }
 
+async function extractZipToFolder(zipPath: string, outputFolderPath: string) {
+  if (process.platform !== 'win32') {
+    throw new Error('Archive extraction is currently supported on Windows hosts only.');
+  }
+
+  const zipArg = `'${zipPath.replace(/'/g, "''")}'`;
+  const outputArg = `'${outputFolderPath.replace(/'/g, "''")}'`;
+  const command = [
+    "$ErrorActionPreference = 'Stop'",
+    'Add-Type -AssemblyName System.IO.Compression.FileSystem',
+    `if (Test-Path -LiteralPath ${outputArg}) { Remove-Item -LiteralPath ${outputArg} -Recurse -Force }`,
+    `New-Item -ItemType Directory -Path ${outputArg} -Force | Out-Null`,
+    `[System.IO.Compression.ZipFile]::ExtractToDirectory(${zipArg}, ${outputArg})`,
+  ].join('; ');
+
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command], {
+      windowsHide: true,
+    });
+
+    let stderr = '';
+    child.stderr.on('data', (chunk) => {
+      stderr += String(chunk ?? '');
+    });
+
+    child.on('error', reject);
+    child.on('exit', (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      reject(new Error(stderr.trim() || `Extraction failed with exit code ${code}.`));
+    });
+  });
+}
+
+function toSafeFolderName(value: string, fallback: string) {
+  const safe = toDownloadSafeFileName(value)
+    .replace(/[. ]+$/g, '')
+    .trim();
+
+  return safe || fallback;
+}
+
+function toDefaultImportMetadata(versionName: string) {
+  return {
+    latestVersion: versionName,
+    score: '',
+    status: '',
+    description: '',
+    notes: [] as string[],
+    tags: [] as string[],
+    launchExecutable: '',
+    customTags: [] as Array<{ key: string; value: string }>,
+  };
+}
+
+async function removeStagedArchiveUpload(uploadId: string) {
+  const staged = stagedGameArchiveUploads.get(uploadId);
+  if (!staged) {
+    return;
+  }
+
+  stagedGameArchiveUploads.delete(uploadId);
+  await unlink(staged.filePath).catch(() => undefined);
+}
+
+async function copyExtractedArchiveIntoVersion(extractedRootPath: string, targetVersionPath: string) {
+  const extractedEntries = (await readdir(extractedRootPath, { withFileTypes: true }))
+    .filter((entry) => entry.name !== '__MACOSX');
+
+  if (!extractedEntries.length) {
+    throw new Error('Archive does not contain importable files.');
+  }
+
+  let sourceRoot = extractedRootPath;
+  if (extractedEntries.length === 1 && extractedEntries[0]?.isDirectory()) {
+    sourceRoot = path.join(extractedRootPath, extractedEntries[0].name);
+  }
+
+  const existingEntries = await readdir(targetVersionPath).catch(() => []);
+  if (existingEntries.length > 0) {
+    throw new Error('Target version folder already contains files. Choose another version name.');
+  }
+
+  const entriesToCopy = await readdir(sourceRoot, { withFileTypes: true });
+  for (const entry of entriesToCopy) {
+    const sourcePath = path.join(sourceRoot, entry.name);
+    const destinationPath = path.join(targetVersionPath, entry.name);
+    if (entry.isDirectory()) {
+      await cp(sourcePath, destinationPath, { recursive: true, force: true, errorOnExist: false });
+      continue;
+    }
+
+    if (entry.isFile()) {
+      await copyFile(sourcePath, destinationPath);
+    }
+  }
+}
+
 function launchExecutable(executablePath: string) {
   const processHandle = spawn(executablePath, [], {
     cwd: path.dirname(executablePath),
@@ -592,6 +701,39 @@ ipcMain.handle('gallery:pick-app-icon-png', async () => {
   return result.filePaths[0] ?? null;
 });
 
+ipcMain.handle('gallery:pick-archive-upload-file', async (): Promise<PickArchiveUploadFileResult | null> => {
+  const window = BrowserWindow.getFocusedWindow() ?? mainWindow;
+  const options: OpenDialogOptions = {
+    properties: ['openFile'],
+    filters: [
+      { name: 'ZIP archives', extensions: ['zip'] },
+      { name: 'All files', extensions: ['*'] },
+    ],
+    title: 'Choose game archive',
+  };
+  const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
+
+  if (result.canceled) {
+    return null;
+  }
+
+  const filePath = String(result.filePaths[0] ?? '').trim();
+  if (!filePath) {
+    return null;
+  }
+
+  const fileStats = await stat(filePath);
+  if (!fileStats.isFile()) {
+    throw new Error('Selected archive path is not a file.');
+  }
+
+  return {
+    filePath,
+    fileName: path.basename(filePath),
+    sizeBytes: fileStats.size,
+  };
+});
+
 ipcMain.handle('gallery:inspect-app-icon-file', async (_event, payload: AppIconInspectPayload): Promise<AppIconInspectResult> => {
   const filePath = String(payload.filePath ?? '').trim();
   if (!filePath) {
@@ -788,6 +930,176 @@ ipcMain.handle('gallery:reorder-screenshots', async (_event, payload: ReorderScr
 
 ipcMain.handle('gallery:remove-screenshot', async (_event, payload: RemoveScreenshotPayload) => {
   await removeScreenshot(payload.screenshotPath);
+});
+
+ipcMain.handle('gallery:stage-game-archive-upload', async (_event, payload: StageGameArchiveUploadPayload): Promise<StageGameArchiveUploadResult> => {
+  const requestedFileName = String(payload?.fileName ?? '').trim();
+  const filePath = String(payload?.filePath ?? '').trim();
+
+  try {
+    const uploadId = randomUUID();
+    const sourceFileName = requestedFileName || (filePath ? path.basename(filePath) : '');
+    if (!sourceFileName) {
+      throw new Error('Archive file name is required.');
+    }
+
+    const extension = path.extname(sourceFileName).toLowerCase() || '.zip';
+    const tempPath = path.join(os.tmpdir(), `lgg-archive-upload-${uploadId}${extension}`);
+    let sizeBytes = 0;
+    let transport = 'base64';
+
+    if (filePath) {
+      const sourceStats = await stat(filePath);
+      if (!sourceStats.isFile()) {
+        throw new Error('Selected archive path is not a file.');
+      }
+
+      sizeBytes = sourceStats.size;
+      if (!sizeBytes) {
+        throw new Error('Uploaded archive is empty or invalid.');
+      }
+
+      await copyFile(filePath, tempPath);
+      transport = 'path';
+    } else {
+      const dataBase64 = String(payload?.dataBase64 ?? '').trim();
+      if (!dataBase64) {
+        throw new Error('Archive content is required.');
+      }
+
+      const buffer = Buffer.from(dataBase64, 'base64');
+      if (!buffer.length) {
+        throw new Error('Uploaded archive is empty or invalid.');
+      }
+
+      sizeBytes = buffer.length;
+      await writeFile(tempPath, buffer);
+    }
+
+    stagedGameArchiveUploads.set(uploadId, {
+      filePath: tempPath,
+      originalFileName: sourceFileName,
+    });
+
+    await appendLogEvent({
+      level: 'info',
+      source: 'main-game-upload',
+      message: `Staged archive upload "${sourceFileName}" as ${uploadId} (${sizeBytes} bytes, transport=${transport}).`,
+    }).catch(() => undefined);
+
+    return {
+      uploadId,
+      originalFileName: sourceFileName,
+      sizeBytes,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown stage error.';
+    await appendLogEvent({
+      level: 'error',
+      source: 'main-game-upload',
+      message: `Failed to stage archive upload "${requestedFileName || filePath || 'unknown'}": ${message}`,
+    }).catch(() => undefined);
+    throw error;
+  }
+});
+
+ipcMain.handle('gallery:cancel-staged-game-archive-upload', async (_event, payload: CancelStagedGameArchiveUploadPayload) => {
+  const uploadId = String(payload?.uploadId ?? '').trim();
+  if (!uploadId) {
+    await appendLogEvent({
+      level: 'warn',
+      source: 'main-game-upload',
+      message: 'Cancel staged archive requested without an uploadId.',
+    }).catch(() => undefined);
+    return;
+  }
+
+  await removeStagedArchiveUpload(uploadId);
+  await appendLogEvent({
+    level: 'info',
+    source: 'main-game-upload',
+    message: `Cancelled staged archive upload ${uploadId}.`,
+  }).catch(() => undefined);
+});
+
+ipcMain.handle('gallery:import-staged-game-archive', async (_event, payload: ImportStagedGameArchivePayload): Promise<ImportStagedGameArchiveResult> => {
+  const uploadId = String(payload?.uploadId ?? '').trim();
+  const gameName = String(payload?.gameName ?? '').trim();
+  const versionName = String(payload?.versionName ?? '').trim();
+
+  if (!uploadId || !gameName || !versionName) {
+    throw new Error('Game name, version, and staged archive are required.');
+  }
+
+  const staged = stagedGameArchiveUploads.get(uploadId);
+  if (!staged) {
+    throw new Error('Staged archive not found. Re-select the archive file and try again.');
+  }
+
+  const config = await loadConfig();
+  const gamesRoot = String(config.gamesRoot ?? '').trim();
+  if (!gamesRoot) {
+    throw new Error('Games root is not configured.');
+  }
+
+  const resolvedGamesRoot = path.resolve(gamesRoot);
+  const existingGamePath = String(payload?.existingGamePath ?? '').trim();
+  const fallbackGamePath = path.join(resolvedGamesRoot, toSafeFolderName(gameName, 'Imported Game'));
+  const targetGamePath = existingGamePath ? path.resolve(existingGamePath) : fallbackGamePath;
+  if (!isPathInside(resolvedGamesRoot, targetGamePath)) {
+    throw new Error('Target game path is outside the configured games root.');
+  }
+
+  const targetVersionPath = path.join(targetGamePath, toSafeFolderName(versionName, 'Version'));
+  const extractRoot = await mkdtemp(path.join(os.tmpdir(), `lgg-archive-extract-${uploadId}-`));
+
+  try {
+    await appendLogEvent({
+      level: 'info',
+      source: 'main-game-upload',
+      message: `Importing staged archive ${uploadId} into "${targetVersionPath}".`,
+    }).catch(() => undefined);
+
+    await mkdir(targetVersionPath, { recursive: true });
+    await extractZipToFolder(staged.filePath, extractRoot);
+    await copyExtractedArchiveIntoVersion(extractRoot, targetVersionPath);
+
+    const mergedMetadata = {
+      ...toDefaultImportMetadata(versionName),
+      ...(payload.metadata ?? {}),
+      latestVersion: String(payload.metadata?.latestVersion ?? versionName).trim() || versionName,
+    };
+
+    await saveGameMetadata({
+      gamePath: targetGamePath,
+      title: gameName,
+      metadata: mergedMetadata,
+    });
+
+    await appendLogEvent({
+      level: 'info',
+      source: 'main-game-upload',
+      message: `Imported game archive "${staged.originalFileName}" into "${targetVersionPath}".`,
+    }).catch(() => undefined);
+
+    return {
+      imported: true,
+      gamePath: targetGamePath,
+      versionPath: targetVersionPath,
+      message: `Imported ${gameName} (${versionName}).`,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown import error.';
+    await appendLogEvent({
+      level: 'error',
+      source: 'main-game-upload',
+      message: `Failed to import staged archive ${uploadId} into "${targetVersionPath}": ${message}`,
+    }).catch(() => undefined);
+    throw error;
+  } finally {
+    await rm(extractRoot, { recursive: true, force: true }).catch(() => undefined);
+    await removeStagedArchiveUpload(uploadId);
+  }
 });
 
 ipcMain.handle('gallery:save-extra-download', async (_event, payload: SaveExtraDownloadPayload): Promise<SaveExtraDownloadResult> => {

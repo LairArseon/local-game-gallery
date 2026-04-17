@@ -18,6 +18,32 @@
 }
 
 @media (max-width: 920px) {
+  .modal-backdrop {
+    padding: 14px;
+  }
+
+  .modal-panel--upload {
+    width: 100%;
+    max-height: none;
+  }
+
+  .modal-panel--upload .modal-panel__header,
+  .modal-panel--upload .modal-panel__footer {
+    padding: 14px 16px;
+  }
+
+  .modal-panel--upload .modal-panel__body {
+    padding: 14px 16px 22px;
+  }
+
+  .upload-modal__top-row {
+    grid-template-columns: 1fr;
+  }
+
+  .upload-advanced__layout {
+    grid-template-columns: 1fr;
+  }
+
   .shell {
     padding: 20px;
   }

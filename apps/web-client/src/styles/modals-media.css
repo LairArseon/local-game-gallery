@@ -29,6 +29,25 @@
   width: min(1240px, 100%);
 }
 
+.modal-panel--upload {
+  width: min(980px, 100%);
+  max-height: none;
+  overflow: visible;
+  grid-template-rows: auto auto auto;
+}
+
+.modal-backdrop--upload {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+  padding: 20px;
+}
+
+.modal-panel--upload .modal-panel__body {
+  overflow: visible;
+}
+
 .modal-panel--lightbox {
   width: 80vw;
   height: 80vh;
@@ -108,6 +127,234 @@
   grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
   gap: 18px;
   align-items: start;
+}
+
+.modal-panel__body--upload {
+  display: grid;
+  gap: 14px;
+  min-height: auto;
+  overflow: visible;
+  padding-bottom: 24px;
+  scroll-padding-bottom: 24px;
+}
+
+.upload-modal__top-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  gap: 12px;
+  align-items: start;
+}
+
+.upload-modal__version-field {
+  margin: 0;
+}
+
+.upload-modal__upload-field {
+  margin: 0;
+}
+
+.upload-modal__game-name--locked {
+  background: rgba(7, 10, 16, 0.5);
+  color: rgba(247, 246, 242, 0.78);
+  border-color: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(8px) saturate(120%);
+  -webkit-backdrop-filter: blur(8px) saturate(120%);
+  cursor: not-allowed;
+}
+
+.archive-upload-dropzone {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px dashed rgba(255, 255, 255, 0.22);
+  border-radius: 16px;
+  background: rgba(8, 11, 18, 0.62);
+  padding: 12px;
+  cursor: pointer;
+}
+
+.upload-modal__top-row .archive-upload-dropzone {
+  margin: 0;
+}
+
+.archive-upload-dropzone:hover {
+  border-color: rgba(125, 188, 255, 0.66);
+  background: rgba(8, 11, 18, 0.78);
+}
+
+.archive-upload-dropzone--dragover {
+  border-color: rgba(125, 188, 255, 0.88);
+  background: rgba(55, 106, 156, 0.24);
+  box-shadow: inset 0 0 0 1px rgba(125, 188, 255, 0.68);
+}
+
+.archive-upload-dropzone__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.archive-upload-dropzone__icon {
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.archive-upload-dropzone__meta {
+  min-width: 0;
+}
+
+.archive-upload-dropzone__meta strong {
+  display: block;
+}
+
+.archive-upload-dropzone__meta p {
+  margin: 4px 0 0;
+  color: rgba(247, 246, 242, 0.74);
+  font-size: 0.8rem;
+}
+
+.archive-upload-dropzone__meta p:first-child {
+  margin-top: 0;
+}
+
+.archive-upload-dropzone__staged {
+  color: rgba(153, 235, 221, 0.95);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.archive-upload-progress {
+  margin-top: 8px;
+  display: grid;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.archive-upload-progress.is-visible {
+  opacity: 1;
+}
+
+.archive-upload-progress__bar {
+  position: relative;
+  display: block;
+  height: 2px;
+  width: 100%;
+  border-radius: 999px;
+  overflow: hidden;
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform 180ms linear;
+  background: linear-gradient(90deg, rgba(243, 157, 66, 0.74) 0%, #f6c773 50%, #ff9f4d 100%);
+  box-shadow: 0 0 8px rgba(255, 167, 86, 0.38);
+}
+
+.archive-upload-progress__bar.is-active::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: max(24px, 18%);
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 240, 210, 0.75) 50%, transparent 100%);
+  animation: topbarSyncProgressSweep 1.35s ease-in-out infinite;
+}
+
+.archive-upload-progress__label {
+  font-size: 0.72rem;
+  color: rgba(247, 246, 242, 0.76);
+}
+
+.upload-import-toast {
+  position: fixed;
+  top: 22px;
+  right: 22px;
+  z-index: 180;
+  min-width: 250px;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 204, 139, 0.42);
+  background: rgba(34, 21, 10, 0.96);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.42);
+}
+
+.upload-import-toast strong {
+  display: block;
+  margin: 0;
+  color: rgba(255, 224, 187, 0.96);
+}
+
+.upload-import-toast p {
+  margin: 4px 0 0;
+  color: rgba(255, 236, 206, 0.84);
+  font-size: 0.78rem;
+}
+
+.upload-advanced {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+}
+
+.upload-advanced__summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.upload-advanced__summary::-webkit-details-marker {
+  display: none;
+}
+
+.upload-advanced[open] .upload-advanced__summary svg {
+  transform: rotate(180deg);
+}
+
+.upload-advanced__summary svg {
+  transition: transform 120ms ease;
+}
+
+.upload-advanced__body {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.upload-advanced__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.upload-advanced__layout .modal-panel__column--tags {
+  position: static;
+}
+
+.upload-advanced[open] .upload-advanced__body {
+  max-height: none;
+  overflow: visible;
+  padding-right: 12px;
+  padding-bottom: 18px;
+}
+
+.upload-advanced__body .field {
+  margin-bottom: 0;
 }
 
 .modal-panel__column {
