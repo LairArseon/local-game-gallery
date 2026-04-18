@@ -44,6 +44,10 @@ import type {
   StageGameArchiveUploadResult,
   SaveVersionDownloadPayload,
   SaveVersionDownloadResult,
+  CompressGameVersionPayload,
+  CompressGameVersionResult,
+  DecompressGameVersionPayload,
+  DecompressGameVersionResult,
   ServiceApiVersionInfo,
   ServiceCapabilities,
   ServiceHealthStatus,
@@ -57,6 +61,14 @@ let galleryHttpService: GalleryHttpService | null = null;
 let isQuitRequested = false;
 const mainProcessStartedAt = new Date().toISOString();
 const stagedGameArchiveUploads = new Map<string, { filePath: string; originalFileName: string }>();
+const versionStorageBaseName = 'storage_compresion';
+const versionStorageArchivePattern = /^storage_compresion\.[^.]+$/i;
+const versionMetadataFilePattern = /\.nfo$/i;
+
+type VersionStorageArchiveInfo = {
+  archivePath: string;
+  extension: string;
+};
 
 function getServiceHealthSnapshot(): ServiceHealthStatus {
   if (galleryHttpService) {
@@ -438,6 +450,231 @@ async function copyExtractedArchiveIntoVersion(extractedRootPath: string, target
     if (entry.isFile()) {
       await copyFile(sourcePath, destinationPath);
     }
+  }
+}
+
+async function resolveVersionStorageArchive(versionPath: string): Promise<VersionStorageArchiveInfo | null> {
+  const entries = await readdir(versionPath, { withFileTypes: true }).catch(() => []);
+  const archiveEntry = entries.find((entry) => entry.isFile() && versionStorageArchivePattern.test(entry.name));
+  if (!archiveEntry) {
+    return null;
+  }
+
+  const extension = path.extname(archiveEntry.name).replace('.', '').toLowerCase() || 'zip';
+  return {
+    archivePath: path.join(versionPath, archiveEntry.name),
+    extension,
+  };
+}
+
+async function listRuntimeVersionEntries(versionPath: string) {
+  const entries = await readdir(versionPath, { withFileTypes: true }).catch(() => []);
+  return entries.filter((entry) => {
+    if (!(entry.isFile() || entry.isDirectory())) {
+      return false;
+    }
+
+    if (versionStorageArchivePattern.test(entry.name)) {
+      return false;
+    }
+
+    if (entry.isFile() && versionMetadataFilePattern.test(entry.name)) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+async function compressVersionForStorage(
+  gamePath: string,
+  versionPath: string,
+  versionName: string,
+  source: string,
+): Promise<CompressGameVersionResult> {
+  const resolvedGamePath = path.resolve(gamePath);
+  const resolvedVersionPath = path.resolve(versionPath);
+
+  if (!isPathInside(resolvedGamePath, resolvedVersionPath)) {
+    throw new Error('Invalid version compression path.');
+  }
+
+  const versionStats = await stat(resolvedVersionPath).catch(() => null);
+  if (!versionStats?.isDirectory()) {
+    throw new Error('Selected version folder was not found on disk.');
+  }
+
+  const runtimeEntries = await listRuntimeVersionEntries(resolvedVersionPath);
+  const existingArchive = await resolveVersionStorageArchive(resolvedVersionPath);
+
+  if (!runtimeEntries.length && existingArchive) {
+    const archiveStats = await stat(existingArchive.archivePath).catch(() => null);
+    return {
+      compressed: true,
+      archivePath: existingArchive.archivePath,
+      archiveSizeBytes: archiveStats?.size ?? 0,
+      message: `${versionName} is already compressed.`,
+    };
+  }
+
+  if (!runtimeEntries.length) {
+    throw new Error('Version folder has no compressible files.');
+  }
+
+  const archiveExtension = existingArchive?.extension || 'zip';
+  const archiveFileName = `${versionStorageBaseName}.${archiveExtension}`;
+  const archiveOutputPath = path.join(resolvedVersionPath, archiveFileName);
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'lgg-version-compress-'));
+  const tempPayloadRoot = path.join(tempDir, 'payload');
+  const tempArchivePath = path.join(tempDir, archiveFileName);
+
+  await appendLogEvent({
+    level: 'info',
+    source,
+    message: `Compression requested for version "${versionName}" at "${resolvedVersionPath}" (${runtimeEntries.length} entries).`,
+  }).catch(() => undefined);
+
+  try {
+    await mkdir(tempPayloadRoot, { recursive: true });
+
+    for (const entry of runtimeEntries) {
+      const sourcePath = path.join(resolvedVersionPath, entry.name);
+      const destinationPath = path.join(tempPayloadRoot, entry.name);
+      if (entry.isDirectory()) {
+        await cp(sourcePath, destinationPath, { recursive: true, force: true, errorOnExist: false });
+        continue;
+      }
+
+      if (entry.isFile()) {
+        await copyFile(sourcePath, destinationPath);
+      }
+    }
+
+    await createZipFromFolder(tempPayloadRoot, tempArchivePath);
+    await copyFile(tempArchivePath, archiveOutputPath);
+
+    for (const entry of runtimeEntries) {
+      const targetPath = path.join(resolvedVersionPath, entry.name);
+      if (entry.isDirectory()) {
+        await rm(targetPath, { recursive: true, force: true });
+      } else {
+        await unlink(targetPath).catch(() => undefined);
+      }
+    }
+
+    const archiveStats = await stat(archiveOutputPath).catch(() => null);
+    await appendLogEvent({
+      level: 'info',
+      source,
+      message: `Compression completed for "${resolvedVersionPath}" -> "${archiveOutputPath}" (${archiveStats?.size ?? 0} bytes).`,
+    }).catch(() => undefined);
+
+    return {
+      compressed: true,
+      archivePath: archiveOutputPath,
+      archiveSizeBytes: archiveStats?.size ?? 0,
+      message: `Compressed ${versionName}.`,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown compression error.';
+    await appendLogEvent({
+      level: 'error',
+      source,
+      message: `Compression failed for "${resolvedVersionPath}": ${message}`,
+    }).catch(() => undefined);
+    throw error;
+  } finally {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+async function decompressVersionFromStorage(
+  gamePath: string,
+  versionPath: string,
+  versionName: string,
+  source: string,
+): Promise<DecompressGameVersionResult> {
+  const resolvedGamePath = path.resolve(gamePath);
+  const resolvedVersionPath = path.resolve(versionPath);
+
+  if (!isPathInside(resolvedGamePath, resolvedVersionPath)) {
+    throw new Error('Invalid version decompression path.');
+  }
+
+  const versionStats = await stat(resolvedVersionPath).catch(() => null);
+  if (!versionStats?.isDirectory()) {
+    throw new Error('Selected version folder was not found on disk.');
+  }
+
+  const archiveInfo = await resolveVersionStorageArchive(resolvedVersionPath);
+  if (!archiveInfo) {
+    return {
+      decompressed: true,
+      extractedEntries: 0,
+      message: `${versionName} is already decompressed.`,
+    };
+  }
+
+  const existingRuntimeEntries = await listRuntimeVersionEntries(resolvedVersionPath);
+  if (existingRuntimeEntries.length) {
+    throw new Error('Version already has runtime files. Manual cleanup is required before decompression.');
+  }
+
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'lgg-version-decompress-'));
+  const extractRoot = path.join(tempDir, 'extract');
+  await appendLogEvent({
+    level: 'info',
+    source,
+    message: `Decompression requested for version "${versionName}" from "${archiveInfo.archivePath}".`,
+  }).catch(() => undefined);
+
+  try {
+    await extractZipToFolder(archiveInfo.archivePath, extractRoot);
+    const extractedEntries = (await readdir(extractRoot, { withFileTypes: true }))
+      .filter((entry) => entry.name !== '__MACOSX');
+
+    let sourceRoot = extractRoot;
+    if (extractedEntries.length === 1 && extractedEntries[0]?.isDirectory()) {
+      sourceRoot = path.join(extractRoot, extractedEntries[0].name);
+    }
+
+    const entriesToCopy = await readdir(sourceRoot, { withFileTypes: true });
+
+    for (const entry of entriesToCopy) {
+      const sourcePath = path.join(sourceRoot, entry.name);
+      const destinationPath = path.join(resolvedVersionPath, entry.name);
+      if (entry.isDirectory()) {
+        await cp(sourcePath, destinationPath, { recursive: true, force: true, errorOnExist: false });
+        continue;
+      }
+
+      if (entry.isFile()) {
+        await copyFile(sourcePath, destinationPath);
+      }
+    }
+
+    await unlink(archiveInfo.archivePath).catch(() => undefined);
+    await appendLogEvent({
+      level: 'info',
+      source,
+      message: `Decompression completed for "${resolvedVersionPath}" (${extractedEntries.length} extracted entries).`,
+    }).catch(() => undefined);
+
+    return {
+      decompressed: true,
+      extractedEntries: entriesToCopy.length,
+      message: `Decompressed ${versionName}.`,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown decompression error.';
+    await appendLogEvent({
+      level: 'error',
+      source,
+      message: `Decompression failed for "${resolvedVersionPath}": ${message}`,
+    }).catch(() => undefined);
+    throw error;
+  } finally {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
   }
 }
 
@@ -1313,8 +1550,10 @@ ipcMain.handle('gallery:save-version-download', async (_event, payload: SaveVers
     };
   }
 
+  const storedArchive = await resolveVersionStorageArchive(resolvedVersionPath);
+  const archiveExtension = storedArchive?.extension || 'zip';
   const baseName = toDownloadSafeFileName(suggestedName || path.basename(resolvedVersionPath));
-  const defaultFileName = `${baseName}.zip`;
+  const defaultFileName = `${baseName}.${archiveExtension}`;
   const window = BrowserWindow.getFocusedWindow() ?? mainWindow;
   const saveDialogResult = window
     ? await dialog.showSaveDialog(window, {
@@ -1344,14 +1583,28 @@ ipcMain.handle('gallery:save-version-download', async (_event, payload: SaveVers
 
   const destinationPath = path.resolve(saveDialogResult.filePath);
   try {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), 'lgg-version-'));
-    const tempZipPath = path.join(tempDir, defaultFileName);
-    try {
-      await createZipFromFolder(resolvedVersionPath, tempZipPath);
-      await copyFile(tempZipPath, destinationPath);
-    } finally {
-      await unlink(tempZipPath).catch(() => undefined);
-      await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+    if (storedArchive) {
+      await appendLogEvent({
+        level: 'info',
+        source: 'main-save-version-download',
+        message: `Version download for "${versionPath}" reused stored archive "${storedArchive.archivePath}".`,
+      }).catch(() => undefined);
+      await copyFile(storedArchive.archivePath, destinationPath);
+    } else {
+      const tempDir = await mkdtemp(path.join(os.tmpdir(), 'lgg-version-'));
+      const tempZipPath = path.join(tempDir, defaultFileName);
+      try {
+        await appendLogEvent({
+          level: 'info',
+          source: 'main-save-version-download',
+          message: `Version download for "${versionPath}" requires on-demand compression.`,
+        }).catch(() => undefined);
+        await createZipFromFolder(resolvedVersionPath, tempZipPath);
+        await copyFile(tempZipPath, destinationPath);
+      } finally {
+        await unlink(tempZipPath).catch(() => undefined);
+        await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+      }
     }
 
     await appendLogEvent({
@@ -1381,6 +1634,39 @@ ipcMain.handle('gallery:save-version-download', async (_event, payload: SaveVers
       message,
     };
   }
+});
+
+ipcMain.handle('gallery:compress-game-version', async (_event, payload: CompressGameVersionPayload): Promise<CompressGameVersionResult> => {
+  const gamePath = String(payload?.gamePath ?? '').trim();
+  const versionPath = String(payload?.versionPath ?? '').trim();
+  const versionName = String(payload?.versionName ?? '').trim() || path.basename(versionPath || gamePath || 'Version');
+
+  if (!gamePath || !versionPath) {
+    return {
+      compressed: false,
+      archivePath: null,
+      archiveSizeBytes: 0,
+      message: 'Game path and version path are required for compression.',
+    };
+  }
+
+  return compressVersionForStorage(gamePath, versionPath, versionName, 'main-version-storage');
+});
+
+ipcMain.handle('gallery:decompress-game-version', async (_event, payload: DecompressGameVersionPayload): Promise<DecompressGameVersionResult> => {
+  const gamePath = String(payload?.gamePath ?? '').trim();
+  const versionPath = String(payload?.versionPath ?? '').trim();
+  const versionName = String(payload?.versionName ?? '').trim() || path.basename(versionPath || gamePath || 'Version');
+
+  if (!gamePath || !versionPath) {
+    return {
+      decompressed: false,
+      extractedEntries: 0,
+      message: 'Game path and version path are required for decompression.',
+    };
+  }
+
+  return decompressVersionFromStorage(gamePath, versionPath, versionName, 'main-version-storage');
 });
 
 ipcMain.handle('gallery:log-event', async (_event, payload: LogEventPayload) => {
@@ -1431,14 +1717,21 @@ ipcMain.handle('gallery:open-folder', async (_event, payload: OpenFolderPayload)
 
 ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Promise<PlayGameResult> => {
   const launchMode = payload.launchMode ?? 'default';
+  const playableVersions = payload.versions.map((version) => ({
+    name: version.name,
+    path: version.path,
+    hasNfo: false,
+    storageState: version.storageState ?? 'decompressed',
+    storageArchivePath: version.storageArchivePath ?? null,
+  }));
   const metadata = await readGameMetadata(
     payload.gamePath,
     payload.gameName,
-    payload.versions.map((version) => ({ ...version, hasNfo: false })),
+    playableVersions,
   );
 
   const detectedLatestVersion = getLatestVersionName(
-    payload.versions.map((version) => ({ ...version, hasNfo: false })),
+    playableVersions,
   );
   const hasVersionMismatch = Boolean(
     detectedLatestVersion
@@ -1447,10 +1740,10 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
   );
   const window = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
 
-  let versionsToSearch = payload.versions;
-  if (launchMode === 'choose-version-temporary' && payload.versions.length > 1) {
-    const versionOptions = payload.versions.map((version, index) => `${index + 1}. ${version.name}`);
-    const versionButtons = payload.versions.map((version, index) => {
+  let versionsToSearch = playableVersions;
+  if (launchMode === 'choose-version-temporary' && playableVersions.length > 1) {
+    const versionOptions = playableVersions.map((version, index) => `${index + 1}. ${version.name}`);
+    const versionButtons = playableVersions.map((version, index) => {
       const label = `${index + 1}) ${version.name}`;
       return label.length > 38 ? `${label.slice(0, 35)}...` : label;
     });
@@ -1462,7 +1755,7 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
         message: 'Select which game version to launch now.',
         detail: `This launch will not change your saved default executable.\n\n${versionOptions.join('\n')}`,
         buttons: [...versionButtons, 'Cancel'],
-        cancelId: payload.versions.length,
+        cancelId: playableVersions.length,
         defaultId: 0,
         noLink: true,
       })
@@ -1472,12 +1765,12 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
       message: 'Select which game version to launch now.',
       detail: `This launch will not change your saved default executable.\n\n${versionOptions.join('\n')}`,
       buttons: [...versionButtons, 'Cancel'],
-      cancelId: payload.versions.length,
+      cancelId: playableVersions.length,
       defaultId: 0,
       noLink: true,
     });
 
-    if (versionSelection.response === payload.versions.length) {
+    if (versionSelection.response === playableVersions.length) {
       await appendLogEvent({
         level: 'warn',
         source: 'main-play-game',
@@ -1490,7 +1783,56 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
       };
     }
 
-    versionsToSearch = [payload.versions[versionSelection.response] ?? payload.versions[0]];
+    versionsToSearch = [playableVersions[versionSelection.response] ?? playableVersions[0]];
+  }
+
+  const preferredVersionName = (launchMode === 'default'
+    ? (metadata.latestVersion || detectedLatestVersion)
+    : versionsToSearch[0]?.name) || versionsToSearch[0]?.name || '';
+  const preferredVersion = versionsToSearch.find((version) => version.name === preferredVersionName) ?? versionsToSearch[0];
+
+  if (preferredVersion?.storageState === 'compressed' && !payload.skipDecompressPrompt) {
+    const confirmation = window
+      ? await dialog.showMessageBox(window, {
+        type: 'question',
+        title: 'Decompress Version Before Launch',
+        message: `"${preferredVersion.name}" is compressed and must be decompressed before launch.`,
+        detail: 'The version will remain decompressed until you manually compress it again.',
+        buttons: ['Decompress and launch', 'Cancel'],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      })
+      : await dialog.showMessageBox({
+      type: 'question',
+      title: 'Decompress Version Before Launch',
+      message: `"${preferredVersion.name}" is compressed and must be decompressed before launch.`,
+      detail: 'The version will remain decompressed until you manually compress it again.',
+      buttons: ['Decompress and launch', 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    });
+
+    if (confirmation.response !== 0) {
+      await appendLogEvent({
+        level: 'warn',
+        source: 'main-play-game',
+        message: `Play canceled while waiting decompression confirmation for game "${payload.gameName}" version "${preferredVersion.name}".`,
+      }).catch(() => undefined);
+      return {
+        launched: false,
+        executablePath: null,
+        message: 'Play canceled.',
+      };
+    }
+
+  }
+
+  if (preferredVersion?.storageState === 'compressed') {
+    await decompressVersionFromStorage(payload.gamePath, preferredVersion.path, preferredVersion.name, 'main-version-storage');
+    preferredVersion.storageState = 'decompressed';
+    preferredVersion.storageArchivePath = null;
   }
 
   const storedExecutable = metadata.launchExecutable.trim();
@@ -1512,7 +1854,9 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
     }
   }
 
-  const searchFolders = versionsToSearch.map((version) => version.path);
+  const searchFolders = preferredVersion
+    ? [preferredVersion.path, ...versionsToSearch.filter((version) => version.path !== preferredVersion.path).map((version) => version.path)]
+    : versionsToSearch.map((version) => version.path);
   const discoveredExecutables = [...new Set((await Promise.all(searchFolders.map((folder) => findExecutablesInFolder(folder)))).flat())].sort();
 
   if (!discoveredExecutables.length) {
@@ -1685,11 +2029,15 @@ ipcMain.handle('gallery:show-game-context-menu', (event, payload: GameContextMen
   menu.popup({ window });
 });
 
-ipcMain.handle('gallery:show-version-context-menu', (event, payload: VersionContextMenuPayload) => {
+ipcMain.handle('gallery:show-version-context-menu', async (event, payload: VersionContextMenuPayload) => {
   const window = BrowserWindow.fromWebContents(event.sender);
   if (!window) {
     return;
   }
+
+  const versionPath = String(payload.versionPath ?? '').trim();
+  const storedArchive = versionPath ? await resolveVersionStorageArchive(versionPath) : null;
+  const isCompressed = Boolean(storedArchive);
 
   const menu = Menu.buildFromTemplate([
     {
@@ -1697,7 +2045,16 @@ ipcMain.handle('gallery:show-version-context-menu', (event, payload: VersionCont
       click: () => {
         window.webContents.send('gallery:version-context-menu-action', {
           action: 'open-version-folder',
-          versionPath: payload.versionPath,
+          versionPath,
+        });
+      },
+    },
+    {
+      label: isCompressed ? 'Decompress version' : 'Compress version',
+      click: () => {
+        window.webContents.send('gallery:version-context-menu-action', {
+          action: isCompressed ? 'decompress-version' : 'compress-version',
+          versionPath,
         });
       },
     },

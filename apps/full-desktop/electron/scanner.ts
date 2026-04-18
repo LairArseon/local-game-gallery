@@ -8,6 +8,7 @@ const imageExtensions = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp
 const defaultGameNfoName = 'game.nfo';
 const defaultVersionNfoName = 'version.nfo';
 const activityLogFileName = 'activitylog';
+const versionStorageArchivePattern = /^storage_compresion\.[^.]+$/i;
 
 type MirrorSyncStats = {
   syncedGames: number;
@@ -205,6 +206,22 @@ async function ensureDefaultVersionNfo(versionPath: string, versionName: string)
 
   await writeFile(fallbackNfoPath, defaultVersionNfoTemplate(versionName), 'utf8');
   return true;
+}
+
+async function detectVersionStorageState(versionPath: string) {
+  const entries = await readDirectoryEntriesSafe(versionPath);
+  const archiveEntry = entries.find((entry) => entry.isFile() && versionStorageArchivePattern.test(entry.name));
+  if (!archiveEntry) {
+    return {
+      storageState: 'decompressed' as const,
+      storageArchivePath: null,
+    };
+  }
+
+  return {
+    storageState: 'compressed' as const,
+    storageArchivePath: path.join(versionPath, archiveEntry.name),
+  };
 }
 
 async function syncNfoFiles(sourceFolderPath: string, mirrorFolderPath: string, stats: MirrorSyncStats) {
@@ -455,12 +472,20 @@ export async function scanGames(config: GalleryConfig, requestOptions: ScanReque
     const gameEntries = await readDirectoryEntriesSafe(gamePath);
     const createdGameNfo = await ensureDefaultGameNfo(gamePath, entry.name);
     createdGameNfoCount += createdGameNfo ? 1 : 0;
-    const versions = gameEntries
+    const versions: Array<{
+      name: string;
+      path: string;
+      hasNfo: boolean;
+      storageState: 'compressed' | 'decompressed';
+      storageArchivePath: string | null;
+    }> = gameEntries
       .filter((child) => child.isDirectory() && versionPattern.test(child.name))
       .map((child) => ({
         name: child.name,
         path: path.join(gamePath, child.name),
         hasNfo: false,
+        storageState: 'decompressed',
+        storageArchivePath: null,
       }));
 
     let createdVersionNfoCount = 0;
@@ -468,6 +493,9 @@ export async function scanGames(config: GalleryConfig, requestOptions: ScanReque
       const createdVersionNfo = await ensureDefaultVersionNfo(version.path, version.name);
       createdVersionNfoCount += createdVersionNfo ? 1 : 0;
       version.hasNfo = true;
+      const storageState = await detectVersionStorageState(version.path);
+      version.storageState = storageState.storageState;
+      version.storageArchivePath = storageState.storageArchivePath;
     }
     createdVersionNfoTotal += createdVersionNfoCount;
 
@@ -637,12 +665,20 @@ export async function scanGame(config: GalleryConfig, gamePath: string): Promise
   const versionPattern = new RegExp(config.versionFolderPattern);
   const gameEntries = await readDirectoryEntriesSafe(resolvedGamePath);
   const createdGameNfo = await ensureDefaultGameNfo(resolvedGamePath, gameName);
-  const versions = gameEntries
+  const versions: Array<{
+    name: string;
+    path: string;
+    hasNfo: boolean;
+    storageState: 'compressed' | 'decompressed';
+    storageArchivePath: string | null;
+  }> = gameEntries
     .filter((child) => child.isDirectory() && versionPattern.test(child.name))
     .map((child) => ({
       name: child.name,
       path: path.join(resolvedGamePath, child.name),
       hasNfo: false,
+      storageState: 'decompressed',
+      storageArchivePath: null,
     }));
 
   let createdVersionNfoCount = 0;
@@ -650,6 +686,9 @@ export async function scanGame(config: GalleryConfig, gamePath: string): Promise
     const createdVersionNfo = await ensureDefaultVersionNfo(version.path, version.name);
     createdVersionNfoCount += createdVersionNfo ? 1 : 0;
     version.hasNfo = true;
+    const storageState = await detectVersionStorageState(version.path);
+    version.storageState = storageState.storageState;
+    version.storageArchivePath = storageState.storageArchivePath;
   }
 
   const picturesPath = path.join(resolvedGamePath, config.picturesFolderName);

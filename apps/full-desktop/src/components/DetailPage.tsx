@@ -10,7 +10,7 @@
  * New to this project: this is the single-game workspace; follow its action callbacks (play, metadata, media, folders) to hooks that perform side effects.
  */
 import type { CSSProperties, MouseEvent, ReactNode } from 'react';
-import { ArrowLeft, ListVideo, Play } from 'lucide-react';
+import { Archive, ArrowLeft, FolderOpen, ListVideo, Play } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { GameSummary } from '../types';
 
@@ -34,6 +34,7 @@ type DetailPageProps = {
   onOpenGameFolder: (gamePath: string) => void;
   onOpenVersionFolder: (versionPath: string) => void;
   onOpenVersionContextMenu: (versionPath: string, versionName: string) => void;
+  onCompressVersion: (gamePath: string, gameName: string, versionPath: string, versionName: string) => Promise<void>;
   onOpenPictures: (gamePath: string) => void;
   onOpenScreenshot: (imagePath: string) => void;
 };
@@ -53,6 +54,7 @@ export function DetailPage({
   onOpenGameFolder,
   onOpenVersionFolder,
   onOpenVersionContextMenu,
+  onCompressVersion,
   onOpenPictures,
   onOpenScreenshot,
   onPlayWithVersionPrompt,
@@ -149,6 +151,8 @@ export function DetailPage({
                       disabled={!canOpenFolders}
                       onContextMenu={(event) => {
                         if (!supportsNativeContextMenu) {
+                          event.preventDefault();
+                          void onCompressVersion(game.path, game.name, version.path, version.name);
                           return;
                         }
 
@@ -164,7 +168,17 @@ export function DetailPage({
                       title={canOpenFolders ? t('detail.versionActionsHint') : undefined}
                     >
                       <span>{version.name}</span>
-                      <span>{version.hasNfo ? t('detail.hasNfo') : t('detail.noNfo')}</span>
+                      <span
+                        className="detail-versions__state"
+                        title={`${version.storageState === 'compressed' ? t('detail.storageCompressed') : t('detail.storageDecompressed')} · ${version.hasNfo ? t('detail.hasNfo') : t('detail.noNfo')}`}
+                      >
+                        {version.storageState === 'compressed'
+                          ? <Archive size={14} aria-hidden="true" />
+                          : <FolderOpen size={14} aria-hidden="true" />}
+                        <span className="detail-versions__state-text">
+                          {version.storageState === 'compressed' ? t('detail.storageCompressed') : t('detail.storageDecompressed')}
+                        </span>
+                      </span>
                     </button>
                   </li>
                 ))}

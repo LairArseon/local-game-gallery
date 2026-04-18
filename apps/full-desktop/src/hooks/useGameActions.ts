@@ -19,6 +19,8 @@ type UseGameActionsArgs = {
   setDetailGamePath: Dispatch<SetStateAction<string | null>>;
   setSelectedGamePath: Dispatch<SetStateAction<string | null>>;
   refreshScan: () => Promise<unknown>;
+  confirmDecompressBeforeLaunch?: (gameName: string, versionName: string) => Promise<boolean>;
+  decompressVersionBeforeLaunch?: (gamePath: string, gameName: string, versionPath: string, versionName: string) => Promise<void>;
   logAppEvent: (message: string, level?: 'info' | 'warn' | 'error', source?: string) => Promise<void>;
   toErrorMessage: (error: unknown, fallback: string) => string;
 };
@@ -31,6 +33,8 @@ export function useGameActions({
   setDetailGamePath,
   setSelectedGamePath,
   refreshScan,
+  confirmDecompressBeforeLaunch,
+  decompressVersionBeforeLaunch,
   logAppEvent,
   toErrorMessage,
 }: UseGameActionsArgs) {
@@ -63,14 +67,40 @@ export function useGameActions({
     }
 
     try {
+      const preferredVersionName = (launchMode === 'default'
+        ? (game.metadata.latestVersion || game.detectedLatestVersion)
+        : game.versions[0]?.name) || game.versions[0]?.name || '';
+      const preferredVersion = game.versions.find((version) => version.name === preferredVersionName) ?? game.versions[0];
+      let skipDecompressPrompt = false;
+
+      if (
+        launchMode === 'default'
+        && preferredVersion?.storageState === 'compressed'
+        && confirmDecompressBeforeLaunch
+      ) {
+        const confirmed = await confirmDecompressBeforeLaunch(game.name, preferredVersion.name);
+        if (!confirmed) {
+          setStatus('Play canceled.');
+          return;
+        }
+
+        if (decompressVersionBeforeLaunch) {
+          await decompressVersionBeforeLaunch(game.path, game.name, preferredVersion.path, preferredVersion.name);
+          skipDecompressPrompt = true;
+        }
+      }
+
       const result = await galleryClient.playGame({
         gamePath: game.path,
         gameName: game.name,
         versions: game.versions.map((version) => ({
           name: version.name,
           path: version.path,
+          storageState: version.storageState,
+          storageArchivePath: version.storageArchivePath,
         })),
         launchMode,
+        skipDecompressPrompt,
       });
       setStatus(result.message);
       // Refresh only when a launch actually happened (play call can also return no-op statuses).

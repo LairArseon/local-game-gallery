@@ -157,6 +157,59 @@ button {
   line-height: 1.38;
 }
 
+.floating-version-storage {
+  position: fixed;
+  top: 110px;
+  right: 14px;
+  z-index: 225;
+  min-width: 260px;
+  max-width: min(360px, calc(100vw - 28px));
+  border-radius: 12px;
+  border: 1px solid rgba(250, 196, 125, 0.38);
+  background: linear-gradient(150deg, rgba(33, 19, 11, 0.95), rgba(22, 12, 8, 0.95));
+  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.42);
+  padding: 11px 13px;
+  display: grid;
+  gap: 6px;
+}
+
+.floating-version-storage__title,
+.floating-version-storage__body {
+  margin: 0;
+}
+
+.floating-version-storage__title {
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: rgba(255, 214, 165, 0.95);
+  font-weight: 700;
+}
+
+.floating-version-storage__body {
+  font-size: 0.78rem;
+  color: rgba(248, 237, 226, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.floating-version-storage__meter {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 190, 118, 0.2);
+  overflow: hidden;
+}
+
+.floating-version-storage__meter-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  background: linear-gradient(90deg, rgba(245, 169, 74, 0.92), rgba(255, 206, 117, 0.92));
+  transition: transform 170ms ease;
+}
+
 .topbar-sync-progress {
   position: absolute;
   left: 20px;

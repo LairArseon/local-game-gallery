@@ -28,6 +28,10 @@ import type {
   SaveExtraDownloadResult,
   SaveVersionDownloadPayload,
   SaveVersionDownloadResult,
+  CompressGameVersionPayload,
+  CompressGameVersionResult,
+  DecompressGameVersionPayload,
+  DecompressGameVersionResult,
   StageGameArchiveUploadPayload,
   StageGameArchiveUploadResult,
   SaveGameMetadataPayload,
@@ -844,7 +848,10 @@ export const webClient: GalleryClient = {
   async showVersionContextMenu(payload: VersionContextMenuPayload) {
     const selectedAction = promptContextAction(
       `Actions for ${payload.versionName}`,
-      [{ action: 'open-version-folder', label: 'Open version folder' }],
+      [
+        { action: 'open-version-folder', label: 'Open version folder' },
+        { action: 'compress-version', label: 'Compress version' },
+      ],
     );
     if (!selectedAction) {
       return;
@@ -994,6 +1001,18 @@ export const webClient: GalleryClient = {
       'saveVersionDownload',
       'Desktop save dialog is only available on the host desktop app.',
     );
+  },
+  async compressGameVersion(payload: CompressGameVersionPayload): Promise<CompressGameVersionResult> {
+    return requestApi<CompressGameVersionResult>('/api/version-storage/compress', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+  async decompressGameVersion(payload: DecompressGameVersionPayload): Promise<DecompressGameVersionResult> {
+    return requestApi<DecompressGameVersionResult>('/api/version-storage/decompress', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
   async pickArchiveUploadFile(): Promise<PickArchiveUploadFileResult | null> {
     const response = await requestApi<{ selectedFile: PickArchiveUploadFileResult | null }>('/api/pick-archive-upload-file', {

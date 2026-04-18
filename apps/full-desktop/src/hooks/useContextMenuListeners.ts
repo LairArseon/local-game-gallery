@@ -26,6 +26,8 @@ type UseContextMenuListenersArgs = {
   toggleGameVaultMembership: (gamePath: string, shouldBeVaulted: boolean) => Promise<unknown>;
   openVaultPinEditor: () => void;
   removeVaultPin: () => Promise<unknown>;
+  onCompressVersion: (versionPath: string) => Promise<void>;
+  onDecompressVersion: (versionPath: string) => Promise<void>;
   setStatus: Dispatch<SetStateAction<string>>;
 };
 
@@ -42,6 +44,8 @@ export function useContextMenuListeners({
   toggleGameVaultMembership,
   openVaultPinEditor,
   removeVaultPin,
+  onCompressVersion,
+  onDecompressVersion,
   setStatus,
 }: UseContextMenuListenersArgs) {
   const { t } = useTranslation();
@@ -111,13 +115,23 @@ export function useContextMenuListeners({
     const dispose = galleryClient.onVersionContextMenuAction((payload) => {
       if (payload.action === 'open-version-folder') {
         void openFolderInExplorer(payload.versionPath);
+        return;
+      }
+
+      if (payload.action === 'compress-version') {
+        void onCompressVersion(payload.versionPath);
+        return;
+      }
+
+      if (payload.action === 'decompress-version') {
+        void onDecompressVersion(payload.versionPath);
       }
     });
 
     return () => {
       dispose();
     };
-  }, [galleryClient, openFolderInExplorer]);
+  }, [galleryClient, onCompressVersion, onDecompressVersion, openFolderInExplorer]);
 
   useEffect(() => {
     const dispose = galleryClient.onVaultContextMenuAction((payload) => {

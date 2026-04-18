@@ -10,7 +10,7 @@
  * New to this project: this is the single-game workspace; follow its action callbacks (play, metadata, media, folders) to hooks that perform side effects.
  */
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
-import { ArrowLeft, ListVideo, Play } from 'lucide-react';
+import { Archive, ArrowLeft, FolderOpen, ListVideo, Play } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import type { GameSummary } from '../types';
@@ -36,6 +36,8 @@ type DetailPageProps = {
   onOpenGameFolder: (gamePath: string) => void;
   onOpenVersionFolder: (versionPath: string) => void;
   onOpenVersionContextMenu: (versionPath: string, versionName: string) => void;
+  onCompressVersion: (gamePath: string, gameName: string, versionPath: string, versionName: string) => Promise<void>;
+  onDecompressVersion: (gamePath: string, gameName: string, versionPath: string, versionName: string) => Promise<void>;
   onDownloadVersion: (gamePath: string, versionPath: string, versionName: string) => void;
   onDownloadExtra: (gamePath: string, relativePath: string, itemName: string, isDirectory: boolean) => void;
   onOpenPictures: (gamePath: string) => void;
@@ -58,6 +60,8 @@ export function DetailPage({
   onOpenGameFolder,
   onOpenVersionFolder,
   onOpenVersionContextMenu,
+  onCompressVersion,
+  onDecompressVersion,
   onDownloadVersion,
   onDownloadExtra,
   onOpenPictures,
@@ -66,7 +70,7 @@ export function DetailPage({
 }: DetailPageProps) {
   const { t } = useTranslation();
   const contextMenuWidth = 220;
-  const contextMenuHeight = 52;
+  const contextMenuHeight = 112;
   const versionContextMenuRef = useRef<HTMLDivElement | null>(null);
   const extrasContextMenuRef = useRef<HTMLDivElement | null>(null);
   const [versionContextMenu, setVersionContextMenu] = useState<{
@@ -82,6 +86,10 @@ export function DetailPage({
     itemName: string;
     isDirectory: boolean;
   } | null>(null);
+  const selectedContextVersion = versionContextMenu
+    ? game.versions.find((version) => version.path === versionContextMenu.versionPath) ?? null
+    : null;
+  const contextVersionIsCompressed = selectedContextVersion?.storageState === 'compressed';
 
   useEffect(() => {
     if (!extrasContextMenu && !versionContextMenu) {
@@ -246,7 +254,17 @@ export function DetailPage({
                       title={canOpenFolders ? t('detail.versionActionsHint') : undefined}
                     >
                       <span>{version.name}</span>
-                      <span>{version.hasNfo ? t('detail.hasNfo') : t('detail.noNfo')}</span>
+                      <span
+                        className="detail-versions__state"
+                        title={`${version.storageState === 'compressed' ? t('detail.storageCompressed') : t('detail.storageDecompressed')} · ${version.hasNfo ? t('detail.hasNfo') : t('detail.noNfo')}`}
+                      >
+                        {version.storageState === 'compressed'
+                          ? <Archive size={14} aria-hidden="true" />
+                          : <FolderOpen size={14} aria-hidden="true" />}
+                        <span className="detail-versions__state-text">
+                          {version.storageState === 'compressed' ? t('detail.storageCompressed') : t('detail.storageDecompressed')}
+                        </span>
+                      </span>
                     </button>
                   </li>
                 ))}
@@ -360,6 +378,21 @@ export function DetailPage({
             }}
           >
             {t('detail.downloadVersion')}
+          </button>
+          <button
+            className="context-menu__item"
+            type="button"
+            onClick={() => {
+              setVersionContextMenu(null);
+              if (contextVersionIsCompressed) {
+                void onDecompressVersion(game.path, game.name, versionContextMenu.versionPath, versionContextMenu.versionName);
+                return;
+              }
+
+              void onCompressVersion(game.path, game.name, versionContextMenu.versionPath, versionContextMenu.versionName);
+            }}
+          >
+            {contextVersionIsCompressed ? t('detail.decompressVersion') : t('detail.compressVersion')}
           </button>
           {supportsNativeContextMenu ? (
             <button

@@ -100,11 +100,15 @@ export type VersionSummary = {
   name: string;
   path: string;
   hasNfo: boolean;
+  storageState: 'compressed' | 'decompressed';
+  storageArchivePath: string | null;
 };
 
 export type PlayableVersion = {
   name: string;
   path: string;
+  storageState: 'compressed' | 'decompressed';
+  storageArchivePath?: string | null;
 };
 
 export type GameMetadataTag = {
@@ -192,7 +196,7 @@ export type VersionContextMenuPayload = {
 };
 
 export type VersionContextMenuAction = {
-  action: 'open-version-folder';
+  action: 'open-version-folder' | 'compress-version' | 'decompress-version';
   versionPath: string;
 };
 
@@ -242,6 +246,7 @@ export type PlayGamePayload = {
   gameName: string;
   versions: PlayableVersion[];
   launchMode?: 'default' | 'choose-version-temporary';
+  skipDecompressPrompt?: boolean;
 };
 
 export type PlayGameResult = {
@@ -282,6 +287,31 @@ export type SaveVersionDownloadResult = {
   saved: boolean;
   canceled: boolean;
   savedPath: string | null;
+  message: string;
+};
+
+export type CompressGameVersionPayload = {
+  gamePath: string;
+  versionPath: string;
+  versionName?: string;
+};
+
+export type CompressGameVersionResult = {
+  compressed: boolean;
+  archivePath: string | null;
+  archiveSizeBytes: number;
+  message: string;
+};
+
+export type DecompressGameVersionPayload = {
+  gamePath: string;
+  versionPath: string;
+  versionName?: string;
+};
+
+export type DecompressGameVersionResult = {
+  decompressed: boolean;
+  extractedEntries: number;
   message: string;
 };
 
@@ -358,6 +388,8 @@ export type GalleryApi = {
   removeScreenshot: (payload: RemoveScreenshotPayload) => Promise<void>;
   saveExtraDownload: (payload: SaveExtraDownloadPayload) => Promise<SaveExtraDownloadResult>;
   saveVersionDownload: (payload: SaveVersionDownloadPayload) => Promise<SaveVersionDownloadResult>;
+  compressGameVersion: (payload: CompressGameVersionPayload) => Promise<CompressGameVersionResult>;
+  decompressGameVersion: (payload: DecompressGameVersionPayload) => Promise<DecompressGameVersionResult>;
   pickArchiveUploadFile: () => Promise<PickArchiveUploadFileResult | null>;
   stageGameArchiveUpload: (payload: StageGameArchiveUploadPayload) => Promise<StageGameArchiveUploadResult>;
   cancelStagedGameArchiveUpload: (payload: CancelStagedGameArchiveUploadPayload) => Promise<void>;

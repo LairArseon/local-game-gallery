@@ -37,6 +37,7 @@ type LibraryPanelProps = {
   onOpenGameFolder: (gamePath: string) => void;
   onOpenVersionFolder: (versionPath: string) => void;
   onOpenVersionContextMenu: (versionPath: string, versionName: string) => void;
+  onCompressVersion: (gamePath: string, gameName: string, versionPath: string, versionName: string) => Promise<void>;
   onOpenPictures: (gamePath: string) => void;
   onOpenScreenshot: (imagePath: string) => void;
   scanResult: ScanResult;
@@ -68,6 +69,7 @@ export function LibraryPanel({
   onOpenGameFolder,
   onOpenVersionFolder,
   onOpenVersionContextMenu,
+  onCompressVersion,
   onOpenPictures,
   onOpenScreenshot,
   scanResult,
@@ -139,6 +141,7 @@ export function LibraryPanel({
           onOpenGameFolder={onOpenGameFolder}
           onOpenVersionFolder={onOpenVersionFolder}
           onOpenVersionContextMenu={onOpenVersionContextMenu}
+          onCompressVersion={onCompressVersion}
           onOpenPictures={onOpenPictures}
           onOpenScreenshot={onOpenScreenshot}
         />

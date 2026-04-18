@@ -38,6 +38,8 @@ type LibraryPanelProps = {
   onOpenGameFolder: (gamePath: string) => void;
   onOpenVersionFolder: (versionPath: string) => void;
   onOpenVersionContextMenu: (versionPath: string, versionName: string) => void;
+  onCompressVersion: (gamePath: string, gameName: string, versionPath: string, versionName: string) => Promise<void>;
+  onDecompressVersion: (gamePath: string, gameName: string, versionPath: string, versionName: string) => Promise<void>;
   onDownloadVersion: (gamePath: string, versionPath: string, versionName: string) => void;
   onDownloadExtra: (gamePath: string, relativePath: string, itemName: string, isDirectory: boolean) => void;
   onOpenPictures: (gamePath: string) => void;
@@ -72,6 +74,8 @@ export function LibraryPanel({
   onOpenGameFolder,
   onOpenVersionFolder,
   onOpenVersionContextMenu,
+  onCompressVersion,
+  onDecompressVersion,
   onDownloadVersion,
   onDownloadExtra,
   onOpenPictures,
@@ -146,6 +150,8 @@ export function LibraryPanel({
           onOpenGameFolder={onOpenGameFolder}
           onOpenVersionFolder={onOpenVersionFolder}
           onOpenVersionContextMenu={onOpenVersionContextMenu}
+          onCompressVersion={onCompressVersion}
+          onDecompressVersion={onDecompressVersion}
           onDownloadVersion={onDownloadVersion}
           onDownloadExtra={onDownloadExtra}
           onOpenPictures={onOpenPictures}

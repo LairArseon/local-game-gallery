@@ -34,6 +34,11 @@ type ModalHostProps = {
   isMirrorParityConfirmOpen: boolean;
   onConfirmMirrorParitySync: () => void;
   onCancelMirrorParitySync: () => void;
+  isDecompressLaunchConfirmOpen: boolean;
+  decompressLaunchGameName: string;
+  decompressLaunchVersionName: string;
+  onConfirmDecompressLaunch: () => void;
+  onCancelDecompressLaunch: () => void;
   metadataModalGamePath: string | null;
   metadataDraft: GameMetadata | null;
   statusChoices: string[];
@@ -110,6 +115,11 @@ export function ModalHost({
   isMirrorParityConfirmOpen,
   onConfirmMirrorParitySync,
   onCancelMirrorParitySync,
+  isDecompressLaunchConfirmOpen,
+  decompressLaunchGameName,
+  decompressLaunchVersionName,
+  onConfirmDecompressLaunch,
+  onCancelDecompressLaunch,
   metadataModalGamePath,
   metadataDraft,
   statusChoices,
@@ -367,6 +377,22 @@ export function ModalHost({
               <div className="modal-panel__vault-actions">
                 <button className="button" type="button" onClick={onCancelMirrorParitySync}>{t('setup.metadataMirrorParitySyncCancel')}</button>
                 <button className="button button--danger" type="button" onClick={onConfirmMirrorParitySync}>{t('setup.metadataMirrorParitySyncConfirmAction')}</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {isDecompressLaunchConfirmOpen ? (
+        <div className="modal-backdrop" onClick={onCancelDecompressLaunch}>
+          <section className="modal-panel modal-panel--vault" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-panel__body modal-panel__body--vault">
+              <h3>{t('detail.decompressLaunchConfirmTitle')}</h3>
+              <p>{t('detail.decompressLaunchConfirmBody', { game: decompressLaunchGameName, version: decompressLaunchVersionName })}</p>
+              <p>{t('detail.decompressLaunchConfirmHint')}</p>
+              <div className="modal-panel__vault-actions">
+                <button className="button" type="button" onClick={onCancelDecompressLaunch}>{t('common.cancel')}</button>
+                <button className="button button--primary" type="button" onClick={onConfirmDecompressLaunch}>{t('detail.decompressLaunchConfirmAction')}</button>
               </div>
             </div>
           </section>

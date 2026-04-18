@@ -4,10 +4,9 @@ dist-web-client/
 dist-standalone-client/
 dist-standalone-electron/
 dist-electron/
-release/*
-!release/*.exe
+release/
 *.log
 docker-data/
 docker/.env
 games/
-installer/bundle/*
+installer/bundle/

@@ -24,6 +24,10 @@ import {
   type ReorderScreenshotsPayload,
   type ScanRequestOptions,
   type SaveGameMetadataPayload,
+  type CompressGameVersionPayload,
+  type CompressGameVersionResult,
+  type DecompressGameVersionPayload,
+  type DecompressGameVersionResult,
   type ScanResult,
   type ServiceApiVersionInfo,
   type ServiceCapabilities,
@@ -141,6 +145,14 @@ const imageMimeToExtension = new Map<string, string>([
   ['image/bmp', '.bmp'],
 ]);
 const stagedArchiveUploads = new Map<string, { filePath: string; originalFileName: string }>();
+const versionStorageBaseName = 'storage_compresion';
+const versionStorageArchivePattern = /^storage_compresion\.[^.]+$/i;
+const versionMetadataFilePattern = /\.nfo$/i;
+
+type VersionStorageArchiveInfo = {
+  archivePath: string;
+  extension: string;
+};
 
 function normalizeIpAddress(value: string | undefined) {
   const raw = String(value ?? '').trim().toLowerCase();
@@ -432,6 +444,231 @@ async function copyExtractedArchiveIntoVersion(extractedRootPath: string, target
     if (entry.isFile()) {
       await copyFile(sourcePath, destinationPath);
     }
+  }
+}
+
+async function resolveVersionStorageArchive(versionPath: string): Promise<VersionStorageArchiveInfo | null> {
+  const entries = await readdir(versionPath, { withFileTypes: true }).catch(() => []);
+  const archiveEntry = entries.find((entry) => entry.isFile() && versionStorageArchivePattern.test(entry.name));
+  if (!archiveEntry) {
+    return null;
+  }
+
+  const extension = path.extname(archiveEntry.name).replace('.', '').toLowerCase() || 'zip';
+  return {
+    archivePath: path.join(versionPath, archiveEntry.name),
+    extension,
+  };
+}
+
+async function listRuntimeVersionEntries(versionPath: string) {
+  const entries = await readdir(versionPath, { withFileTypes: true }).catch(() => []);
+  return entries.filter((entry) => {
+    if (!(entry.isFile() || entry.isDirectory())) {
+      return false;
+    }
+
+    if (versionStorageArchivePattern.test(entry.name)) {
+      return false;
+    }
+
+    if (entry.isFile() && versionMetadataFilePattern.test(entry.name)) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+async function compressVersionForStorage(
+  gamePath: string,
+  versionPath: string,
+  versionName: string,
+  source: string,
+): Promise<CompressGameVersionResult> {
+  const resolvedGamePath = path.resolve(gamePath);
+  const resolvedVersionPath = path.resolve(versionPath);
+
+  if (!isPathInside(resolvedGamePath, resolvedVersionPath)) {
+    throw new Error('Invalid version compression path.');
+  }
+
+  const versionStats = await stat(resolvedVersionPath).catch(() => null);
+  if (!versionStats?.isDirectory()) {
+    throw new Error('Selected version folder was not found on disk.');
+  }
+
+  const runtimeEntries = await listRuntimeVersionEntries(resolvedVersionPath);
+  const existingArchive = await resolveVersionStorageArchive(resolvedVersionPath);
+
+  if (!runtimeEntries.length && existingArchive) {
+    const archiveStats = await stat(existingArchive.archivePath).catch(() => null);
+    return {
+      compressed: true,
+      archivePath: existingArchive.archivePath,
+      archiveSizeBytes: archiveStats?.size ?? 0,
+      message: `${versionName} is already compressed.`,
+    };
+  }
+
+  if (!runtimeEntries.length) {
+    throw new Error('Version folder has no compressible files.');
+  }
+
+  const archiveExtension = existingArchive?.extension || 'zip';
+  const archiveFileName = `${versionStorageBaseName}.${archiveExtension}`;
+  const archiveOutputPath = path.join(resolvedVersionPath, archiveFileName);
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'lgg-version-compress-'));
+  const tempPayloadRoot = path.join(tempDir, 'payload');
+  const tempArchivePath = path.join(tempDir, archiveFileName);
+
+  await appendLogEvent({
+    level: 'info',
+    source,
+    message: `Compression requested for version "${versionName}" at "${resolvedVersionPath}" (${runtimeEntries.length} entries).`,
+  }).catch(() => undefined);
+
+  try {
+    await mkdir(tempPayloadRoot, { recursive: true });
+
+    for (const entry of runtimeEntries) {
+      const sourcePath = path.join(resolvedVersionPath, entry.name);
+      const destinationPath = path.join(tempPayloadRoot, entry.name);
+      if (entry.isDirectory()) {
+        await cp(sourcePath, destinationPath, { recursive: true, force: true, errorOnExist: false });
+        continue;
+      }
+
+      if (entry.isFile()) {
+        await copyFile(sourcePath, destinationPath);
+      }
+    }
+
+    await createZipFromFolder(tempPayloadRoot, tempArchivePath);
+    await copyFile(tempArchivePath, archiveOutputPath);
+
+    for (const entry of runtimeEntries) {
+      const targetPath = path.join(resolvedVersionPath, entry.name);
+      if (entry.isDirectory()) {
+        await rm(targetPath, { recursive: true, force: true });
+      } else {
+        await unlink(targetPath).catch(() => undefined);
+      }
+    }
+
+    const archiveStats = await stat(archiveOutputPath).catch(() => null);
+    await appendLogEvent({
+      level: 'info',
+      source,
+      message: `Compression completed for "${resolvedVersionPath}" -> "${archiveOutputPath}" (${archiveStats?.size ?? 0} bytes).`,
+    }).catch(() => undefined);
+
+    return {
+      compressed: true,
+      archivePath: archiveOutputPath,
+      archiveSizeBytes: archiveStats?.size ?? 0,
+      message: `Compressed ${versionName}.`,
+    };
+  } catch (error) {
+    const message = toErrorMessage(error, 'Unknown compression error.');
+    await appendLogEvent({
+      level: 'error',
+      source,
+      message: `Compression failed for "${resolvedVersionPath}": ${message}`,
+    }).catch(() => undefined);
+    throw error;
+  } finally {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+async function decompressVersionFromStorage(
+  gamePath: string,
+  versionPath: string,
+  versionName: string,
+  source: string,
+): Promise<DecompressGameVersionResult> {
+  const resolvedGamePath = path.resolve(gamePath);
+  const resolvedVersionPath = path.resolve(versionPath);
+
+  if (!isPathInside(resolvedGamePath, resolvedVersionPath)) {
+    throw new Error('Invalid version decompression path.');
+  }
+
+  const versionStats = await stat(resolvedVersionPath).catch(() => null);
+  if (!versionStats?.isDirectory()) {
+    throw new Error('Selected version folder was not found on disk.');
+  }
+
+  const archiveInfo = await resolveVersionStorageArchive(resolvedVersionPath);
+  if (!archiveInfo) {
+    return {
+      decompressed: true,
+      extractedEntries: 0,
+      message: `${versionName} is already decompressed.`,
+    };
+  }
+
+  const existingRuntimeEntries = await listRuntimeVersionEntries(resolvedVersionPath);
+  if (existingRuntimeEntries.length) {
+    throw new Error('Version already has runtime files. Manual cleanup is required before decompression.');
+  }
+
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'lgg-version-decompress-'));
+  const extractRoot = path.join(tempDir, 'extract');
+  await appendLogEvent({
+    level: 'info',
+    source,
+    message: `Decompression requested for version "${versionName}" from "${archiveInfo.archivePath}".`,
+  }).catch(() => undefined);
+
+  try {
+    await extractZipToFolder(archiveInfo.archivePath, extractRoot);
+    const extractedEntries = (await readdir(extractRoot, { withFileTypes: true }))
+      .filter((entry) => entry.name !== '__MACOSX');
+
+    let sourceRoot = extractRoot;
+    if (extractedEntries.length === 1 && extractedEntries[0]?.isDirectory()) {
+      sourceRoot = path.join(extractRoot, extractedEntries[0].name);
+    }
+
+    const entriesToCopy = await readdir(sourceRoot, { withFileTypes: true });
+
+    for (const entry of entriesToCopy) {
+      const sourcePath = path.join(sourceRoot, entry.name);
+      const destinationPath = path.join(resolvedVersionPath, entry.name);
+      if (entry.isDirectory()) {
+        await cp(sourcePath, destinationPath, { recursive: true, force: true, errorOnExist: false });
+        continue;
+      }
+
+      if (entry.isFile()) {
+        await copyFile(sourcePath, destinationPath);
+      }
+    }
+
+    await unlink(archiveInfo.archivePath).catch(() => undefined);
+    await appendLogEvent({
+      level: 'info',
+      source,
+      message: `Decompression completed for "${resolvedVersionPath}" (${extractedEntries.length} extracted entries).`,
+    }).catch(() => undefined);
+
+    return {
+      decompressed: true,
+      extractedEntries: entriesToCopy.length,
+      message: `Decompressed ${versionName}.`,
+    };
+  } catch (error) {
+    const message = toErrorMessage(error, 'Unknown decompression error.');
+    await appendLogEvent({
+      level: 'error',
+      source,
+      message: `Decompression failed for "${resolvedVersionPath}": ${message}`,
+    }).catch(() => undefined);
+    throw error;
+  } finally {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
   }
 }
 
@@ -736,6 +973,8 @@ async function launchGameFromService(payload: PlayGamePayload): Promise<PlayGame
     name: version.name,
     path: path.resolve(String(version.path ?? '').trim()),
     hasNfo: false,
+    storageState: version.storageState ?? 'decompressed',
+    storageArchivePath: version.storageArchivePath ?? null,
   })).filter((version) => version.path);
 
   const metadata = await readGameMetadata(resolvedGamePath, gameName, versions);
@@ -745,6 +984,21 @@ async function launchGameFromService(payload: PlayGamePayload): Promise<PlayGame
     && metadata.latestVersion
     && detectedLatestVersion !== metadata.latestVersion,
   );
+
+  const preferredVersionName = (launchMode === 'default'
+    ? (metadata.latestVersion || detectedLatestVersion)
+    : versions[0]?.name) || versions[0]?.name || '';
+  const preferredVersion = versions.find((version) => version.name === preferredVersionName) ?? versions[0];
+  if (preferredVersion?.storageState === 'compressed') {
+    await appendLogEvent({
+      level: 'info',
+      source: 'http-service-version-storage',
+      message: `Play request requires decompression for "${preferredVersion.path}".`,
+    }).catch(() => undefined);
+    await decompressVersionFromStorage(resolvedGamePath, preferredVersion.path, preferredVersion.name, 'http-service-version-storage');
+    preferredVersion.storageState = 'decompressed';
+    preferredVersion.storageArchivePath = null;
+  }
 
   const storedExecutable = metadata.launchExecutable.trim();
   if (storedExecutable && !hasVersionMismatch && launchMode === 'default') {
@@ -765,11 +1019,13 @@ async function launchGameFromService(payload: PlayGamePayload): Promise<PlayGame
     }
   }
 
-  const searchFolders = launchMode === 'choose-version-temporary' && versions.length
-    ? [versions[0]?.path ?? resolvedGamePath]
-    : versions.length
-      ? versions.map((version) => version.path)
-      : [resolvedGamePath];
+  const searchFolders = preferredVersion
+    ? [preferredVersion.path, ...versions.filter((version) => version.path !== preferredVersion.path).map((version) => version.path)]
+    : launchMode === 'choose-version-temporary' && versions.length
+      ? [versions[0]?.path ?? resolvedGamePath]
+      : versions.length
+        ? versions.map((version) => version.path)
+        : [resolvedGamePath];
   const discoveredExecutables = [...new Set((await Promise.all(searchFolders.map((folder) => findExecutablesInFolder(folder)))).flat())].sort();
 
   if (!discoveredExecutables.length) {
@@ -1382,20 +1638,48 @@ export async function startGalleryHttpService({
           return;
         }
 
-        const tempDir = await mkdtemp(path.join(os.tmpdir(), 'lgg-version-zip-'));
-        const zipFileName = `${toDownloadSafeFileName(versionName || path.basename(resolvedVersionPath))}.zip`;
-        const zipPath = path.join(tempDir, zipFileName);
+        const storedArchive = await resolveVersionStorageArchive(resolvedVersionPath);
+        const baseName = toDownloadSafeFileName(versionName || path.basename(resolvedVersionPath));
 
         try {
-          await createZipFromFolder(resolvedVersionPath, zipPath);
-          const zipContents = await readFile(zipPath);
+          if (storedArchive) {
+            const archiveContents = await readFile(storedArchive.archivePath);
+            const archiveFileName = `${baseName}.${storedArchive.extension}`;
+            withCorsHeaders(response);
+            response.statusCode = 200;
+            response.setHeader('Content-Type', storedArchive.extension === 'zip' ? 'application/zip' : 'application/octet-stream');
+            response.setHeader('Content-Disposition', buildAttachmentContentDisposition(archiveFileName));
+            response.setHeader('Cache-Control', 'no-store');
+            response.end(archiveContents);
+            await appendLogEvent({
+              level: 'info',
+              source: 'http-service-versions-download',
+              message: `Version download reused stored archive "${storedArchive.archivePath}" for "${resolvedVersionPath}".`,
+            }).catch(() => undefined);
+            return;
+          }
 
-          withCorsHeaders(response);
-          response.statusCode = 200;
-          response.setHeader('Content-Type', 'application/zip');
-          response.setHeader('Content-Disposition', buildAttachmentContentDisposition(zipFileName));
-          response.setHeader('Cache-Control', 'no-store');
-          response.end(zipContents);
+          const tempDir = await mkdtemp(path.join(os.tmpdir(), 'lgg-version-zip-'));
+          const zipFileName = `${baseName}.zip`;
+          const zipPath = path.join(tempDir, zipFileName);
+          try {
+            await appendLogEvent({
+              level: 'info',
+              source: 'http-service-versions-download',
+              message: `Version download requires on-demand compression for "${resolvedVersionPath}".`,
+            }).catch(() => undefined);
+            await createZipFromFolder(resolvedVersionPath, zipPath);
+            const zipContents = await readFile(zipPath);
+
+            withCorsHeaders(response);
+            response.statusCode = 200;
+            response.setHeader('Content-Type', 'application/zip');
+            response.setHeader('Content-Disposition', buildAttachmentContentDisposition(zipFileName));
+            response.setHeader('Cache-Control', 'no-store');
+            response.end(zipContents);
+          } finally {
+            await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+          }
         } catch (error) {
           const message = toErrorMessage(error, 'Failed to package version for download.');
           await appendLogEvent({
@@ -1404,8 +1688,6 @@ export async function startGalleryHttpService({
             message: `Version download failed for "${resolvedVersionPath}": ${message}`,
           }).catch(() => undefined);
           sendError(response, 500, 'version_download_failed', message);
-        } finally {
-          await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
         }
 
         return;
@@ -1460,6 +1742,44 @@ export async function startGalleryHttpService({
         return;
       }
 
+      if (method === 'POST' && route === '/api/version-storage/compress') {
+        try {
+          const payload = await readJsonBody<CompressGameVersionPayload>(request);
+          const gamePath = String(payload.gamePath ?? '').trim();
+          const versionPath = String(payload.versionPath ?? '').trim();
+          const versionName = String(payload.versionName ?? '').trim() || path.basename(versionPath || gamePath || 'Version');
+          if (!gamePath || !versionPath) {
+            sendError(response, 400, 'invalid_version_storage_payload', 'Game path and version path are required for compression.');
+            return;
+          }
+
+          const result = await compressVersionForStorage(gamePath, versionPath, versionName, 'http-service-version-storage');
+          sendOk(response, result);
+        } catch (error) {
+          sendError(response, 400, 'compress_version_failed', toErrorMessage(error, 'Failed to compress version.'));
+        }
+        return;
+      }
+
+      if (method === 'POST' && route === '/api/version-storage/decompress') {
+        try {
+          const payload = await readJsonBody<DecompressGameVersionPayload>(request);
+          const gamePath = String(payload.gamePath ?? '').trim();
+          const versionPath = String(payload.versionPath ?? '').trim();
+          const versionName = String(payload.versionName ?? '').trim() || path.basename(versionPath || gamePath || 'Version');
+          if (!gamePath || !versionPath) {
+            sendError(response, 400, 'invalid_version_storage_payload', 'Game path and version path are required for decompression.');
+            return;
+          }
+
+          const result = await decompressVersionFromStorage(gamePath, versionPath, versionName, 'http-service-version-storage');
+          sendOk(response, result);
+        } catch (error) {
+          sendError(response, 400, 'decompress_version_failed', toErrorMessage(error, 'Failed to decompress version.'));
+        }
+        return;
+      }
+
       if (method === 'POST' && route === '/api/scan-game') {
         try {
           const payload = await readJsonBody<{ gamePath: string }>(request);
@@ -1469,7 +1789,6 @@ export async function startGalleryHttpService({
             sendError(response, 400, 'invalid_game_path', 'Game path is required.');
             return;
           }
-
           if (!isPathInsideAllowedGalleryRoots(resolvedGamePath, config)) {
             sendError(response, 403, 'forbidden_game_path', 'Target game path is outside allowed gallery roots.');
             return;

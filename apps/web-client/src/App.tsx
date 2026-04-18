@@ -49,6 +49,7 @@ import { useScanOrchestrator, type RefreshScanMode } from './hooks/useScanOrches
 import { useFallbackRecoveryProbe } from './hooks/useFallbackRecoveryProbe';
 import { useExtraDownloads } from './hooks/useExtraDownloads';
 import { useVersionDownloads } from './hooks/useVersionDownloads';
+import { useVersionStorage } from './hooks/useVersionStorage';
 import { useGameArchiveUpload } from './hooks/useGameArchiveUpload';
 import { clamp } from './utils/app-helpers';
 import { useGalleryClient } from './client/context';
@@ -117,6 +118,7 @@ function App() {
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [isMirrorSyncConfirmOpen, setIsMirrorSyncConfirmOpen] = useState(false);
   const [isMirrorParityConfirmOpen, setIsMirrorParityConfirmOpen] = useState(false);
+  const [decompressLaunchConfirmContext, setDecompressLaunchConfirmContext] = useState<{ gameName: string; versionName: string } | null>(null);
   const [screenshotModalPath, setScreenshotModalPath] = useState<string | null>(null);
   const [focusCarouselIndexByGamePath, setFocusCarouselIndexByGamePath] = useState<Record<string, number>>({});
   const [serviceCapabilities, setServiceCapabilities] = useState<ServiceCapabilities>(() => (
@@ -131,6 +133,7 @@ function App() {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const mirrorSyncConfirmResolveRef = useRef<((shouldSync: boolean) => void) | null>(null);
   const mirrorParityConfirmResolveRef = useRef<((shouldSync: boolean) => void) | null>(null);
+  const decompressLaunchConfirmResolveRef = useRef<((shouldDecompress: boolean) => void) | null>(null);
 
   useEffect(() => {
     if (!config?.language) {
@@ -189,7 +192,9 @@ function App() {
   useEffect(() => () => {
     if (!mirrorSyncConfirmResolveRef.current) {
       if (!mirrorParityConfirmResolveRef.current) {
-        return;
+        if (!decompressLaunchConfirmResolveRef.current) {
+          return;
+        }
       }
     }
 
@@ -201,6 +206,11 @@ function App() {
     if (mirrorParityConfirmResolveRef.current) {
       mirrorParityConfirmResolveRef.current(false);
       mirrorParityConfirmResolveRef.current = null;
+    }
+
+    if (decompressLaunchConfirmResolveRef.current) {
+      decompressLaunchConfirmResolveRef.current(false);
+      decompressLaunchConfirmResolveRef.current = null;
     }
   }, []);
 
@@ -509,6 +519,34 @@ function App() {
     resolve?.(shouldSync);
   }
 
+  async function confirmDecompressBeforeLaunch(gameName: string, versionName: string) {
+    return new Promise<boolean>((resolve) => {
+      if (decompressLaunchConfirmResolveRef.current) {
+        decompressLaunchConfirmResolveRef.current(false);
+      }
+
+      decompressLaunchConfirmResolveRef.current = resolve;
+      setDecompressLaunchConfirmContext({ gameName, versionName });
+    });
+  }
+
+  function resolveDecompressBeforeLaunchConfirmation(shouldDecompress: boolean) {
+    setDecompressLaunchConfirmContext(null);
+
+    const resolve = decompressLaunchConfirmResolveRef.current;
+    decompressLaunchConfirmResolveRef.current = null;
+    resolve?.(shouldDecompress);
+  }
+
+  async function decompressVersionForLaunch(
+    gamePath: string,
+    gameName: string,
+    versionPath: string,
+    versionName: string,
+  ) {
+    await decompressVersion(gamePath, gameName, versionPath, versionName);
+  }
+
   async function runMirrorParitySync() {
     if (!config?.metadataMirrorRoot.trim()) {
       setStatus(t('status.metadataMirrorRootRequiredForParitySync'));
@@ -566,6 +604,8 @@ function App() {
     setDetailGamePath,
     setSelectedGamePath,
     refreshScan,
+    confirmDecompressBeforeLaunch,
+    decompressVersionBeforeLaunch: decompressVersionForLaunch,
     logAppEvent,
     toErrorMessage,
   });
@@ -787,6 +827,63 @@ function App() {
     hasVaultPin: Boolean(config?.vaultPin?.trim()),
   });
 
+  const refreshSingleGame = async (gamePath: string) => {
+    try {
+      const updatedGame = await galleryClient.scanGame(gamePath);
+      if (!updatedGame) {
+        await refreshScan('scan-only');
+        return;
+      }
+
+      setScanResult((current) => {
+        const currentIndex = current.games.findIndex((game) => game.path === updatedGame.path);
+        if (currentIndex < 0) {
+          return current;
+        }
+
+        const nextGames = [...current.games];
+        nextGames[currentIndex] = updatedGame;
+        return {
+          ...current,
+          scannedAt: new Date().toISOString(),
+          games: nextGames,
+        };
+      });
+    } catch {
+      await refreshScan('scan-only');
+    }
+  };
+
+  const { compressVersion, decompressVersion, compressionProgress } = useVersionStorage({
+    galleryClient,
+    setStatus,
+    t,
+    logAppEvent,
+    refreshGame: refreshSingleGame,
+  });
+
+  const onCompressVersionByPath = async (versionPath: string) => {
+    const game = scanResult.games.find((candidate) => candidate.versions.some((version) => version.path === versionPath));
+    const version = game?.versions.find((candidate) => candidate.path === versionPath);
+    if (!game || !version) {
+      setStatus(t('status.unableFindSelectedGame'));
+      return;
+    }
+
+    await compressVersion(game.path, game.name, version.path, version.name);
+  };
+
+  const onDecompressVersionByPath = async (versionPath: string) => {
+    const game = scanResult.games.find((candidate) => candidate.versions.some((version) => version.path === versionPath));
+    const version = game?.versions.find((candidate) => candidate.path === versionPath);
+    if (!game || !version) {
+      setStatus(t('status.unableFindSelectedGame'));
+      return;
+    }
+
+    await decompressVersion(game.path, game.name, version.path, version.name);
+  };
+
   useContextMenuListeners({
     games: scanResult.games,
     canLaunch,
@@ -800,6 +897,8 @@ function App() {
     toggleGameVaultMembership,
     openVaultPinEditor,
     removeVaultPin,
+    onCompressVersion: onCompressVersionByPath,
+    onDecompressVersion: onDecompressVersionByPath,
     setStatus,
   });
 
@@ -944,6 +1043,19 @@ function App() {
         ? t('detail.downloadProgressDownloading')
         : t('detail.downloadProgressSaving')
     : '';
+  const compressionProgressLabel = compressionProgress
+    ? compressionProgress.operation === 'decompress'
+      ? compressionProgress.phase === 'preparing'
+        ? t('detail.decompressProgressPreparing')
+        : compressionProgress.phase === 'compressing'
+          ? t('detail.decompressProgressDecompressing')
+          : t('detail.decompressProgressFinalizing')
+      : compressionProgress.phase === 'preparing'
+        ? t('detail.compressProgressPreparing')
+        : compressionProgress.phase === 'compressing'
+          ? t('detail.compressProgressCompressing')
+          : t('detail.compressProgressFinalizing')
+    : '';
   return (
     <main className="shell">
       {isUsingMirrorFallback ? (
@@ -972,6 +1084,19 @@ function App() {
                 : t('detail.downloadProgressUnknown')}
             </p>
           ) : null}
+        </aside>
+      ) : null}
+
+      {compressionProgress ? (
+        <aside className="floating-version-storage" role="status" aria-live="polite">
+          <p className="floating-version-storage__title">{compressionProgressLabel}</p>
+          <p className="floating-version-storage__body">{compressionProgress.gameName} - {compressionProgress.versionName}</p>
+          <div className="floating-version-storage__meter" aria-hidden="true">
+            <span
+              className="floating-version-storage__meter-fill"
+              style={{ transform: `scaleX(${Math.max(0, Math.min(1, compressionProgress.percent))})` }}
+            />
+          </div>
         </aside>
       ) : null}
 
@@ -1138,6 +1263,12 @@ function App() {
           onOpenGameFolder={onOpenGameFolder}
           onOpenVersionFolder={onOpenVersionFolder}
           onOpenVersionContextMenu={onOpenVersionContextMenu}
+          onCompressVersion={async (gamePath, gameName, versionPath, versionName) => {
+            await compressVersion(gamePath, gameName, versionPath, versionName);
+          }}
+          onDecompressVersion={async (gamePath, gameName, versionPath, versionName) => {
+            await decompressVersion(gamePath, gameName, versionPath, versionName);
+          }}
           onDownloadExtra={onDownloadExtra}
           onDownloadVersion={onDownloadVersion}
           onOpenPictures={openPicturesModal}
@@ -1205,6 +1336,11 @@ function App() {
         isMirrorParityConfirmOpen={isMirrorParityConfirmOpen}
         onConfirmMirrorParitySync={() => resolveMirrorParitySyncConfirmation(true)}
         onCancelMirrorParitySync={() => resolveMirrorParitySyncConfirmation(false)}
+        isDecompressLaunchConfirmOpen={Boolean(decompressLaunchConfirmContext)}
+        decompressLaunchGameName={decompressLaunchConfirmContext?.gameName ?? ''}
+        decompressLaunchVersionName={decompressLaunchConfirmContext?.versionName ?? ''}
+        onConfirmDecompressLaunch={() => resolveDecompressBeforeLaunchConfirmation(true)}
+        onCancelDecompressLaunch={() => resolveDecompressBeforeLaunchConfirmation(false)}
         metadataModalGamePath={metadataModalGamePath}
         metadataDraft={metadataDraft}
         statusChoices={config.statusChoices}

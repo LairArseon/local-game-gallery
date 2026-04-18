@@ -307,6 +307,19 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
+.detail-versions__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(198, 232, 241, 0.88);
+}
+
+.detail-versions__state-text {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .detail-tags {
   margin-top: 12px;
 }
