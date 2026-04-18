@@ -11,6 +11,7 @@
 import type { ComponentProps } from 'react';
 import { FilterPanel } from './FilterPanel';
 import { TagPoolPanel } from './TagPoolPanel';
+import { TopbarPanels as SharedTopbarPanels } from '../../../shared/app-shell/components/TopbarPanels';
 
 type TopbarPanelsProps = {
   isTagPoolPanelOpen: boolean;
@@ -26,10 +27,14 @@ export function TopbarPanels({
   filterPanelProps,
 }: TopbarPanelsProps) {
   return (
-    <>
-      {isTagPoolPanelOpen ? <TagPoolPanel {...tagPoolPanelProps} /> : null}
-      {isFilterPanelOpen ? <FilterPanel {...filterPanelProps} /> : null}
-    </>
+    <SharedTopbarPanels<ComponentProps<typeof TagPoolPanel>, ComponentProps<typeof FilterPanel>>
+      isTagPoolPanelOpen={isTagPoolPanelOpen}
+      isFilterPanelOpen={isFilterPanelOpen}
+      TagPoolPanelComponent={TagPoolPanel}
+      FilterPanelComponent={FilterPanel}
+      tagPoolPanelProps={tagPoolPanelProps}
+      filterPanelProps={filterPanelProps}
+    />
   );
 }
 

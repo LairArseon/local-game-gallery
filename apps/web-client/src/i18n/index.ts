@@ -1,23 +1,7 @@
-import i18n from 'i18next';
-import { initReactI18next } from 'react-i18next';
 import enCommon from './en/common.json';
 import esCommon from './es/common.json';
+import { createI18n } from '../../../shared/app-shell/i18n/createI18n';
 
-const initialLanguage = navigator.language.toLowerCase().startsWith('es') ? 'es' : 'en';
-
-void i18n
-  .use(initReactI18next)
-  .init({
-    resources: {
-      en: { common: enCommon },
-      es: { common: esCommon },
-    },
-    lng: initialLanguage,
-    fallbackLng: 'en',
-    defaultNS: 'common',
-    interpolation: {
-      escapeValue: false,
-    },
-  });
+const i18n = createI18n({ enCommon, esCommon });
 
 export default i18n;

@@ -9,6 +9,7 @@
  * New to this project: this panel manages canonical tags and usage; follow edit/add/remove handlers to useTagPoolManager and autocomplete hooks.
  */
 import type { KeyboardEvent } from 'react';
+import { TagPoolPanel as SharedTagPoolPanel } from '../../../shared/app-shell/components/TagPoolPanel';
 
 type TagAutocompleteState = {
   scope: 'pool' | 'filter' | 'metadata';
@@ -48,84 +49,21 @@ export function TagPoolPanel({
   onAddTag,
 }: TagPoolPanelProps) {
   return (
-    <section className="topbar-filters topbar-tag-pool">
-      <div className="topbar-filters__heading">
-        <strong>Tag pool</strong>
-      </div>
-      <p className="topbar-filters__hint">Click a bubble to edit. Right-click to remove only when unused by all games.</p>
-      <div className="tag-bubbles">
-        {tagPool.map((tag, index) => {
-          const isEditing = activeTagPoolEditorIndex === index;
-          const bubbleLabel = tag.trim() || 'Empty tag';
-          const usageCount = Number.isFinite(tagPoolUsage?.[tag]) ? tagPoolUsage[tag] : 0;
-
-          if (isEditing) {
-            return (
-              <div className="tag-bubble tag-bubble--editing" key={`pool-tag-${index}`}>
-                <div className="tag-autocomplete">
-                  <input
-                    type="text"
-                    autoFocus
-                    value={tag}
-                    placeholder="example: roguelike"
-                    onFocus={() => onSetAutocomplete({ scope: 'pool', index, highlighted: 0 })}
-                    onBlur={() => {
-                      // Delay finalize so autocomplete item mousedown can apply before blur clears editor.
-                      window.setTimeout(() => {
-                        onFinalizeEdit(index);
-                      }, 100);
-                    }}
-                    onKeyDown={(event) => onEditorKeyDown(event, index)}
-                    onChange={(event) => {
-                      onEditorValueChange(index, event.target.value);
-                      onSetAutocomplete({ scope: 'pool', index, highlighted: 0 });
-                    }}
-                  />
-                  {activeTagAutocomplete?.scope === 'pool' && activeTagAutocomplete.index === index && activeTagSuggestions.length ? (
-                    <div className="tag-autocomplete__menu">
-                      {activeTagSuggestions.map((suggestion, suggestionIndex) => (
-                        <button
-                          key={`${suggestion}-${suggestionIndex}`}
-                          className={`tag-autocomplete__item ${activeTagAutocomplete.highlighted === suggestionIndex ? 'tag-autocomplete__item--active' : ''}`}
-                          type="button"
-                          onMouseDown={(event) => {
-                            event.preventDefault();
-                            onApplySuggestion(index, suggestion);
-                          }}
-                        >
-                          {suggestion}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            );
-          }
-
-          return (
-            <button
-              key={`pool-tag-${index}`}
-              className="tag-bubble tag-bubble--suggested"
-              type="button"
-              title={`${bubbleLabel} (${usageCount} game${usageCount === 1 ? '' : 's'})`}
-              onClick={() => onStartEdit(index)}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                // Removal guards live in hook logic; UI always routes right-click intent.
-                onRemoveTag(index);
-              }}
-            >
-              <span>{bubbleLabel}</span>
-              <span className="tag-bubble__metric">{usageCount}</span>
-            </button>
-          );
-        })}
-        <button className="tag-bubble tag-bubble--add" type="button" onClick={onAddTag} title="Add pool tag">
-          +
-        </button>
-      </div>
-    </section>
+    <SharedTagPoolPanel
+      tagPool={tagPool}
+      tagPoolUsage={tagPoolUsage}
+      activeTagPoolEditorIndex={activeTagPoolEditorIndex}
+      activeTagAutocomplete={activeTagAutocomplete}
+      activeTagSuggestions={activeTagSuggestions}
+      onStartEdit={onStartEdit}
+      onRemoveTag={onRemoveTag}
+      onFinalizeEdit={onFinalizeEdit}
+      onEditorValueChange={onEditorValueChange}
+      onSetAutocomplete={onSetAutocomplete}
+      onEditorKeyDown={onEditorKeyDown}
+      onApplySuggestion={onApplySuggestion}
+      onAddTag={onAddTag}
+    />
   );
 }
 

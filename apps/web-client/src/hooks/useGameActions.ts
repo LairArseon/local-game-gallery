@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Centralizes high-frequency game actions triggered by cards, detail pages, and menus.
  *
  * The hook unifies play launch logic, detail selection flow, folder open actions,
@@ -7,9 +7,10 @@
  *
  * New to this project: this hook centralizes play/open/folder/selection actions; start with runPlayGame to trace launch payloads into Electron play IPC.
  */
-import type { Dispatch, MouseEvent, SetStateAction } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import { useGalleryClient } from '../client/context';
 import type { GameSummary } from '../types';
+import { useGameActionsCore } from '../../../shared/app-shell/hooks/useGameActionsCore';
 
 type UseGameActionsArgs = {
   games: GameSummary[];
@@ -40,124 +41,23 @@ export function useGameActions({
 }: UseGameActionsArgs) {
   const galleryClient = useGalleryClient();
 
-  function handlePlayClick(game: GameSummary, event: MouseEvent<HTMLButtonElement>) {
-    event.stopPropagation();
-    void playGame(game);
-  }
-
-  function handlePlayWithVersionPromptClick(game: GameSummary, event: MouseEvent<HTMLButtonElement>) {
-    event.stopPropagation();
-    void playGameWithVersionPrompt(game);
-  }
-
-  async function playGame(game: GameSummary) {
-    return runPlayGame(game, 'default');
-  }
-
-  async function playGameWithVersionPrompt(game: GameSummary) {
-    return runPlayGame(game, 'choose-version-temporary');
-  }
-
-  async function runPlayGame(game: GameSummary, launchMode: 'default' | 'choose-version-temporary') {
-    if (!canLaunch) {
-      if (launchBlockedMessage) {
-        setStatus(launchBlockedMessage);
-      }
-      return;
-    }
-
-    try {
-      const preferredVersionName = (launchMode === 'default'
-        ? (game.metadata.latestVersion || game.detectedLatestVersion)
-        : game.versions[0]?.name) || game.versions[0]?.name || '';
-      const preferredVersion = game.versions.find((version) => version.name === preferredVersionName) ?? game.versions[0];
-      let skipDecompressPrompt = false;
-
-      if (
-        launchMode === 'default'
-        && preferredVersion?.storageState === 'compressed'
-        && confirmDecompressBeforeLaunch
-      ) {
-        const confirmed = await confirmDecompressBeforeLaunch(game.name, preferredVersion.name);
-        if (!confirmed) {
-          setStatus('Play canceled.');
-          return;
-        }
-
-        if (decompressVersionBeforeLaunch) {
-          await decompressVersionBeforeLaunch(game.path, game.name, preferredVersion.path, preferredVersion.name);
-          skipDecompressPrompt = true;
-        }
-      }
-
-      const result = await galleryClient.playGame({
-        gamePath: game.path,
-        gameName: game.name,
-        versions: game.versions.map((version) => ({
-          name: version.name,
-          path: version.path,
-          storageState: version.storageState,
-          storageArchivePath: version.storageArchivePath,
-        })),
-        launchMode,
-        skipDecompressPrompt,
-      });
-      setStatus(result.message);
-      // Refresh only when a launch actually happened (play call can also return no-op statuses).
-      if (result.launched) {
-        await refreshScan();
-      }
-    } catch (error) {
-      const message = toErrorMessage(error, 'Failed to launch game.');
-      setStatus(message);
-      void logAppEvent(message, 'error', 'play-game');
-    }
-  }
-
-  function handleOpenDetail(game: GameSummary, event: MouseEvent<HTMLButtonElement>) {
-    event.stopPropagation();
-    setDetailGamePath(game.path);
-    setSelectedGamePath(game.path);
-  }
-
-  function openGameDetailFromPath(gamePath: string) {
-    // Context-menu payloads can become stale after rescans; guard missing entries.
-    const game = games.find((candidate) => candidate.path === gamePath);
-    if (!game) {
-      return;
-    }
-
-    setDetailGamePath(game.path);
-    setSelectedGamePath(game.path);
-  }
-
-  async function openFolderInExplorer(folderPath: string) {
-    try {
-      const result = await galleryClient.openFolder({ folderPath });
-      setStatus(result.message);
-    } catch (error) {
-      const message = toErrorMessage(error, 'Failed to open folder.');
-      setStatus(message);
-      void logAppEvent(message, 'error', 'open-folder');
-    }
-  }
-
-  function toggleGameSelection(path: string) {
-    // Clicking the same card again collapses single-selection focus.
-    setSelectedGamePath((current) => (current === path ? null : path));
-  }
-
-  return {
-    handlePlayClick,
-    handlePlayWithVersionPromptClick,
-    playGame,
-    playGameWithVersionPrompt,
-    handleOpenDetail,
-    openGameDetailFromPath,
-    openFolderInExplorer,
-    toggleGameSelection,
-  };
+  return useGameActionsCore<GameSummary>({
+    games,
+    canLaunch,
+    launchBlockedMessage,
+    setStatus,
+    setDetailGamePath,
+    setSelectedGamePath,
+    refreshScan,
+    confirmDecompressBeforeLaunch,
+    decompressVersionBeforeLaunch,
+    logAppEvent,
+    toErrorMessage,
+    playGame: (payload) => galleryClient.playGame(payload),
+    openFolder: (payload) => galleryClient.openFolder(payload),
+  });
 }
+
 
 
 

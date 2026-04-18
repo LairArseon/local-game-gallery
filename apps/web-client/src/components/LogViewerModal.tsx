@@ -10,7 +10,7 @@
  */
 import { useState } from 'react';
 import { useRef } from 'react';
-import { CustomSelect } from './CustomSelect';
+import { LogViewerModal as SharedLogViewerModal } from '../../../shared/app-shell/components/LogViewerModal';
 
 type LogLevelFilter = 'all' | 'info' | 'warn' | 'error';
 
@@ -38,7 +38,7 @@ export function LogViewerModal({
   onClearLogs,
 }: LogViewerModalProps) {
   const [copyLabel, setCopyLabel] = useState('Copy logs');
-  const logViewerRef = useRef<HTMLElement | null>(null);
+  const logViewerRef = useRef<HTMLPreElement | null>(null);
 
   async function copyLogs() {
     const selection = window.getSelection();
@@ -77,46 +77,23 @@ export function LogViewerModal({
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <section className="modal-panel modal-panel--wide" onClick={(event) => event.stopPropagation()}>
-        <header className="modal-panel__header">
-          <h2>Event logs</h2>
-          <button className="button" type="button" onClick={onClose}>Close</button>
-        </header>
-        <div className="modal-panel__body">
-          <div className="log-viewer__filters">
-            <label className="field">
-              <span>Level</span>
-              <CustomSelect
-                ariaLabel="Log level filter"
-                value={logLevelFilter}
-                options={[
-                  { value: 'all', label: 'All' },
-                  { value: 'info', label: 'Info' },
-                  { value: 'warn', label: 'Warn' },
-                  { value: 'error', label: 'Error' },
-                ]}
-                onChange={(nextValue) => onChangeLogLevel(nextValue as LogLevelFilter)}
-              />
-            </label>
-            <label className="field">
-              <span>Date</span>
-              <input type="date" value={logDateFilter} onChange={(event) => onChangeDateFilter(event.target.value)} />
-            </label>
-          </div>
-          <pre ref={logViewerRef} className="log-viewer">{isLogLoading ? 'Loading logs...' : (filteredLogContents || 'No logs found for current filters.')}</pre>
-        </div>
-        <footer className="modal-panel__footer">
-          <button className="button" type="button" onClick={() => { void copyLogs(); }}>
-            {copyLabel}
-          </button>
-          <button className="button" type="button" disabled={isLogClearing} onClick={onClearLogs}>
-            {isLogClearing ? 'Clearing...' : 'Clear logs'}
-          </button>
-          <button className="button" type="button" onClick={onClose}>Close</button>
-        </footer>
-      </section>
-    </div>
+    <SharedLogViewerModal
+      isLogLoading={isLogLoading}
+      isLogClearing={isLogClearing}
+      filteredLogContents={filteredLogContents}
+      logLevelFilter={logLevelFilter}
+      logDateFilter={logDateFilter}
+      onClose={onClose}
+      onChangeLogLevel={onChangeLogLevel}
+      onChangeDateFilter={onChangeDateFilter}
+      onClearLogs={onClearLogs}
+      logViewerRef={logViewerRef}
+      extraFooterActions={(
+        <button className="button" type="button" onClick={() => { void copyLogs(); }}>
+          {copyLabel}
+        </button>
+      )}
+    />
   );
 }
 

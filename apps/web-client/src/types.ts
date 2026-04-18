@@ -401,3 +401,4 @@ declare global {
     gallery: GalleryApi;
   }
 }
+

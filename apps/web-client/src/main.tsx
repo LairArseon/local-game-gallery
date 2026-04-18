@@ -7,8 +7,8 @@
  * New to this project: this file is the renderer bootstrap boundary; it mounts App, imports i18n/styles, and wraps with the render error boundary.
  */
 import React from 'react';
-import ReactDOM from 'react-dom/client';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { renderAppRoot } from '../../shared/app-shell/main/renderAppRoot';
 import App from './App';
 import { RenderErrorBoundary } from './components/RenderErrorBoundary';
 import { GalleryClientProvider } from './client/context';
@@ -154,17 +154,16 @@ function WebServiceBootstrap({ children }: WebServiceBootstrapProps) {
 
 const galleryClient = createGalleryClient();
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <WebServiceBootstrap>
-      <GalleryClientProvider client={galleryClient}>
-        <RenderErrorBoundary>
-          <App />
-        </RenderErrorBoundary>
-      </GalleryClientProvider>
-    </WebServiceBootstrap>
-  </React.StrictMode>,
-);
+renderAppRoot({
+  app: (
+    <GalleryClientProvider client={galleryClient}>
+      <RenderErrorBoundary>
+        <App />
+      </RenderErrorBoundary>
+    </GalleryClientProvider>
+  ),
+  wrapper: (children) => <WebServiceBootstrap>{children}</WebServiceBootstrap>,
+});
 
 
 

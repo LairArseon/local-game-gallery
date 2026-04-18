@@ -7,7 +7,7 @@ function runCommand(command, args, cwd) {
     const child = spawn(command, args, {
       cwd,
       stdio: 'inherit',
-      shell: process.platform === 'win32',
+      shell: false,
       windowsHide: false,
     });
 
@@ -30,22 +30,26 @@ async function main() {
   const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
   const repoRoot = path.resolve(scriptsDir, '..');
 
+  function npmRunStep(label, scriptName) {
+    if (process.platform === 'win32') {
+      return {
+        label,
+        command: 'cmd.exe',
+        args: ['/d', '/s', '/c', 'npm', 'run', scriptName],
+      };
+    }
+
+    return {
+      label,
+      command: 'npm',
+      args: ['run', scriptName],
+    };
+  }
+
   const steps = [
-    {
-      label: 'full-desktop installer',
-      command: 'npm',
-      args: ['run', 'dist:win'],
-    },
-    {
-      label: 'standalone-client installer',
-      command: 'npm',
-      args: ['run', 'dist:standalone-client:win'],
-    },
-    {
-      label: 'bundle installer',
-      command: 'npm',
-      args: ['run', 'dist:bundle-installer:win'],
-    },
+    npmRunStep('full-desktop installer', 'dist:win'),
+    npmRunStep('standalone-client installer', 'dist:standalone-client:win'),
+    npmRunStep('bundle installer', 'dist:bundle-installer:win'),
   ];
 
   for (const step of steps) {

@@ -8,16 +8,15 @@
  *
  * New to this project: this is the modal switchboard; use it to see which state flag opens each modal and which hook owns each modal's behavior.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
 import { LogViewerModal } from './LogViewerModal';
 import { MediaModal } from './MediaModal';
 import { MetadataModal } from './MetadataModal';
 import { VaultPinModal } from './VaultPinModal';
 import { VaultUnlockModal } from './VaultUnlockModal';
 import type { GameMetadata, GameSummary } from '../types';
+import { ModalHost as SharedModalHost } from '../../../shared/app-shell/components/ModalHost';
 
 type TagAutocompleteState = {
   scope: 'pool' | 'filter' | 'metadata';
@@ -180,326 +179,121 @@ export function ModalHost({
   saveVaultPin,
   cancelVaultPinEditor,
 }: ModalHostProps) {
-  const { t } = useTranslation();
-  const thumbsViewportRef = useRef<HTMLDivElement | null>(null);
-  const [isThumbOverflowing, setIsThumbOverflowing] = useState(false);
-  const [canScrollThumbsPrev, setCanScrollThumbsPrev] = useState(false);
-  const [canScrollThumbsNext, setCanScrollThumbsNext] = useState(false);
+  const metadataModal: ReactNode = metadataModalGamePath && metadataDraft ? (
+    <MetadataModal
+      metadataDraft={metadataDraft}
+      statusChoices={statusChoices}
+      activeMetadataTagEditorIndex={activeMetadataTagEditorIndex}
+      activeTagAutocomplete={activeTagAutocomplete}
+      activeTagSuggestions={activeTagSuggestions}
+      isMetadataSaving={isMetadataSaving}
+      onClose={closeMetadataModal}
+      onSave={() => {
+        void saveMetadataChanges();
+      }}
+      onSetMetadataDraft={(updater) => {
+        setMetadataDraft((current) => {
+          if (!current) {
+            return current;
+          }
 
-  const screenshotGallery = useMemo(() => {
-    if (!screenshotModalPath) {
-      return {
-        screenshots: [] as string[],
-        currentIndex: -1,
-      };
-    }
+          return typeof updater === 'function'
+            ? (updater as (entry: typeof current) => typeof current)(current)
+            : updater;
+        });
+      }}
+      onSetActiveMetadataTagEditorIndex={setActiveMetadataTagEditorIndex}
+      onSetActiveTagAutocomplete={setActiveTagAutocomplete}
+      onHandleTagAutocompleteKeyDown={handleTagAutocompleteKeyDown}
+      onApplyTagSuggestion={applyTagSuggestion}
+    />
+  ) : null;
 
-    const owningGame = games.find((game) => game.media.screenshots.includes(screenshotModalPath));
-    if (!owningGame) {
-      return {
-        screenshots: [screenshotModalPath],
-        currentIndex: 0,
-      };
-    }
+  const mediaModal: ReactNode = (
+    <MediaModal
+      game={mediaModalGame}
+      isOpen={Boolean(mediaModalGamePath && mediaModalGame)}
+      isMediaSaving={isMediaSaving}
+      featuredImportTarget={featuredImportTarget}
+      pendingFeaturedDropPaths={pendingFeaturedDropPaths}
+      dragSection={dragSection}
+      draggedScreenshotPath={draggedScreenshotPath}
+      dragOverScreenshotPath={dragOverScreenshotPath}
+      screenshotContextMenu={screenshotContextMenu}
+      getImageSrc={filePathToSrc}
+      setFeaturedImportTarget={setFeaturedImportTarget}
+      setPendingFeaturedDropPaths={setPendingFeaturedDropPaths}
+      setDragSection={setDragSection}
+      setDraggedScreenshotPath={setDraggedScreenshotPath}
+      setDragOverScreenshotPath={setDragOverScreenshotPath}
+      setScreenshotContextMenu={setScreenshotContextMenu}
+      onClose={closePicturesModal}
+      onImportMedia={importMedia}
+      onReorderScreenshots={reorderScreenshots}
+      onRemoveScreenshot={removeScreenshot}
+    />
+  );
 
-    const currentIndex = owningGame.media.screenshots.indexOf(screenshotModalPath);
-    return {
-      screenshots: owningGame.media.screenshots,
-      currentIndex: currentIndex >= 0 ? currentIndex : 0,
-    };
-  }, [games, screenshotModalPath]);
+  const logViewerModal: ReactNode = isLogModalOpen ? (
+    <LogViewerModal
+      isLogLoading={isLogLoading}
+      isLogClearing={isLogClearing}
+      filteredLogContents={filteredLogContents}
+      logLevelFilter={logLevelFilter}
+      logDateFilter={logDateFilter}
+      onClose={closeLogViewer}
+      onChangeLogLevel={(nextValue) => setLogLevelFilter(nextValue)}
+      onChangeDateFilter={(nextValue) => setLogDateFilter(nextValue)}
+      onClearLogs={() => void clearLogsFromViewer()}
+    />
+  ) : null;
 
-  const hasLightboxGallery = screenshotGallery.screenshots.length > 1;
+  const vaultUnlockModal: ReactNode = isVaultUnlockModalOpen ? (
+    <VaultUnlockModal
+      pinValue={vaultPinInput}
+      pinError={vaultPinError}
+      onPinValueChange={setVaultPinInput}
+      onConfirm={confirmVaultUnlock}
+      onCancel={cancelVaultUnlock}
+    />
+  ) : null;
 
-  useEffect(() => {
-    if (!hasLightboxGallery) {
-      setCanScrollThumbsPrev(false);
-      setCanScrollThumbsNext(false);
-      return;
-    }
-
-    const viewport = thumbsViewportRef.current;
-    if (!viewport) {
-      return;
-    }
-
-    const updateThumbScrollState = () => {
-      const overflowAmount = viewport.scrollWidth - viewport.clientWidth;
-      const isOverflowing = overflowAmount > 4;
-      setIsThumbOverflowing(isOverflowing);
-
-      if (!isOverflowing) {
-        setCanScrollThumbsPrev(false);
-        setCanScrollThumbsNext(false);
-        return;
-      }
-
-      const maxScroll = viewport.scrollWidth - viewport.clientWidth;
-      setCanScrollThumbsPrev(viewport.scrollLeft > 1);
-      setCanScrollThumbsNext(viewport.scrollLeft < maxScroll - 1);
-    };
-
-    const syncActiveThumbIntoView = () => {
-      const activeThumb = viewport.querySelector<HTMLButtonElement>('.lightbox-thumb--active');
-      activeThumb?.scrollIntoView({ block: 'nearest', inline: 'center' });
-      updateThumbScrollState();
-    };
-
-    updateThumbScrollState();
-    syncActiveThumbIntoView();
-
-    viewport.addEventListener('scroll', updateThumbScrollState, { passive: true });
-    window.addEventListener('resize', updateThumbScrollState);
-
-    return () => {
-      viewport.removeEventListener('scroll', updateThumbScrollState);
-      window.removeEventListener('resize', updateThumbScrollState);
-    };
-  }, [hasLightboxGallery, screenshotModalPath, screenshotGallery.screenshots.length]);
-
-  function moveLightbox(delta: number) {
-    if (!screenshotGallery.screenshots.length || screenshotGallery.currentIndex < 0) {
-      return;
-    }
-
-    const nextIndex = (screenshotGallery.currentIndex + delta + screenshotGallery.screenshots.length) % screenshotGallery.screenshots.length;
-    setScreenshotModalPath(screenshotGallery.screenshots[nextIndex] ?? null);
-  }
-
-  function scrollThumbs(delta: number) {
-    const viewport = thumbsViewportRef.current;
-    if (!viewport) {
-      return;
-    }
-
-    const thumbnail = viewport.querySelector<HTMLElement>('.lightbox-thumb');
-    const thumbWidth = thumbnail?.getBoundingClientRect().width ?? 88;
-    viewport.scrollBy({ left: delta * (thumbWidth + 8), behavior: 'smooth' });
-  }
+  const vaultPinModal: ReactNode = isVaultPinModalOpen ? (
+    <VaultPinModal
+      hasExistingPin={hasExistingVaultPin}
+      newPinValue={newVaultPinInput}
+      confirmPinValue={confirmVaultPinInput}
+      pinError={vaultPinModalError}
+      onNewPinValueChange={setNewVaultPinInput}
+      onConfirmPinValueChange={setConfirmVaultPinInput}
+      onConfirm={saveVaultPin}
+      onCancel={cancelVaultPinEditor}
+    />
+  ) : null;
 
   return (
-    <>
-      {metadataModalGamePath && metadataDraft ? (
-        <MetadataModal
-          metadataDraft={metadataDraft}
-          statusChoices={statusChoices}
-          activeMetadataTagEditorIndex={activeMetadataTagEditorIndex}
-          activeTagAutocomplete={activeTagAutocomplete}
-          activeTagSuggestions={activeTagSuggestions}
-          isMetadataSaving={isMetadataSaving}
-          onClose={closeMetadataModal}
-          onSave={() => {
-            void saveMetadataChanges();
-          }}
-          onSetMetadataDraft={(updater) => {
-            setMetadataDraft((current) => {
-              // Guard against close/race conditions where modal state was cleared mid-update.
-              if (!current) {
-                return current;
-              }
-
-              // Preserve support for both direct value writes and functional state updaters.
-              return typeof updater === 'function'
-                ? (updater as (entry: typeof current) => typeof current)(current)
-                : updater;
-            });
-          }}
-          onSetActiveMetadataTagEditorIndex={setActiveMetadataTagEditorIndex}
-          onSetActiveTagAutocomplete={setActiveTagAutocomplete}
-          onHandleTagAutocompleteKeyDown={handleTagAutocompleteKeyDown}
-          onApplyTagSuggestion={applyTagSuggestion}
-        />
-      ) : null}
-
-      <MediaModal
-        game={mediaModalGame}
-        // Require both path and resolved game object to avoid partially-initialized modal renders.
-        isOpen={Boolean(mediaModalGamePath && mediaModalGame)}
-        isMediaSaving={isMediaSaving}
-        featuredImportTarget={featuredImportTarget}
-        pendingFeaturedDropPaths={pendingFeaturedDropPaths}
-        dragSection={dragSection}
-        draggedScreenshotPath={draggedScreenshotPath}
-        dragOverScreenshotPath={dragOverScreenshotPath}
-        screenshotContextMenu={screenshotContextMenu}
-        getImageSrc={filePathToSrc}
-        setFeaturedImportTarget={setFeaturedImportTarget}
-        setPendingFeaturedDropPaths={setPendingFeaturedDropPaths}
-        setDragSection={setDragSection}
-        setDraggedScreenshotPath={setDraggedScreenshotPath}
-        setDragOverScreenshotPath={setDragOverScreenshotPath}
-        setScreenshotContextMenu={setScreenshotContextMenu}
-        onClose={closePicturesModal}
-        onImportMedia={importMedia}
-        onReorderScreenshots={reorderScreenshots}
-        onRemoveScreenshot={removeScreenshot}
-      />
-
-      {isLogModalOpen ? (
-        <LogViewerModal
-          isLogLoading={isLogLoading}
-          isLogClearing={isLogClearing}
-          filteredLogContents={filteredLogContents}
-          logLevelFilter={logLevelFilter}
-          logDateFilter={logDateFilter}
-          onClose={closeLogViewer}
-          onChangeLogLevel={(nextValue) => setLogLevelFilter(nextValue)}
-          onChangeDateFilter={(nextValue) => setLogDateFilter(nextValue)}
-          onClearLogs={() => void clearLogsFromViewer()}
-        />
-      ) : null}
-
-      {isMirrorSyncConfirmOpen ? (
-        <div className="modal-backdrop" onClick={onCancelMirrorSync}>
-          <section className="modal-panel modal-panel--vault" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-panel__body modal-panel__body--vault">
-              <h3>{t('setup.metadataMirrorSyncTitle')}</h3>
-              <p>{t('setup.metadataMirrorSyncBody')}</p>
-              <div className="modal-panel__vault-actions">
-                <button className="button" type="button" onClick={onCancelMirrorSync}>{t('setup.metadataMirrorSyncLater')}</button>
-                <button className="button button--primary" type="button" onClick={onConfirmMirrorSync}>{t('setup.metadataMirrorSyncNow')}</button>
-              </div>
-            </div>
-          </section>
-        </div>
-      ) : null}
-
-      {isMirrorParityConfirmOpen ? (
-        <div className="modal-backdrop" onClick={onCancelMirrorParitySync}>
-          <section className="modal-panel modal-panel--vault modal-panel--danger" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-panel__body modal-panel__body--vault modal-panel__body--danger">
-              <h3>{t('setup.metadataMirrorParitySyncConfirmTitle')}</h3>
-              <p>{t('setup.metadataMirrorParitySyncConfirmBody')}</p>
-              <div className="modal-panel__vault-actions">
-                <button className="button" type="button" onClick={onCancelMirrorParitySync}>{t('setup.metadataMirrorParitySyncCancel')}</button>
-                <button className="button button--danger" type="button" onClick={onConfirmMirrorParitySync}>{t('setup.metadataMirrorParitySyncConfirmAction')}</button>
-              </div>
-            </div>
-          </section>
-        </div>
-      ) : null}
-
-      {isDecompressLaunchConfirmOpen ? (
-        <div className="modal-backdrop" onClick={onCancelDecompressLaunch}>
-          <section className="modal-panel modal-panel--vault" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-panel__body modal-panel__body--vault">
-              <h3>{t('detail.decompressLaunchConfirmTitle')}</h3>
-              <p>{t('detail.decompressLaunchConfirmBody', { game: decompressLaunchGameName, version: decompressLaunchVersionName })}</p>
-              <p>{t('detail.decompressLaunchConfirmHint')}</p>
-              <div className="modal-panel__vault-actions">
-                <button className="button" type="button" onClick={onCancelDecompressLaunch}>{t('common.cancel')}</button>
-                <button className="button button--primary" type="button" onClick={onConfirmDecompressLaunch}>{t('detail.decompressLaunchConfirmAction')}</button>
-              </div>
-            </div>
-          </section>
-        </div>
-      ) : null}
-
-      {screenshotModalPath ? (
-        // Backdrop click closes lightbox; inner panel stops propagation to keep interactions local.
-        <div className="modal-backdrop" onClick={() => setScreenshotModalPath(null)}>
-          <section className="modal-panel modal-panel--lightbox" onClick={(event) => event.stopPropagation()}>
-            <div className={`modal-panel__body modal-panel__body--lightbox ${hasLightboxGallery ? 'modal-panel__body--lightbox-has-thumbs' : ''}`}>
-              <div className="lightbox-stage">
-                {hasLightboxGallery ? (
-                  <button
-                    className="lightbox-nav-zone lightbox-nav-zone--prev"
-                    type="button"
-                    onClick={() => moveLightbox(-1)}
-                    aria-label={t('gameView.previousScreenshot')}
-                    title={t('gameView.previousScreenshot')}
-                  >
-                    <span className="lightbox-nav-zone__icon" aria-hidden="true">
-                      <ChevronLeft size={22} aria-hidden="true" />
-                    </span>
-                  </button>
-                ) : null}
-                <img src={filePathToSrc(screenshotModalPath) ?? undefined} alt={t('media.screenshotAlt')} className="lightbox-image" />
-                {hasLightboxGallery ? (
-                  <button
-                    className="lightbox-nav-zone lightbox-nav-zone--next"
-                    type="button"
-                    onClick={() => moveLightbox(1)}
-                    aria-label={t('gameView.nextScreenshot')}
-                    title={t('gameView.nextScreenshot')}
-                  >
-                    <span className="lightbox-nav-zone__icon" aria-hidden="true">
-                      <ChevronRight size={22} aria-hidden="true" />
-                    </span>
-                  </button>
-                ) : null}
-              </div>
-              {hasLightboxGallery ? (
-                <div className="lightbox-thumbs-shell">
-                  {isThumbOverflowing ? (
-                    <button
-                      className="lightbox-thumbs-nav"
-                      type="button"
-                      onClick={() => scrollThumbs(-1)}
-                      disabled={!canScrollThumbsPrev}
-                      aria-label={t('gameView.previousScreenshot')}
-                      title={t('gameView.previousScreenshot')}
-                    >
-                      <ChevronLeft size={18} aria-hidden="true" />
-                    </button>
-                  ) : <span className="lightbox-thumbs-nav-spacer" aria-hidden="true" />}
-                  <div className="lightbox-thumbs-viewport" ref={thumbsViewportRef} role="list" aria-label={t('detail.screenshots')}>
-                    <div className={`lightbox-thumbs-track ${!isThumbOverflowing ? 'lightbox-thumbs-track--centered' : ''}`}>
-                      {screenshotGallery.screenshots.map((imagePath) => (
-                        <button
-                          key={imagePath}
-                          type="button"
-                          role="listitem"
-                          className={`lightbox-thumb ${imagePath === screenshotModalPath ? 'lightbox-thumb--active' : ''}`}
-                          onClick={() => setScreenshotModalPath(imagePath)}
-                        >
-                          <img src={filePathToSrc(imagePath) ?? undefined} alt={t('media.screenshotAlt')} />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  {isThumbOverflowing ? (
-                    <button
-                      className="lightbox-thumbs-nav"
-                      type="button"
-                      onClick={() => scrollThumbs(1)}
-                      disabled={!canScrollThumbsNext}
-                      aria-label={t('gameView.nextScreenshot')}
-                      title={t('gameView.nextScreenshot')}
-                    >
-                      <ChevronRight size={18} aria-hidden="true" />
-                    </button>
-                  ) : <span className="lightbox-thumbs-nav-spacer" aria-hidden="true" />}
-                </div>
-              ) : null}
-            </div>
-          </section>
-        </div>
-      ) : null}
-
-      {isVaultUnlockModalOpen ? (
-        <VaultUnlockModal
-          pinValue={vaultPinInput}
-          pinError={vaultPinError}
-          onPinValueChange={setVaultPinInput}
-          onConfirm={confirmVaultUnlock}
-          onCancel={cancelVaultUnlock}
-        />
-      ) : null}
-
-      {isVaultPinModalOpen ? (
-        <VaultPinModal
-          hasExistingPin={hasExistingVaultPin}
-          newPinValue={newVaultPinInput}
-          confirmPinValue={confirmVaultPinInput}
-          pinError={vaultPinModalError}
-          onNewPinValueChange={setNewVaultPinInput}
-          onConfirmPinValueChange={setConfirmVaultPinInput}
-          onConfirm={saveVaultPin}
-          onCancel={cancelVaultPinEditor}
-        />
-      ) : null}
-    </>
+    <SharedModalHost<GameSummary>
+      games={games}
+      metadataModal={metadataModal}
+      mediaModal={mediaModal}
+      logViewerModal={logViewerModal}
+      vaultUnlockModal={vaultUnlockModal}
+      vaultPinModal={vaultPinModal}
+      isMirrorSyncConfirmOpen={isMirrorSyncConfirmOpen}
+      onConfirmMirrorSync={onConfirmMirrorSync}
+      onCancelMirrorSync={onCancelMirrorSync}
+      isMirrorParityConfirmOpen={isMirrorParityConfirmOpen}
+      onConfirmMirrorParitySync={onConfirmMirrorParitySync}
+      onCancelMirrorParitySync={onCancelMirrorParitySync}
+      isDecompressLaunchConfirmOpen={isDecompressLaunchConfirmOpen}
+      decompressLaunchGameName={decompressLaunchGameName}
+      decompressLaunchVersionName={decompressLaunchVersionName}
+      onConfirmDecompressLaunch={onConfirmDecompressLaunch}
+      onCancelDecompressLaunch={onCancelDecompressLaunch}
+      screenshotModalPath={screenshotModalPath}
+      setScreenshotModalPath={setScreenshotModalPath}
+      filePathToSrc={filePathToSrc}
+    />
   );
 }
 

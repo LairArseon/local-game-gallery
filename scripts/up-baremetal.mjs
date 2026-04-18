@@ -41,6 +41,7 @@ const buildTargets = [
     command: 'build:web-client',
     sourceEntries: [
       'apps/web-client/src',
+      'apps/shared/app-shell',
       'apps/web-client/vite.config.ts',
     ],
     outputEntries: [
@@ -53,6 +54,7 @@ const buildTargets = [
     sourceEntries: [
       'apps/standalone-client/src',
       'apps/standalone-client/electron',
+      'apps/shared/app-shell',
       'apps/standalone-client/vite.config.ts',
       // Standalone renderer imports web-client source directly.
       'apps/web-client/src',

@@ -1,1 +1,1 @@
-/// <reference types="vite/client" />
+/// <reference path="../../../shared/app-shell/vite-env.d.ts" />
