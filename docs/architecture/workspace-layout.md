@@ -30,9 +30,6 @@ Phase 3 web-client boundary split is complete:
 - apps/full-desktop
 - apps/standalone-client
 - apps/web-client
-- packages/shared-types
-- packages/shared-ui
-- packages/shared-client-sdk
 - services/gallery-service
 
 Current full desktop source locations:
@@ -78,7 +75,7 @@ npm run dist:standalone-client:win
 
 ## Next Migration Steps
 
-1. Move reusable client adapter utilities into packages/shared-client-sdk.
-2. Move reusable presentational components into packages/shared-ui.
+1. Continue extracting reusable client adapter utilities when a second consumer appears.
+2. Continue extracting reusable presentational components when desktop and web clients share stabilized UI APIs.
 3. Move service entrypoint and runtime code into services/gallery-service.
 4. Add component-selectable bundle installer (Service, Web Client, Desktop Client).

@@ -11,7 +11,7 @@
         "npm run dist:win"
       ],
       "outputs": [
-        "release/Local Game Gallery Setup *.exe"
+        "release/full-desktop/*.exe"
       ],
       "status": "implemented"
     },
@@ -71,7 +71,7 @@
         "npm run dist:bundle-installer:win"
       ],
       "outputs": [
-        "installer/bundle/*.exe"
+        "release/bundle-installer/*.exe"
       ],
       "status": "implemented"
     }

@@ -35,7 +35,7 @@
       "kind": "desktop-client",
       "selectionMode": "optional",
       "artifacts": [
-        "release/standalone-client-installer"
+        "release/standalone-client"
       ],
       "dependsOn": [
         "service"
@@ -50,7 +50,7 @@
       "kind": "desktop-suite",
       "selectionMode": "optional",
       "artifacts": [
-        "release/full-desktop-installer"
+        "release/full-desktop"
       ],
       "dependsOn": [],
       "conflictsWith": [

@@ -29,7 +29,7 @@ function parseArgs(argv) {
 function getTargetConfig(target, repoRoot) {
   if (target === 'full') {
     return {
-      outputDir: path.join(repoRoot, 'release'),
+      outputDir: path.join(repoRoot, 'release', 'full-desktop'),
       baseName: 'Local Game Gallery Setup',
     };
   }
@@ -43,7 +43,7 @@ function getTargetConfig(target, repoRoot) {
 
   if (target === 'bundle') {
     return {
-      outputDir: path.join(repoRoot, 'installer', 'bundle'),
+      outputDir: path.join(repoRoot, 'release', 'bundle-installer'),
       baseName: 'Local Game Gallery Bundle Setup',
     };
   }

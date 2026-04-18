@@ -50,7 +50,7 @@ This is feasible with the current architecture because service capabilities and 
   - component manifest scaffold
   - build/distribution matrix scaffold
   - component selection policy and constraints
-  - tracked in installer/components.manifest.json and installer/build-matrix.json
+  - tracked in docs/operations/component-manifest.json and docs/operations/component-build-matrix.json
 
 ## M3
 

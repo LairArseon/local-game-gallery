@@ -138,9 +138,9 @@ Launches Electron using compiled output and built renderer assets.
 ### Windows packaging
 
 - `npm run pack:win`
-  - Creates unpacked app output in `release/win-unpacked`.
+  - Creates unpacked app output in `release/full-desktop/win-unpacked`.
 - `npm run dist:win`
-  - Creates NSIS installer in `release/`.
+  - Creates NSIS installer in `release/full-desktop/`.
 
 Both scripts run:
 

@@ -274,7 +274,7 @@ async function main() {
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
   const appVersion = String(packageJson.version ?? '').trim() || '0.0.0';
 
-  const outputDir = path.join(repoRoot, 'installer', 'bundle');
+  const outputDir = path.join(repoRoot, 'release', 'bundle-installer');
   const stageDir = path.join(outputDir, '.stage');
   const payloadDir = path.join(stageDir, 'payload');
   const outputExePath = path.join(outputDir, `Local Game Gallery Bundle Setup ${appVersion}.exe`);

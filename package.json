@@ -49,7 +49,8 @@
     "dist:win": "npm run build && npm run build:icon && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win nsis && node scripts/prune-installer-artifacts.mjs --target full",
     "dist:bundle-installer:win": "npm run build:electron && npm run build:web-client && npm run build:standalone-client && npm run build:icon && node scripts/build-bundle-installer.mjs && node scripts/prune-installer-artifacts.mjs --target bundle",
     "pack:standalone-client:win": "npm run build:standalone-client && npm run build:icon && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config apps/standalone-client/builder.json --win --dir",
-    "dist:standalone-client:win": "npm run build:standalone-client && npm run build:icon && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config apps/standalone-client/builder.json --win nsis && node scripts/prune-installer-artifacts.mjs --target standalone"
+    "dist:standalone-client:win": "npm run build:standalone-client && npm run build:icon && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config apps/standalone-client/builder.json --win nsis && node scripts/prune-installer-artifacts.mjs --target standalone",
+    "dist:all:win": "node scripts/package-all.mjs"
   },
   "dependencies": {
     "i18next": "^26.0.4",
@@ -79,7 +80,7 @@
     "productName": "Local Game Gallery",
     "asar": true,
     "directories": {
-      "output": "release"
+      "output": "release/full-desktop"
     },
     "files": [
       "dist/**/*",

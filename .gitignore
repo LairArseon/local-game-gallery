@@ -9,4 +9,3 @@ release/
 docker-data/
 docker/.env
 games/
-installer/bundle/

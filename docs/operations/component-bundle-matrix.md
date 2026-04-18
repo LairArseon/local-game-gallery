@@ -6,8 +6,8 @@ This document defines the installer component model and its current build matrix
 
 ## Source artifacts
 
-- Component manifest: [../../installer/components.manifest.json](../../installer/components.manifest.json)
-- Build matrix: [../../installer/build-matrix.json](../../installer/build-matrix.json)
+- Component manifest: [component-manifest.json](component-manifest.json)
+- Build matrix: [component-build-matrix.json](component-build-matrix.json)
 
 ## Component model
 
@@ -26,7 +26,7 @@ This document defines the installer component model and its current build matrix
 
 1. full-desktop-suite-win
 - Script: npm run dist:win
-- Output: release full desktop installer
+- Output: release/full-desktop installer artifacts
 - Status: implemented
 
 2. desktop-client-win
@@ -46,7 +46,7 @@ This document defines the installer component model and its current build matrix
 
 5. bundle-installer-win
 - Script: npm run dist:bundle-installer:win
-- Output: installer/bundle executable
+- Output: release/bundle-installer executable
 - Status: implemented
 
 ## Notes

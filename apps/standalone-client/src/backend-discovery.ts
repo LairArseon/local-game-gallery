@@ -3,7 +3,7 @@ import type {
   ServiceApiVersionInfo,
   ServiceCapabilities,
   ServiceHealthStatus,
-} from '../../../packages/shared-types/src';
+} from './service-contracts';
 
 const defaultServicePort = 37995;
 const discoveryTimeoutMs = 2500;
