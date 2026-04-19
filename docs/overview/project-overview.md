@@ -22,93 +22,41 @@ First-time in app:
 
 ## 1. Purpose
 
-Local Game Gallery is a desktop application built with Electron + React + TypeScript.
-It scans a local games folder, reads/writes metadata, manages images, and provides multiple gallery views with filtering, tagging, and launch support.
+Local Game Gallery is a local-first game library manager.
+It scans a games directory, tracks version folders, stores metadata per game, and gives users a consistent workflow to browse, update, and launch games.
 
-## 2. High-Level Architecture
+## 2. Main User Workflow
 
-The app is split into two runtime layers:
+1. Configure library root and scan settings.
+2. Run a library scan to discover games and versions.
+3. Browse and filter games in gallery views.
+4. Open a game detail page to inspect versions, screenshots, and metadata.
+5. Refresh either one game or the whole library after filesystem changes.
+6. Perform version storage actions (compress/decompress) with progress feedback.
+7. Launch the selected game executable from the app.
 
-- Electron Main Process (`electron/`)
-  - Owns native capabilities: filesystem, dialogs, context menu, launching executables, app window lifecycle, and IPC handlers.
-- Renderer (React UI) (`src/`)
-  - Owns UI state, views, modals, filtering, presets, and user interactions.
+This workflow is shared across full desktop, standalone desktop client, and web client surfaces.
 
-Current paths after workspace split:
+## 3. Runtime Modes
 
-- Electron Main Process: `apps/full-desktop/electron/`
-- Renderer (React UI): `apps/full-desktop/src/`
+- Full desktop app
+  - Single Electron app with native filesystem access and full local workflow.
+- Service + web client
+  - Local service process exposes API; web UI connects through HTTP.
+- Service + standalone desktop client
+  - Desktop UI connects to service while keeping desktop shell experience.
 
-Data moves between Renderer and Main through IPC via preload bridge (`apps/full-desktop/electron/preload.ts`) using `window.gallery.*` methods.
+UI behavior is intentionally aligned across runtimes so scan, refresh, metadata, and version storage flows feel the same.
 
-## 3. Core Modules
+## 4. Core Data Model
 
-### Renderer modules (`apps/full-desktop/src/`)
-
-- `apps/full-desktop/src/App.tsx`
-  - Main UI container and app logic.
-  - Setup panel, filters/presets, all gallery view modes, detail page, metadata modal, image management modal.
-  - Calls IPC through `window.gallery` for scan/save/import/play/reorder/remove actions.
-- `apps/full-desktop/src/styles.css`
-  - Global styling, layout system, card/view styling, modal styles, filter panel, autocomplete UI.
-- `apps/full-desktop/src/types.ts`
-  - Shared TypeScript contracts used by both renderer and main process.
-  - Defines gallery config, metadata schema, IPC payloads/results, and API surface.
-- `apps/full-desktop/src/main.tsx`
-  - React entrypoint.
-
-### Electron modules (`apps/full-desktop/electron/`)
-
-- `apps/full-desktop/electron/main.ts`
-  - Electron app bootstrap + BrowserWindow creation.
-  - Registers all IPC handlers (`gallery:*`).
-  - Integrates native dialogs, context menu, and game executable launching.
-- `apps/full-desktop/electron/preload.ts`
-  - Secure context bridge (`contextBridge.exposeInMainWorld`) for renderer access to whitelisted IPC calls.
-- `apps/full-desktop/electron/config.ts`
-  - Loads/saves persisted app config JSON in `app.getPath('userData')`.
-- `apps/full-desktop/electron/game-library.ts`
-  - Metadata read/write (`game.nfo`), media import/reorder/remove/reindex logic.
-- `apps/full-desktop/electron/scanner.ts`
-  - Scans game folders and returns structured game summaries.
-- `apps/full-desktop/electron/tsconfig.json`
-  - TypeScript config for Electron build output.
-
-## 4. Packages Used
-
-## Runtime dependencies
-
-- `react`
-  - Renderer UI library.
-- `react-dom`
-  - React DOM renderer binding.
-
-## Development/build dependencies
-
-- `electron`
-  - Desktop shell/runtime.
-- `typescript`
-  - Static typing and TS compilation.
-- `vite`
-  - Renderer bundler/dev server.
-- `@vitejs/plugin-react`
-  - React plugin for Vite.
-- `concurrently`
-  - Runs multiple dev scripts in parallel.
-- `cross-env`
-  - Cross-platform environment variable support in npm scripts.
-- `electron-builder`
-  - Creates Windows distributables (`win-unpacked`, NSIS installer).
-- `wait-on`
-  - Waits for dev server/build artifacts before launching Electron.
-- `nodemon`
-  - Watches Electron output and restarts app in development.
-- `png-to-ico`
-  - Converts PNG icon assets to Windows `.ico`.
-- `sharp`
-  - Pads non-square PNG icons to a transparent square before ICO conversion.
-- `@types/node`, `@types/react`, `@types/react-dom`
-  - Type definitions.
+- Library config
+  - Persisted user settings (root path, exclude patterns, status choices, view preferences, filters).
+- Per-game metadata
+  - Stored as `game.nfo` in each game folder.
+  - Includes title, latest version, score, status, notes, tags, executable path, and media references.
+- Media assets
+  - Game pictures directory (default `pictures`) for poster/card/background/screenshots.
 
 ## 5. Build and Run Flow
 
@@ -135,20 +83,56 @@ This starts three parallel processes:
 
 Launches Electron using compiled output and built renderer assets.
 
-### Windows packaging
+### Windows packaging (standard release flow)
+
+Canonical command:
+
+- `npm run dist:all:win`
+
+What it does (in order):
+
+1. Builds and packages full desktop installer (`dist:win`).
+2. Builds and packages standalone desktop client installer (`dist:standalone-client:win`).
+3. Builds and packages bundle installer (`dist:bundle-installer:win`).
+
+Expected outputs:
+
+- `release/full-desktop/Local Game Gallery Setup <version>.exe`
+- `release/standalone-client/Local Game Gallery Client Setup <version>.exe`
+- `release/bundle-installer/Local Game Gallery Bundle Setup <version>.exe`
+
+Notes:
+
+- Each installer step prunes stale installer artifacts from previous versions in its target release folder.
+- Packaging regenerates icon assets via `npm run build:icon`.
+- If `icon/icon.png` is missing, icon generation falls back to `icon/standalone-client-icon/icon.png` as source for root icon output.
+- Desktop packaging includes runtime dependencies from `node_modules/**/*` inside installer payload.
+
+### Windows packaging (single-target commands)
 
 - `npm run pack:win`
-  - Creates unpacked app output in `release/full-desktop/win-unpacked`.
+  - Creates unpacked full desktop app output in `release/full-desktop/win-unpacked`.
 - `npm run dist:win`
-  - Creates NSIS installer in `release/full-desktop/`.
+  - Creates full desktop NSIS installer in `release/full-desktop/`.
+- `npm run dist:standalone-client:win`
+  - Creates standalone client NSIS installer in `release/standalone-client/`.
+- `npm run dist:bundle-installer:win`
+  - Creates component bundle installer in `release/bundle-installer/`.
 
-Both scripts run:
+### Fresh clone packaging clarifications
 
-1. Renderer + Electron build
-2. Icon conversion (`npm run build:icon`)
-3. `electron-builder` packaging
+If you clone this repository with only tracked files (excluding all `.gitignore` entries), Windows packaging still works.
 
-## 6.1 Icon Conversion and Transparency
+Requirements before packaging:
+
+1. Windows machine.
+2. Node.js + npm installed.
+3. Run `npm install` first to restore `node_modules/`.
+4. Internet access on first run for tool/runtime cache downloads (for example Electron/electron-builder/NSIS cache artifacts).
+
+Ignored folders such as `dist/`, `dist-*`, `release/`, and `node_modules/` are generated by build/packaging scripts and are not required in git.
+
+## 6. Icon Conversion
 
 Icon source and output:
 
@@ -171,42 +155,17 @@ Notes:
 - Tray clarity on Windows is best when source PNGs are at least 256x256 and crisp at small sizes.
 - Packaging regenerates `.ico` files automatically from your PNG sources.
 
-## 6. Important Data and Files
+## 7. Main Workflow Features
 
-- App config (persisted): userData `config.json`
-  - Stores setup fields, view preferences, status choices, and filter presets.
-- Per-game metadata: `game.nfo` in each game folder
-  - Stores title, latest version, score, status, description, notes, tags, launch executable, custom tags.
-- Images: game pictures folder (default: `pictures`)
-  - Supports poster/card/background/screenshots naming conventions.
+- Library setup and rescanning (full or single-game refresh)
+- Incremental game size calculation with visible scan progress
+- Multi-view browsing with filters and presets
+- Detail view editing for metadata, tags, status, notes, and media
+- Version storage compression/decompression with progress and byte counters
+- Game launch and native folder actions from context menus
+- Optional game archive upload/import into the local library
 
-## 7. IPC API Summary (`window.gallery`)
-
-Main renderer-available operations include:
-
-- Config: get/save config, pick root
-- Scanning: scan games
-- Metadata: save metadata
-- Media: import from dialog, import dropped files, reorder screenshots, remove screenshot
-- Downloads: save extras downloads and version downloads to a user-selected location
-- Game uploads: pick archive, stage upload, cancel staged upload, import staged archive into library
-- Execution: play game
-- Menus/events: show context menu, subscribe to context menu actions
-
-## 8. Current Feature Set (at a glance)
-
-- Multi-view gallery: poster, card, compact, expanded
-- Detail page with background image and screenshot lightbox
-- Metadata editing with status, tags, notes, custom tags
-- Tag autocomplete in filters and metadata
-- Filtering: tags include/exclude, minimum score, status, ordering
-- Presets for filter configurations
-- Image management: add, reorder, remove screenshots
-- File downloading for extras and game versions
-- Game archive upload/import workflow with staging, progress, and cancel support
-- Game launching with executable selection + persistence
-
-## 9. Output Structure
+## 8. Output Structure
 
 - Renderer build output: `dist/`
 - Electron compiled output: `dist-electron/`

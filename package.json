@@ -1,6 +1,6 @@
 {
   "name": "local-game-gallery",
-  "version": "2.6.0",
+  "version": "2.6.1",
   "private": true,
   "author": "Lair Arseon",
   "license": "CC0-1.0",
@@ -89,6 +89,7 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
+      "node_modules/**/*",
       "package.json"
     ],
     "win": {
