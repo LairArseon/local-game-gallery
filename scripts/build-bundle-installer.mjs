@@ -1,5 +1,7 @@
 import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -92,6 +94,86 @@ async function cleanupOldBundleInstallers(outputDir, keepFileName) {
   }
 }
 
+function createRuntimeDependencyCollector(repoRoot) {
+  const requireFromRepo = createRequire(path.join(repoRoot, 'package.json'));
+  const rootNodeModules = path.join(repoRoot, 'node_modules');
+
+  function resolvePackageDir(packageName, fromDir) {
+    try {
+      const packageJsonPath = requireFromRepo.resolve(`${packageName}/package.json`, {
+        paths: [fromDir],
+      });
+      return path.dirname(packageJsonPath);
+    } catch {
+      const resolvedEntryPath = requireFromRepo.resolve(packageName, {
+        paths: [fromDir],
+      });
+      let currentDir = path.dirname(resolvedEntryPath);
+      const parsedName = packageName.startsWith('@') ? packageName.split('/').slice(0, 2).join('/') : packageName.split('/')[0];
+
+      while (currentDir.length >= rootNodeModules.length) {
+        const packageJsonPath = path.join(currentDir, 'package.json');
+        if (existsSync(packageJsonPath)) {
+          const packageJson = requireFromRepo(packageJsonPath);
+          if (String(packageJson.name ?? '').trim() === parsedName) {
+            return currentDir;
+          }
+        }
+
+        const parentDir = path.dirname(currentDir);
+        if (parentDir === currentDir) {
+          break;
+        }
+        currentDir = parentDir;
+      }
+
+      throw new Error(`Unable to resolve package root for ${packageName} from ${fromDir}`);
+    }
+  }
+
+  return async function collectRuntimeDependencyDirs(entryPackages) {
+    const queue = [...entryPackages];
+    const visitedPackageDirs = new Set();
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current) {
+        continue;
+      }
+
+      const fromDir = current.fromDir ?? repoRoot;
+      const packageDir = resolvePackageDir(current.packageName, fromDir);
+      if (visitedPackageDirs.has(packageDir)) {
+        continue;
+      }
+
+      visitedPackageDirs.add(packageDir);
+      const packageJsonPath = path.join(packageDir, 'package.json');
+      const packageJsonRaw = await readFile(packageJsonPath, 'utf8');
+      const packageJson = JSON.parse(packageJsonRaw);
+      const dependencies = Object.keys(packageJson.dependencies ?? {});
+
+      for (const dependencyName of dependencies) {
+        queue.push({ packageName: dependencyName, fromDir: packageDir });
+      }
+    }
+
+    const runtimeDirs = [];
+    for (const packageDir of visitedPackageDirs) {
+      const relativeToNodeModules = path.relative(rootNodeModules, packageDir);
+      if (!relativeToNodeModules || relativeToNodeModules.startsWith('..')) {
+        continue;
+      }
+      runtimeDirs.push({
+        sourceDir: packageDir,
+        relativeDir: relativeToNodeModules,
+      });
+    }
+
+    return runtimeDirs.sort((a, b) => a.relativeDir.localeCompare(b.relativeDir));
+  };
+}
+
 function createNsisScript({ outputExePath, payloadDirPath, appVersion }) {
   const outputPathWindows = toWindowsPath(outputExePath);
   const payloadPathWindows = toWindowsPath(payloadDirPath);
@@ -134,6 +216,10 @@ function createNsisScript({ outputExePath, payloadDirPath, appVersion }) {
     '!insertmacro MUI_UNPAGE_INSTFILES',
     '!insertmacro MUI_LANGUAGE "English"',
     '',
+    'Section "-PreInstall" SEC_PREINSTALL',
+    '  Call EnsureInstallTargetWritable',
+    'SectionEnd',
+    '',
     'Section "Gallery Service" SEC_SERVICE',
     '  Call EnsureRuntimePayload',
     '  SetOutPath "$INSTDIR\\dist-electron\\electron"',
@@ -145,7 +231,6 @@ function createNsisScript({ outputExePath, payloadDirPath, appVersion }) {
     'SectionEnd',
     '',
     'Section "Web Client (Tray Host + Browser URL)" SEC_WEB',
-    '  Call EnsureRuntimePayload',
     '  SetOutPath "$INSTDIR\\dist-electron\\electron"',
     '  File /r "${PAYLOAD_DIR}\\dist-electron\\electron\\*"',
     '',
@@ -161,7 +246,6 @@ function createNsisScript({ outputExePath, payloadDirPath, appVersion }) {
     'SectionEnd',
     '',
     'Section "Desktop Client" SEC_DESKTOP',
-    '  Call EnsureRuntimePayload',
     '',
     '  SetOutPath "$INSTDIR\\dist-standalone-electron\\electron"',
     '  File /r "${PAYLOAD_DIR}\\dist-standalone-electron\\electron\\*"',
@@ -205,12 +289,34 @@ function createNsisScript({ outputExePath, payloadDirPath, appVersion }) {
     '  SetOutPath "$INSTDIR\\runtime\\electron"',
     '  File /r "${PAYLOAD_DIR}\\runtime\\electron-dist\\*"',
     '',
+    '  SetOutPath "$INSTDIR\\node_modules"',
+    '  File /r "${PAYLOAD_DIR}\\node_modules\\*"',
+    '',
     '  SetOutPath "$INSTDIR\\icon"',
     '  File /r "${PAYLOAD_DIR}\\icon\\*"',
     'FunctionEnd',
     '',
     'Function EnsureStartMenuFolder',
     '  CreateDirectory "$SMPROGRAMS\\${START_MENU_DIR}"',
+    'FunctionEnd',
+    '',
+    'Function EnsureInstallTargetWritable',
+    '  IfFileExists "$INSTDIR\\runtime\\electron\\chrome_100_percent.pak" 0 done',
+    'retry:',
+    '  IfFileExists "$INSTDIR\\runtime\\electron\\chrome_100_percent.pak.lggtmp" 0 +2',
+    '  Delete "$INSTDIR\\runtime\\electron\\chrome_100_percent.pak.lggtmp"',
+    '  ClearErrors',
+    '  Rename "$INSTDIR\\runtime\\electron\\chrome_100_percent.pak" "$INSTDIR\\runtime\\electron\\chrome_100_percent.pak.lggtmp"',
+    '  IfErrors locked',
+    '  ClearErrors',
+    '  Rename "$INSTDIR\\runtime\\electron\\chrome_100_percent.pak.lggtmp" "$INSTDIR\\runtime\\electron\\chrome_100_percent.pak"',
+    '  IfErrors locked',
+    '  Goto done',
+    'locked:',
+    '  MessageBox MB_ICONEXCLAMATION|MB_RETRYCANCEL "Local Game Gallery files are currently in use.$\\r$\\n$\\r$\\nClose Gallery Service Tray, Web Client Tray Host, and Desktop Client, then click Retry." IDRETRY retry IDCANCEL cancel',
+    'cancel:',
+    '  Abort',
+    'done:',
     'FunctionEnd',
     '',
     'Function .onSelChange',
@@ -269,6 +375,7 @@ async function main() {
 
   const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
   const repoRoot = path.resolve(scriptsDir, '..');
+  const rootNodeModulesDir = path.join(repoRoot, 'node_modules');
 
   const packageJsonPath = path.join(repoRoot, 'package.json');
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
@@ -294,6 +401,7 @@ async function main() {
   await ensureExists(requiredPaths.distWebClient, 'web client bundle');
   await ensureExists(requiredPaths.distStandaloneElectron, 'standalone electron bundle');
   await ensureExists(requiredPaths.distStandaloneClient, 'standalone renderer bundle');
+  await ensureExists(rootNodeModulesDir, 'node_modules runtime dependencies');
   await ensureExists(requiredPaths.icon, 'icon assets');
 
   await rm(stageDir, { recursive: true, force: true });
@@ -304,6 +412,30 @@ async function main() {
   await cp(requiredPaths.distWebClient, path.join(payloadDir, 'dist-web-client'), { recursive: true });
   await cp(requiredPaths.distStandaloneElectron, path.join(payloadDir, 'dist-standalone-electron', 'electron'), { recursive: true });
   await cp(requiredPaths.distStandaloneClient, path.join(payloadDir, 'dist-standalone-client'), { recursive: true });
+
+  const collectRuntimeDependencyDirs = createRuntimeDependencyCollector(repoRoot);
+  const runtimeDependencyDirs = await collectRuntimeDependencyDirs([
+    { packageName: 'archiver', fromDir: repoRoot },
+    { packageName: 'unzipper', fromDir: repoRoot },
+  ]);
+
+  for (const dependencyDir of runtimeDependencyDirs) {
+    await cp(
+      dependencyDir.sourceDir,
+      path.join(payloadDir, 'node_modules', dependencyDir.relativeDir),
+      { recursive: true },
+    );
+  }
+
+  const runtimeDependencySample = runtimeDependencyDirs
+    .slice(0, 12)
+    .map((entry) => entry.relativeDir)
+    .join(', ');
+  const runtimeDependencyExtraCount = Math.max(0, runtimeDependencyDirs.length - 12);
+  console.log(
+    `[bundle-installer] bundled runtime dependencies: ${runtimeDependencyDirs.length} packages${runtimeDependencySample ? ` (${runtimeDependencySample}${runtimeDependencyExtraCount > 0 ? `, +${runtimeDependencyExtraCount} more` : ''})` : ''}.`,
+  );
+
   await cp(requiredPaths.icon, path.join(payloadDir, 'icon'), { recursive: true });
 
   const nsisScript = createNsisScript({
