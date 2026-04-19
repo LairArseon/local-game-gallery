@@ -9,7 +9,7 @@ export type TagAutocompleteState = {
   highlighted: number;
 } | null;
 
-export type FilterOrderByModeLike = 'alpha-asc' | 'alpha-desc' | 'score-asc' | 'score-desc';
+export type FilterOrderByModeLike = 'alpha-asc' | 'alpha-desc' | 'score-asc' | 'score-desc' | 'size-asc' | 'size-desc';
 
 export type FilterPresetLike<TOrderBy extends FilterOrderByModeLike> = {
   name: string;
@@ -30,6 +30,7 @@ export type GalleryConfigLike<
 
 export type GameSummaryLike = {
   name: string;
+  sizeBytes?: number | null;
   versions: Array<{ name: string }>;
   metadata: {
     tags: string[];
@@ -62,5 +63,6 @@ export type UseFilterManagerCoreArgs<
   t: (key: string, options?: Record<string, unknown>) => string;
   normalizeTagRules: (rules: string[]) => string[];
   normalizedScore: (value: unknown) => number;
+  isSizeOrderingEnabled?: boolean;
   saveConfig: (nextConfig: TConfig) => Promise<TConfig>;
 };

@@ -1,5 +1,5 @@
-import type { RefObject } from 'react';
-import type { MouseEvent } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import { Bell, Lock, LockOpen, RefreshCw, Settings, SlidersHorizontal, Tag, Upload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -20,10 +20,11 @@ type TopbarControlsProps = {
   onToggleFilterPanel: () => void;
   onToggleSidebar: () => void;
   onToggleVault: () => void;
-  onOpenVaultContextMenu: (event: MouseEvent<HTMLButtonElement>, hasVaultPin: boolean) => void;
+  onOpenVaultContextMenu: (event: ReactMouseEvent<HTMLButtonElement>, hasVaultPin: boolean) => void;
   onToggleVersionNotifications: () => void;
   onOpenArchiveUpload?: () => void;
   onRescan: () => void;
+  onRescanWithSize?: () => void;
   actionLabels: {
     openUpload?: string;
     rescan: string;
@@ -38,6 +39,7 @@ type TopbarControlsProps = {
     hideVault: string;
     showVersionNotifications: string;
     hideVersionNotifications: string;
+    rescanWithSize?: string;
   };
 };
 
@@ -62,9 +64,45 @@ export function TopbarControls({
   onToggleVersionNotifications,
   onOpenArchiveUpload,
   onRescan,
+  onRescanWithSize,
   actionLabels,
 }: TopbarControlsProps) {
   const { t } = useTranslation();
+  const contextMenuMinViewportGapPx = 8;
+  const contextMenuEstimatedWidthPx = 220;
+  const [rescanMenu, setRescanMenu] = useState<{ x: number; y: number } | null>(null);
+  const rescanMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!rescanMenu) {
+      return;
+    }
+
+    const closeMenuIfOutside = (event: globalThis.MouseEvent) => {
+      const targetNode = event.target as Node | null;
+      if (targetNode && rescanMenuRef.current?.contains(targetNode)) {
+        return;
+      }
+
+      setRescanMenu(null);
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setRescanMenu(null);
+      }
+    };
+
+    window.addEventListener('mousedown', closeMenuIfOutside, true);
+    window.addEventListener('contextmenu', closeMenuIfOutside, true);
+    window.addEventListener('keydown', onKeyDown, true);
+
+    return () => {
+      window.removeEventListener('mousedown', closeMenuIfOutside, true);
+      window.removeEventListener('contextmenu', closeMenuIfOutside, true);
+      window.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [rescanMenu]);
 
   return (
     <div className="topbar__actions">
@@ -149,12 +187,46 @@ export function TopbarControls({
           className={`button button--icon-only ${isScanning ? 'is-busy' : ''}`}
           type="button"
           onClick={onRescan}
+          onContextMenu={(event) => {
+            if (!onRescanWithSize || isScanning) {
+              return;
+            }
+
+            event.preventDefault();
+            const viewportWidth = window.innerWidth;
+            const overflowsRight = event.clientX + contextMenuEstimatedWidthPx > viewportWidth - contextMenuMinViewportGapPx;
+            const menuX = overflowsRight
+              ? Math.max(contextMenuMinViewportGapPx, event.clientX - contextMenuEstimatedWidthPx)
+              : event.clientX;
+            setRescanMenu({ x: menuX, y: event.clientY });
+          }}
           disabled={isScanning}
           aria-label={isScanning ? actionLabels.scanning : actionLabels.rescan}
           title={isScanning ? actionLabels.scanning : actionLabels.rescan}
         >
           <RefreshCw size={16} aria-hidden="true" className={isScanning ? 'icon-spin' : undefined} />
         </button>
+        {rescanMenu && onRescanWithSize ? (
+          <div
+            ref={rescanMenuRef}
+            className="context-menu"
+            style={{ left: `${rescanMenu.x}px`, top: `${rescanMenu.y}px` }}
+            role="menu"
+            aria-label={actionLabels.rescan}
+          >
+            <button
+              type="button"
+              className="context-menu__item"
+              role="menuitem"
+              onClick={() => {
+                setRescanMenu(null);
+                onRescanWithSize();
+              }}
+            >
+              {actionLabels.rescanWithSize ?? t('actions.rescanWithSize')}
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

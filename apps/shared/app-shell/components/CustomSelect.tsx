@@ -62,13 +62,21 @@ export function CustomSelect({ value, options, ariaLabel, onChange, className }:
         return 0;
       }
 
-      return (current + delta + options.length) % options.length;
+      let nextIndex = current;
+      for (let step = 0; step < options.length; step += 1) {
+        nextIndex = (nextIndex + delta + options.length) % options.length;
+        if (!options[nextIndex]?.disabled) {
+          return nextIndex;
+        }
+      }
+
+      return current;
     });
   }
 
   function commitHighlightedOption() {
     const nextOption = options[highlightedIndex];
-    if (!nextOption) {
+    if (!nextOption || nextOption.disabled) {
       return;
     }
 
@@ -193,9 +201,15 @@ export function CustomSelect({ value, options, ariaLabel, onChange, className }:
               type="button"
               role="option"
               aria-selected={value === option.value}
+              aria-disabled={option.disabled ? 'true' : 'false'}
               tabIndex={index === highlightedIndex ? 0 : -1}
               className={`custom-select__option ${value === option.value ? 'custom-select__option--selected' : ''}`}
+              disabled={option.disabled}
               onClick={() => {
+                if (option.disabled) {
+                  return;
+                }
+
                 onChange(option.value);
                 setIsOpen(false);
                 triggerRef.current?.focus();

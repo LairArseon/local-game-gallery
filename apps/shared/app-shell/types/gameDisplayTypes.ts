@@ -13,6 +13,7 @@ export type GameVersionDisplayLike = {
 export type GameDisplayLike = {
   path: string;
   name: string;
+  sizeBytes: number | null;
   usesPlaceholderArt: boolean;
   imageCount: number;
   hasVersionMismatch: boolean;

@@ -17,7 +17,7 @@
  *
  * New to this project: read App top-to-bottom to see feature composition order, then jump into each imported hook for domain behavior and IPC/persistence details.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GalleryConfig, GalleryViewMode, ScanResult, ServiceCapabilities } from './types';
 import { LibraryPanel } from './components/LibraryPanel';
@@ -67,9 +67,33 @@ import { useAppLanguageSync } from './hooks/useAppLanguageSync';
 import { useNarrowViewport } from './hooks/useNarrowViewport';
 import { useDetailScrollReset } from './hooks/useDetailScrollReset';
 import { useGalleryClient } from './client/context';
+import { formatByteSize } from '../../shared/app-shell/utils/app-helpers';
 
 const emptyScan: ScanResult = createEmptyScan();
 const fallbackRecoveryProbeIntervalMs = 12000;
+const maxConcurrentSizeRequests = 6;
+
+function normalizeSizePathKey(value: string) {
+  return String(value ?? '').trim().replace(/\\/g, '/').toLowerCase();
+}
+
+function resolveSingleGameSize(
+  sizes: Record<string, number>,
+  requestedPath: string,
+) {
+  const numericEntries = Object.entries(sizes).filter((entry) => Number.isFinite(entry[1]));
+  const normalizedRequestedPath = normalizeSizePathKey(requestedPath);
+  const exactEntry = numericEntries.find((entry) => normalizeSizePathKey(entry[0]) === normalizedRequestedPath);
+  if (exactEntry) {
+    return exactEntry[1];
+  }
+
+  if (numericEntries.length === 1) {
+    return numericEntries[0][1];
+  }
+
+  return null;
+}
 
 function App() {
   const { t, i18n } = useTranslation();
@@ -83,6 +107,9 @@ function App() {
   const [status, setStatus] = useState(() => t('app.loadingConfig'));
   const [isSaving, setIsSaving] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [isSizeScanning, setIsSizeScanning] = useState(false);
+  const [sizeScanCompletedCount, setSizeScanCompletedCount] = useState(0);
+  const [sizeScanTotalCount, setSizeScanTotalCount] = useState(0);
   const [scanProgress, setScanProgress] = useState(0);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [viewMode, setViewMode] = useState<GalleryViewMode>('poster');
@@ -105,6 +132,9 @@ function App() {
   } | null>(null);
   const cardsContainerRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const sizeScanInFlightRef = useRef<Promise<void> | null>(null);
+  const sizeScanBatchIdRef = useRef(0);
+  const hasAutoTriggeredSizeScanRef = useRef(false);
   const logAppEvent = createLogAppEvent(galleryClient);
 
   const {
@@ -236,6 +266,179 @@ function App() {
     toErrorMessage,
   });
 
+  const runGameSizeScan = useCallback(async (gamePaths: string[]) => {
+    const uniquePaths = [...new Set(gamePaths.map((entry) => String(entry ?? '').trim()).filter(Boolean))];
+    if (!uniquePaths.length) {
+      return;
+    }
+
+    if (sizeScanInFlightRef.current) {
+      return sizeScanInFlightRef.current;
+    }
+
+    const batchId = sizeScanBatchIdRef.current + 1;
+    sizeScanBatchIdRef.current = batchId;
+    setIsSizeScanning(true);
+    setSizeScanCompletedCount(0);
+    setSizeScanTotalCount(uniquePaths.length);
+    setScanResult((current) => ({
+      ...current,
+      games: current.games.map((game) => (
+        uniquePaths.includes(game.path)
+          ? { ...game, sizeBytes: null }
+          : game
+      )),
+    }));
+
+    const pendingPaths = [...uniquePaths];
+    const workerCount = Math.max(1, Math.min(maxConcurrentSizeRequests, pendingPaths.length));
+    const startedAt = Date.now();
+    let resolvedCount = 0;
+    let fallbackCount = 0;
+    let errorCount = 0;
+    let completedCount = 0;
+    void logAppEvent(
+      `Started size scan batch ${batchId}: ${uniquePaths.length} game(s), ${workerCount} worker(s).`,
+      'info',
+      'scan-game-sizes',
+    );
+
+    const inFlight = (async () => {
+      try {
+        const worker = async () => {
+          while (pendingPaths.length > 0) {
+            const nextPath = pendingPaths.shift();
+            if (!nextPath) {
+              continue;
+            }
+
+            try {
+              const result = await galleryClient.scanGameSizes({ gamePaths: [nextPath] });
+              const resolvedSize = resolveSingleGameSize(result.sizes, nextPath);
+              const nextSizeValue = Number.isFinite(resolvedSize) ? resolvedSize : 0;
+
+              if (Number.isFinite(resolvedSize)) {
+                resolvedCount += 1;
+              } else {
+                fallbackCount += 1;
+                void logAppEvent(
+                  `Size scan fallback for "${nextPath}": response keys=${Object.keys(result.sizes).join(', ') || '(none)'}.`,
+                  'warn',
+                  'scan-game-sizes-progress',
+                );
+              }
+
+              if (sizeScanBatchIdRef.current === batchId) {
+                setScanResult((current) => ({
+                  ...current,
+                  games: current.games.map((game) => (
+                    game.path === nextPath
+                      ? { ...game, sizeBytes: nextSizeValue }
+                      : game
+                  )),
+                }));
+              }
+            } catch (error) {
+              errorCount += 1;
+              const logMessage = toErrorMessage(error, `Failed to scan game size for ${nextPath}.`);
+              void logAppEvent(logMessage, 'warn', 'scan-game-size-single');
+
+              if (sizeScanBatchIdRef.current === batchId) {
+                setScanResult((current) => ({
+                  ...current,
+                  games: current.games.map((game) => (
+                    game.path === nextPath
+                      ? { ...game, sizeBytes: 0 }
+                      : game
+                  )),
+                }));
+              }
+            } finally {
+              completedCount += 1;
+              if (sizeScanBatchIdRef.current === batchId) {
+                setSizeScanCompletedCount((current) => current + 1);
+              }
+
+              if (completedCount === 1 || completedCount === uniquePaths.length || completedCount % 10 === 0) {
+                const percent = Math.round((completedCount / uniquePaths.length) * 100);
+                void logAppEvent(
+                  `Size scan batch ${batchId} progress: ${completedCount}/${uniquePaths.length} (${percent}%).`,
+                  'info',
+                  'scan-game-sizes-progress',
+                );
+              }
+            }
+          }
+        };
+
+        await Promise.all(Array.from({ length: workerCount }, () => worker()));
+      } catch (error) {
+        const logMessage = toErrorMessage(error, 'Failed to scan game sizes.');
+        setStatus(t('status.failedScanGameSizes'));
+        void logAppEvent(logMessage, 'warn', 'scan-game-sizes');
+      } finally {
+        if (sizeScanBatchIdRef.current === batchId) {
+          setIsSizeScanning(false);
+          setSizeScanTotalCount(0);
+        }
+        const durationMs = Date.now() - startedAt;
+        void logAppEvent(
+          `Finished size scan batch ${batchId}: resolved=${resolvedCount}, fallback=${fallbackCount}, failed=${errorCount}, durationMs=${durationMs}.`,
+          errorCount > 0 ? 'warn' : 'info',
+          'scan-game-sizes',
+        );
+        sizeScanInFlightRef.current = null;
+      }
+    })();
+
+    sizeScanInFlightRef.current = inFlight;
+    return inFlight;
+  }, [galleryClient, logAppEvent, t]);
+
+  const handleRescanWithSize = useCallback(async () => {
+    const result = await refreshScan();
+    if (!result) {
+      return;
+    }
+
+    void runGameSizeScan(result.games.map((game) => game.path));
+  }, [refreshScan, runGameSizeScan]);
+
+  const handleRefreshRequest = useCallback(async () => {
+    const activeDetailGamePath = String(detailGamePath ?? '').trim();
+    if (activeDetailGamePath) {
+      await refreshGame(activeDetailGamePath);
+      await runGameSizeScan([activeDetailGamePath]);
+      return;
+    }
+
+    await refreshScan();
+  }, [detailGamePath, refreshGame, refreshScan, runGameSizeScan]);
+
+  useEffect(() => {
+    if (hasAutoTriggeredSizeScanRef.current) {
+      return;
+    }
+
+    if (!config || !scanResult.scannedAt || isScanning || isSizeScanning) {
+      return;
+    }
+
+    hasAutoTriggeredSizeScanRef.current = true;
+    const initialPaths = scanResult.games.map((game) => game.path).filter(Boolean);
+    void logAppEvent(
+      `Triggering initial size scan on client connect: ${initialPaths.length} game(s).`,
+      'info',
+      'scan-game-sizes',
+    );
+
+    if (!initialPaths.length) {
+      return;
+    }
+
+    void runGameSizeScan(initialPaths);
+  }, [config, isScanning, isSizeScanning, logAppEvent, runGameSizeScan, scanResult.games, scanResult.scannedAt]);
+
   useFallbackRecoveryProbe({
     isUsingMirrorFallback,
     gamesRoot: config?.gamesRoot,
@@ -304,6 +507,7 @@ function App() {
     games: scanResult.games,
     searchQuery,
     setStatus,
+    isSizeOrderingEnabled: !isSizeScanning && scanResult.games.every((game) => game.sizeBytes !== null),
     logAppEvent,
     toErrorMessage,
     setActiveTagAutocomplete,
@@ -460,7 +664,7 @@ function App() {
     setConfig,
     searchInputRef,
     isScanning,
-    refreshScan,
+    onRefreshRequest: handleRefreshRequest,
     screenshotModalPath,
     setScreenshotModalPath,
   });
@@ -738,6 +942,15 @@ function App() {
   }
 
   const detailBackgroundImageSrc = detailBackgroundSrc ? filePathToSrc(detailBackgroundSrc) : null;
+  const hasPendingSizeValues = isSizeScanning
+    || (scanResult.games.length > 0 && scanResult.games.every((game) => game.sizeBytes === null));
+  const totalLibrarySizeBytes = scanResult.games.reduce((total, game) => total + (game.sizeBytes ?? 0), 0);
+  const sizeScanPercent = sizeScanTotalCount > 0
+    ? Math.round((sizeScanCompletedCount / sizeScanTotalCount) * 100)
+    : 0;
+  const totalLibrarySizeLabel = hasPendingSizeValues
+    ? (isSizeScanning ? `${t('app.calculating')} (${sizeScanPercent}%)` : t('app.calculating'))
+    : formatByteSize(totalLibrarySizeBytes);
 
   return (
     <main className="shell">
@@ -759,7 +972,7 @@ function App() {
       <header className="topbar panel">
         <div className="topbar__title">
           <p className="eyebrow">{t('app.title')}</p>
-          <p>{t('app.gamesFound', { count: scanResult.games.length })}</p>
+          <p>{t('app.gamesFoundWithSize', { count: scanResult.games.length, size: totalLibrarySizeLabel })}</p>
         </div>
         <TopbarControls
           searchQuery={searchQuery}
@@ -782,7 +995,10 @@ function App() {
           onToggleVersionNotifications={() => setIsVersionNotificationsOpen((current) => !current)}
           onOpenArchiveUpload={() => archiveUpload.openModal()}
           onRescan={() => {
-            void refreshScan();
+            void handleRefreshRequest();
+          }}
+          onRescanWithSize={() => {
+            void handleRescanWithSize();
           }}
           actionLabels={actionLabels}
         />
@@ -829,6 +1045,7 @@ function App() {
             draftOrderBy,
             draftStatus,
             orderByModeLabels,
+            isSizeOrderingEnabled: !isSizeScanning && scanResult.games.every((game) => game.sizeBytes !== null),
             statusChoices: config.statusChoices,
             isPresetNamingOpen,
             draftPresetName,

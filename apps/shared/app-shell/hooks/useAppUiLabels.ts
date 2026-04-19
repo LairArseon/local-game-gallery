@@ -17,6 +17,7 @@ export function useAppUiLabels(t: Translate) {
     open: t('actions.open'),
     back: t('actions.back'),
     rescan: t('actions.rescan'),
+    rescanWithSize: t('actions.rescanWithSize'),
     scanning: t('actions.scanning'),
     showTagPool: t('actions.showTagPool'),
     hideTagPool: t('actions.hideTagPool'),
@@ -44,6 +45,8 @@ export function useAppUiLabels(t: Translate) {
     'alpha-desc': t('orderBy.alpha-desc'),
     'score-asc': t('orderBy.score-asc'),
     'score-desc': t('orderBy.score-desc'),
+    'size-asc': t('orderBy.size-asc'),
+    'size-desc': t('orderBy.size-desc'),
   }), [t]);
 
   return {

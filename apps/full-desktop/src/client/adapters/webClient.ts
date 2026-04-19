@@ -21,11 +21,14 @@ import type {
   ReorderScreenshotsPayload,
   SaveGameMetadataPayload,
   ScanRequestOptions,
+  ScanGameSizesPayload,
+  ScanGameSizesResult,
   ScanResult,
   ServiceApiVersionInfo,
   ServiceCapabilities,
   ServiceHealthStatus,
   StageDroppedAppIconPayload,
+  VersionStorageProgressEvent,
   VaultContextMenuAction,
   VaultContextMenuPayload,
   VersionContextMenuAction,
@@ -458,6 +461,11 @@ export const webClient: GalleryClient = {
   async getConfig() {
     return requestApi<GalleryConfig>('/api/config');
   },
+  onVersionStorageProgress(_callback: (payload: VersionStorageProgressEvent) => void) {
+    return () => {
+      // Live operation progress events are only available through Electron IPC.
+    };
+  },
   async saveConfig(config) {
     return requestApi<GalleryConfig>('/api/config', {
       method: 'PUT',
@@ -501,6 +509,20 @@ export const webClient: GalleryClient = {
     return requestApi<ScanResult>('/api/scan', {
       method: 'POST',
       body: JSON.stringify(options ?? {}),
+    });
+  },
+  async scanGame(gamePath: string) {
+    const response = await requestApi<{ game: GameSummary | null }>('/api/scan-game', {
+      method: 'POST',
+      body: JSON.stringify({ gamePath }),
+    });
+
+    return response.game;
+  },
+  async scanGameSizes(payload: ScanGameSizesPayload): Promise<ScanGameSizesResult> {
+    return requestApi<ScanGameSizesResult>('/api/scan-game-sizes', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   },
   async showGameContextMenu(payload: GameContextMenuPayload) {

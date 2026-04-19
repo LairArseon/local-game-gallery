@@ -33,6 +33,7 @@ type TopbarControlsProps = {
   onToggleVersionNotifications: () => void;
   onOpenArchiveUpload: () => void;
   onRescan: () => void;
+  onRescanWithSize?: () => void;
   actionLabels: {
     openUpload: string;
     rescan: string;
@@ -47,6 +48,7 @@ type TopbarControlsProps = {
     hideVault: string;
     showVersionNotifications: string;
     hideVersionNotifications: string;
+    rescanWithSize?: string;
   };
 };
 
@@ -71,6 +73,7 @@ export function TopbarControls({
   onToggleVersionNotifications,
   onOpenArchiveUpload,
   onRescan,
+  onRescanWithSize,
   actionLabels,
 }: TopbarControlsProps) {
   return (
@@ -95,6 +98,7 @@ export function TopbarControls({
       onToggleVersionNotifications={onToggleVersionNotifications}
       onOpenArchiveUpload={onOpenArchiveUpload}
       onRescan={onRescan}
+      onRescanWithSize={onRescanWithSize}
       actionLabels={actionLabels}
     />
   );

@@ -2,6 +2,8 @@
   "app": {
     "title": "Local Game Gallery",
     "gamesFound": "Games found: {{count}}",
+    "gamesFoundWithSize": "Games found: {{count}} ({{size}})",
+    "calculating": "Calculating...",
     "loadingConfig": "Loading configuration...",
     "mirrorFallbackBannerTitle": "Primary games root unavailable",
     "mirrorFallbackBannerBody": "Browsing from metadata mirror fallback. Launch actions are disabled until the primary root is reachable."
@@ -13,6 +15,7 @@
     "open": "Open",
     "back": "Back",
     "rescan": "Rescan",
+    "rescanWithSize": "Rescan and calculate sizes",
     "scanning": "Scanning...",
     "showTagPool": "Show tag pool",
     "hideTagPool": "Hide tag pool",
@@ -67,7 +70,9 @@
     "alpha-asc": "Alphabetically up",
     "alpha-desc": "Alphabetically down",
     "score-asc": "Score up",
-    "score-desc": "Score down"
+    "score-desc": "Score down",
+    "size-asc": "Size up",
+    "size-desc": "Size down"
   },
   "topbar": {
     "searchAria": "Search games",
@@ -123,8 +128,6 @@
     "statusChoices": "Status choices",
     "posterViewColumns": "Poster view columns",
     "cardViewColumns": "Card view columns",
-    "columnsHint": "Use 0 to auto-fit columns based on current element size.",
-    "baseFontScale": "Base font scale",
     "baseFontScaleHint": "Affects only game content cards/lists/detail, not setup or top menus.",
     "baseSpacingScale": "Base spacing scale",
     "baseSpacingScaleHint": "Affects only game content spacing.",
@@ -278,6 +281,7 @@
     "none": "None",
     "note": "Note",
     "bootstrapped": "Bootstrapped",
+    "size": "Size",
     "lastPlayed": "Last date played",
     "previousScreenshot": "Previous screenshot",
     "nextScreenshot": "Next screenshot",
@@ -382,6 +386,7 @@
     "failedUpdateVault": "Failed to update vault membership.",
     "scanCompletedNoMatches": "Scan completed. No games matched yet.",
     "launchDisabledMirrorFallback": "Game launching is disabled while browsing from metadata mirror fallback.",
-    "failedScanGameFolders": "Failed to scan game folders."
+    "failedScanGameFolders": "Failed to scan game folders.",
+    "failedScanGameSizes": "Failed to scan game sizes."
   }
 }

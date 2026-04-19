@@ -253,6 +253,13 @@ button {
   text-overflow: ellipsis;
 }
 
+.floating-version-storage__bytes {
+  margin: -1px 0 2px;
+  font-size: 0.72rem;
+  color: rgba(255, 219, 176, 0.92);
+  font-variant-numeric: tabular-nums;
+}
+
 .floating-version-storage__meter {
   height: 6px;
   border-radius: 999px;
@@ -877,6 +884,13 @@ button {
 
 .custom-select__option:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+.custom-select__option:disabled,
+.custom-select__option:disabled:hover {
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(247, 246, 242, 0.38);
+  cursor: not-allowed;
 }
 
 .custom-select__option:focus-visible {

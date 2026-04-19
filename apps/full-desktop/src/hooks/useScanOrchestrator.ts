@@ -11,7 +11,11 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import type { GalleryClient } from '../client/contracts';
 import type { ScanResult } from '../types';
-import { useScanRefreshCore, type RefreshScanMode } from '../../../shared/app-shell/hooks/useScanOrchestratorCore';
+import {
+  useRefreshGameCore,
+  useScanRefreshCore,
+  type RefreshScanMode,
+} from '../../../shared/app-shell/hooks/useScanOrchestratorCore';
 
 const fallbackRecoveryProbeIntervalMs = 12000;
 
@@ -51,6 +55,14 @@ export function useScanOrchestrator({
     toErrorMessage,
     setIsScanning,
     setScanProgress,
+  });
+
+  const refreshGame = useRefreshGameCore({
+    scanGame: galleryClient.scanGame,
+    setScanResult,
+    refreshScan,
+    toErrorMessage,
+    logAppEvent,
   });
 
   useEffect(() => {
@@ -118,6 +130,7 @@ export function useScanOrchestrator({
     isScanning,
     scanProgress,
     refreshScan,
+    refreshGame,
   };
 }
 

@@ -23,6 +23,7 @@ export type FilterPanelProps<
   draftOrderBy: TOrderBy;
   draftStatus: string;
   orderByModeLabels: Record<TOrderBy, string>;
+  isSizeOrderingEnabled: boolean;
   statusChoices: string[];
   isPresetNamingOpen: boolean;
   draftPresetName: string;

@@ -2,7 +2,7 @@ import type { MouseEvent } from 'react';
 import { ArrowRight, ListVideo, Play } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { GameDisplayLike, SharedFocusCardProps } from '../types/gameDisplayTypes';
-import { formatLastPlayed } from '../utils/app-helpers';
+import { formatByteSize, formatLastPlayed } from '../utils/app-helpers';
 
 export function FocusCard<TGame extends GameDisplayLike>({
   game,
@@ -106,6 +106,7 @@ export function FocusCard<TGame extends GameDisplayLike>({
         <p>{t('detail.latestVersion')}: {game.metadata.latestVersion || t('detail.unknown')}</p>
         <p>{t('detail.status')}: {game.metadata.status || t('detail.notSet')}</p>
         <p>{t('detail.score')}: {game.metadata.score || t('detail.notSet')}</p>
+        <p>{t('gameView.size')}: {game.sizeBytes === null ? t('app.calculating') : formatByteSize(game.sizeBytes)}</p>
         <p>{t('gameView.lastPlayed')}: {formatLastPlayedValue(game.lastPlayedAt)}</p>
         <p>{game.metadata.description || t('detail.noDescription')}</p>
         {game.metadata.notes.filter(Boolean).slice(0, 2).map((note) => (

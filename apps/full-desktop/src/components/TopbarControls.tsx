@@ -32,6 +32,7 @@ type TopbarControlsProps = {
   onOpenVaultContextMenu: (event: MouseEvent<HTMLButtonElement>, hasVaultPin: boolean) => void;
   onToggleVersionNotifications: () => void;
   onRescan: () => void;
+    onRescanWithSize?: () => void;
   actionLabels: {
     rescan: string;
     scanning: string;
@@ -45,6 +46,7 @@ type TopbarControlsProps = {
     hideVault: string;
     showVersionNotifications: string;
     hideVersionNotifications: string;
+      rescanWithSize?: string;
   };
 };
 
@@ -68,6 +70,7 @@ export function TopbarControls({
   onOpenVaultContextMenu,
   onToggleVersionNotifications,
   onRescan,
+    onRescanWithSize,
   actionLabels,
 }: TopbarControlsProps) {
   return (
@@ -91,6 +94,7 @@ export function TopbarControls({
       onOpenVaultContextMenu={onOpenVaultContextMenu}
       onToggleVersionNotifications={onToggleVersionNotifications}
       onRescan={onRescan}
+        onRescanWithSize={onRescanWithSize}
       actionLabels={actionLabels}
     />
   );

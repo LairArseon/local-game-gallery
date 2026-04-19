@@ -88,3 +88,22 @@ export function formatLastPlayed(value: string | null) {
     minute: '2-digit',
   });
 }
+
+export function formatByteSize(value: number | null | undefined) {
+  const normalized = Number(value ?? 0);
+  if (!Number.isFinite(normalized) || normalized <= 0) {
+    return '0 B';
+  }
+
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let size = normalized;
+  let unitIndex = 0;
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+
+  const decimals = unitIndex === 0 ? 0 : size < 10 ? 2 : 1;
+  return `${size.toFixed(decimals)} ${units[unitIndex]}`;
+}

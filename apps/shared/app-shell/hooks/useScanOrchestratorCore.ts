@@ -9,7 +9,7 @@ import { useCallback, useRef, type Dispatch, type MutableRefObject, type SetStat
 
 export type RefreshScanMode = 'scan-only' | 'scan-and-sync' | 'parity-sync' | 'fallback-recovery-probe';
 
-type ScanResultLike<TGame extends { path: string; name: string }> = {
+type ScanResultLike<TGame extends { path: string; name: string; sizeBytes?: number | null }> = {
   games: TGame[];
   warnings: string[];
   usingMirrorFallback: boolean;
@@ -28,7 +28,7 @@ type UseScanRefreshCoreArgs<TGame extends { path: string; name: string }, TScanR
 };
 
 export function useScanRefreshCore<
-  TGame extends { path: string; name: string },
+  TGame extends { path: string; name: string; sizeBytes?: number | null },
   TScanResult extends ScanResultLike<TGame>,
 >({
   scanGames,
@@ -87,7 +87,20 @@ export function useScanRefreshCore<
           return result;
         }
 
-        setScanResult(result);
+        setScanResult((current) => {
+          const previousSizeByPath = new Map(
+            current.games.map((game) => [game.path, game.sizeBytes ?? null]),
+          );
+          const mergedGames = result.games.map((game) => ({
+            ...game,
+            sizeBytes: game.sizeBytes ?? previousSizeByPath.get(game.path) ?? null,
+          }));
+
+          return {
+            ...result,
+            games: mergedGames,
+          };
+        });
         setStatus(result.games.length ? t('status.foundGameFolders', { count: result.games.length }) : t('status.scanCompletedNoMatches'));
 
         const elapsedMs = Date.now() - startedAtMs;
@@ -142,7 +155,7 @@ type UseRefreshGameCoreArgs<TGame extends { path: string; name: string }, TScanR
   logAppEvent: (message: string, level?: 'info' | 'warn' | 'error', source?: string) => Promise<void>;
 };
 
-export function useRefreshGameCore<TGame extends { path: string; name: string }, TScanResult extends { scannedAt: string; games: TGame[] }>({
+export function useRefreshGameCore<TGame extends { path: string; name: string; sizeBytes?: number | null }, TScanResult extends { scannedAt: string; games: TGame[] }>({
   scanGame,
   setScanResult,
   refreshScan,
@@ -175,10 +188,16 @@ export function useRefreshGameCore<TGame extends { path: string; name: string },
 
         const nextGames = [...existingGames];
         const index = nextGames.findIndex((game) => game.path === refreshedGame.path);
+        const previousSize = index >= 0 ? nextGames[index]?.sizeBytes ?? null : null;
+        const mergedGame = {
+          ...refreshedGame,
+          sizeBytes: refreshedGame.sizeBytes ?? previousSize ?? null,
+        };
+
         if (index >= 0) {
-          nextGames[index] = refreshedGame;
+          nextGames[index] = mergedGame;
         } else {
-          nextGames.push(refreshedGame);
+          nextGames.push(mergedGame);
         }
 
         nextGames.sort((left, right) => left.name.localeCompare(right.name));
@@ -199,5 +218,5 @@ export function useRefreshGameCore<TGame extends { path: string; name: string },
   }, [logAppEvent, refreshScan, scanGame, setScanResult, toErrorMessage]);
 }
 
-export type ScanRefreshRef<TGame extends { path: string; name: string }, TScanResult extends ScanResultLike<TGame>> =
+export type ScanRefreshRef<TGame extends { path: string; name: string; sizeBytes?: number | null }, TScanResult extends ScanResultLike<TGame>> =
   MutableRefObject<((mode?: RefreshScanMode) => Promise<TScanResult | null>) | null>;

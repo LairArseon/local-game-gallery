@@ -184,6 +184,62 @@ async function readLastPlayedAt(gamePath: string) {
   }
 }
 
+async function computeDirectorySize(rootPath: string): Promise<number> {
+  const rootStats = await stat(rootPath).catch(() => null);
+  if (!rootStats?.isDirectory()) {
+    return 0;
+  }
+
+  let totalSize = 0;
+  const pendingFolders: string[] = [rootPath];
+
+  while (pendingFolders.length > 0) {
+    const currentFolder = pendingFolders.pop();
+    if (!currentFolder) {
+      continue;
+    }
+
+    const entries = await readDirectoryEntriesSafe(currentFolder);
+    for (const entry of entries) {
+      const entryPath = path.join(currentFolder, entry.name);
+      if (entry.isFile()) {
+        const fileStats = await stat(entryPath).catch(() => null);
+        if (fileStats?.isFile()) {
+          totalSize += fileStats.size;
+        }
+        continue;
+      }
+
+      if (entry.isDirectory()) {
+        pendingFolders.push(entryPath);
+      }
+    }
+  }
+
+  return totalSize;
+}
+
+function resolveAllowedScanRoots(config: GalleryConfig) {
+  const sourceRoot = path.resolve(String(config.gamesRoot ?? '').trim() || '.');
+  const mirrorRootRaw = String(config.metadataMirrorRoot ?? '').trim();
+  const mirrorRoot = mirrorRootRaw ? path.resolve(mirrorRootRaw) : '';
+  const mirrorValidationError = mirrorRoot
+    ? getMirrorRootValidationError(sourceRoot, mirrorRoot)
+    : '';
+
+  const allowedRoots = [sourceRoot];
+  if (mirrorRoot && !mirrorValidationError) {
+    allowedRoots.push(mirrorRoot);
+  }
+
+  return {
+    sourceRoot,
+    mirrorRoot,
+    mirrorValidationError,
+    allowedRoots,
+  };
+}
+
 async function ensureDefaultGameNfo(gamePath: string, gameName: string) {
   const fallbackNfoPath = path.join(gamePath, defaultGameNfoName);
   const hasAnyNfo = await hasNfoFile(gamePath);
@@ -545,10 +601,10 @@ export async function scanGames(config: GalleryConfig, requestOptions: ScanReque
       : { poster: null, card: null, background: null, screenshots: [] };
     const extras = await scanGameExtras(gamePath, config.hideDotEntries);
     const lastPlayedAt = await readLastPlayedAt(gamePath);
-
     games.push({
       name: entry.name,
       path: gamePath,
+      sizeBytes: null,
       isVaulted: vaultedGamePaths.has(gamePath)
         || (usingMirrorFallback && vaultedGamePaths.has(sourceEquivalentGamePath)),
       lastPlayedAt,
@@ -720,10 +776,10 @@ export async function scanGame(config: GalleryConfig, gamePath: string): Promise
     : { poster: null, card: null, background: null, screenshots: [] };
   const extras = await scanGameExtras(resolvedGamePath, config.hideDotEntries);
   const lastPlayedAt = await readLastPlayedAt(resolvedGamePath);
-
   return {
     name: gameName,
     path: resolvedGamePath,
+    sizeBytes: null,
     isVaulted: (config.vaultedGamePaths ?? []).includes(resolvedGamePath)
       || (usingMirrorFallback && (config.vaultedGamePaths ?? []).includes(sourceEquivalentGamePath)),
     lastPlayedAt,
@@ -743,4 +799,33 @@ export async function scanGame(config: GalleryConfig, gamePath: string): Promise
     versionCount: versions.length,
     versions,
   };
+}
+
+export async function scanGameSizes(
+  config: GalleryConfig,
+  gamePaths: string[],
+): Promise<Record<string, number>> {
+  const { allowedRoots } = resolveAllowedScanRoots(config);
+  const normalizedPaths = [...new Set(
+    (Array.isArray(gamePaths) ? gamePaths : [])
+      .map((entry) => path.resolve(String(entry ?? '').trim()))
+      .filter(Boolean),
+  )];
+
+  const sizes: Record<string, number> = {};
+  for (const gamePath of normalizedPaths) {
+    const isInsideAllowedRoot = allowedRoots.some((rootPath) => isPathInside(rootPath, gamePath));
+    if (!isInsideAllowedRoot) {
+      continue;
+    }
+
+    const gameStats = await stat(gamePath).catch(() => null);
+    if (!gameStats?.isDirectory()) {
+      continue;
+    }
+
+    sizes[gamePath] = await computeDirectorySize(gamePath);
+  }
+
+  return sizes;
 }

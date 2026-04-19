@@ -8,7 +8,7 @@ type UseGlobalShortcutsArgs<TConfig extends ZoomConfigLike> = {
   setConfig: Dispatch<SetStateAction<TConfig | null>>;
   searchInputRef: RefObject<HTMLInputElement | null>;
   isScanning: boolean;
-  refreshScan: () => Promise<unknown>;
+  onRefreshRequest: () => Promise<unknown>;
   screenshotModalPath: string | null;
   setScreenshotModalPath: Dispatch<SetStateAction<string | null>>;
   clamp: (value: number, min: number, max: number) => number;
@@ -19,7 +19,7 @@ export function useGlobalShortcuts<TConfig extends ZoomConfigLike>({
   setConfig,
   searchInputRef,
   isScanning,
-  refreshScan,
+  onRefreshRequest,
   screenshotModalPath,
   setScreenshotModalPath,
   clamp,
@@ -134,14 +134,14 @@ export function useGlobalShortcuts<TConfig extends ZoomConfigLike>({
         return;
       }
 
-      void refreshScan();
+      void onRefreshRequest();
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [isScanning, refreshScan]);
+  }, [isScanning, onRefreshRequest]);
 
   useEffect(() => {
     if (!screenshotModalPath) {

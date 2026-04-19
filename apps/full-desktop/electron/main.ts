@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto';
 import { loadConfig, saveConfig } from './config';
 import { appendLogEvent, clearLogContents, openLogFolder, readLogContents } from './logger';
 import { getLatestVersionName, importDroppedGameMedia, readGameMetadata, removeScreenshot, reorderScreenshots, saveGameMetadata } from './game-library';
-import { scanGame, scanGames } from './scanner';
+import { scanGame, scanGameSizes, scanGames } from './scanner';
 import { startGalleryHttpService, type GalleryHttpService } from './service';
 import { registerArchiveUploadHandlers } from './ipc/registerArchiveUploadHandlers';
 import {
@@ -23,6 +23,7 @@ import {
   isPathInside,
   resolveVersionStorageArchive,
   toDownloadSafeFileName,
+  type VersionStorageProgressUpdate,
 } from './shared/archive-version-storage';
 import {
   appendGameLaunchActivity,
@@ -50,6 +51,8 @@ import type {
   RemoveScreenshotPayload,
   ReorderScreenshotsPayload,
   ScanRequestOptions,
+  ScanGameSizesPayload,
+  ScanGameSizesResult,
   SaveGameMetadataPayload,
   SaveExtraDownloadPayload,
   SaveExtraDownloadResult,
@@ -59,6 +62,7 @@ import type {
   CompressGameVersionResult,
   DecompressGameVersionPayload,
   DecompressGameVersionResult,
+  VersionStorageProgressEvent,
   ServiceApiVersionInfo,
   ServiceCapabilities,
   ServiceHealthStatus,
@@ -700,6 +704,24 @@ ipcMain.handle('gallery:scan-game', async (_event, payload: { gamePath: string }
   }
 });
 
+ipcMain.handle('gallery:scan-game-sizes', async (_event, payload: ScanGameSizesPayload): Promise<ScanGameSizesResult> => {
+  const config = await loadConfig();
+  const gamePaths = Array.isArray(payload?.gamePaths) ? payload.gamePaths : [];
+
+  try {
+    const sizes = await scanGameSizes(config, gamePaths);
+    return { sizes };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Game size scan failed.';
+    await appendLogEvent({
+      level: 'warn',
+      source: 'scan-game-sizes',
+      message: `Desktop game size scan failed: ${message}`,
+    }).catch(() => undefined);
+    return { sizes: {} };
+  }
+});
+
 ipcMain.handle('gallery:save-game-metadata', async (_event, payload: SaveGameMetadataPayload) => {
   await saveGameMetadata(payload);
 });
@@ -1042,6 +1064,8 @@ ipcMain.handle('gallery:save-version-download', async (_event, payload: SaveVers
 ipcMain.handle('gallery:compress-game-version', async (_event, payload: CompressGameVersionPayload): Promise<CompressGameVersionResult> => {
   const gamePath = String(payload?.gamePath ?? '').trim();
   const versionPath = String(payload?.versionPath ?? '').trim();
+  const operationId = String(payload?.operationId ?? '').trim() || randomUUID();
+  const gameName = path.basename(gamePath || 'Game');
   const versionName = String(payload?.versionName ?? '').trim() || path.basename(versionPath || gamePath || 'Version');
 
   if (!gamePath || !versionPath) {
@@ -1053,12 +1077,35 @@ ipcMain.handle('gallery:compress-game-version', async (_event, payload: Compress
     };
   }
 
-  return compressVersionForStorage(gamePath, versionPath, versionName, 'main-version-storage', appendLogEvent);
+  return compressVersionForStorage(
+    gamePath,
+    versionPath,
+    versionName,
+    'main-version-storage',
+    appendLogEvent,
+    (update: VersionStorageProgressUpdate) => {
+      const eventPayload: VersionStorageProgressEvent = {
+        operationId,
+        operation: update.operation,
+        phase: update.phase,
+        percent: update.percent,
+        processedBytes: update.processedBytes ?? 0,
+        totalBytes: update.totalBytes ?? 0,
+        gamePath,
+        versionPath,
+        gameName,
+        versionName,
+      };
+      _event.sender.send('gallery:version-storage-progress', eventPayload);
+    },
+  );
 });
 
 ipcMain.handle('gallery:decompress-game-version', async (_event, payload: DecompressGameVersionPayload): Promise<DecompressGameVersionResult> => {
   const gamePath = String(payload?.gamePath ?? '').trim();
   const versionPath = String(payload?.versionPath ?? '').trim();
+  const operationId = String(payload?.operationId ?? '').trim() || randomUUID();
+  const gameName = path.basename(gamePath || 'Game');
   const versionName = String(payload?.versionName ?? '').trim() || path.basename(versionPath || gamePath || 'Version');
 
   if (!gamePath || !versionPath) {
@@ -1069,7 +1116,28 @@ ipcMain.handle('gallery:decompress-game-version', async (_event, payload: Decomp
     };
   }
 
-  return decompressVersionFromStorage(gamePath, versionPath, versionName, 'main-version-storage', appendLogEvent);
+  return decompressVersionFromStorage(
+    gamePath,
+    versionPath,
+    versionName,
+    'main-version-storage',
+    appendLogEvent,
+    (update: VersionStorageProgressUpdate) => {
+      const eventPayload: VersionStorageProgressEvent = {
+        operationId,
+        operation: update.operation,
+        phase: update.phase,
+        percent: update.percent,
+        processedBytes: update.processedBytes ?? 0,
+        totalBytes: update.totalBytes ?? 0,
+        gamePath,
+        versionPath,
+        gameName,
+        versionName,
+      };
+      _event.sender.send('gallery:version-storage-progress', eventPayload);
+    },
+  );
 });
 
 ipcMain.handle('gallery:log-event', async (_event, payload: LogEventPayload) => {

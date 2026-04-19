@@ -5,6 +5,7 @@
 export type CustomSelectOption = {
   value: string;
   label: string;
+  disabled?: boolean;
 };
 
 export type CustomSelectProps = {

@@ -22,6 +22,8 @@ import {
   type RemoveScreenshotPayload,
   type ReorderScreenshotsPayload,
   type ScanRequestOptions,
+  type ScanGameSizesPayload,
+  type ScanGameSizesResult,
   type SaveGameMetadataPayload,
   type CompressGameVersionPayload,
   type CompressGameVersionResult,
@@ -31,11 +33,12 @@ import {
   type ServiceApiVersionInfo,
   type ServiceCapabilities,
   type ServiceHealthStatus,
+  type VersionStorageProgressEvent,
 } from '../src/types';
 import { loadConfig, saveConfig } from './config';
 import { getLatestVersionName, readGameMetadata, reorderScreenshots, removeScreenshot, saveGameMetadata } from './game-library';
 import { appendLogEvent, clearLogContents, openLogFolder, readLogContents } from './logger';
-import { scanGame, scanGames } from './scanner';
+import { scanGame, scanGameSizes, scanGames } from './scanner';
 import { handleArchiveUploadRoutes } from './http/handleArchiveUploadRoutes';
 import {
   buildAttachmentContentDisposition,
@@ -143,6 +146,35 @@ const imageMimeToExtension = new Map<string, string>([
   ['image/bmp', '.bmp'],
 ]);
 const stagedArchiveUploads = new Map<string, { filePath: string; originalFileName: string }>();
+const versionStorageProgressRetentionMs = 10 * 60 * 1000;
+const versionStorageProgressByOperationId = new Map<
+  string,
+  {
+    event: VersionStorageProgressEvent;
+    completed: boolean;
+    updatedAt: number;
+  }
+>();
+
+function setVersionStorageProgress(event: VersionStorageProgressEvent, completed = false) {
+  versionStorageProgressByOperationId.set(event.operationId, {
+    event: {
+      ...event,
+      percent: Math.max(0, Math.min(1, Number(event.percent ?? 0))),
+    },
+    completed,
+    updatedAt: Date.now(),
+  });
+
+  if (!completed) {
+    return;
+  }
+
+  const cleanupTimer = setTimeout(() => {
+    versionStorageProgressByOperationId.delete(event.operationId);
+  }, versionStorageProgressRetentionMs);
+  cleanupTimer.unref?.();
+}
 
 function normalizeIpAddress(value: string | undefined) {
   const raw = String(value ?? '').trim().toLowerCase();
@@ -1087,13 +1119,60 @@ export async function startGalleryHttpService({
           const payload = await readJsonBody<CompressGameVersionPayload>(request);
           const gamePath = String(payload.gamePath ?? '').trim();
           const versionPath = String(payload.versionPath ?? '').trim();
+          const operationId = String(payload.operationId ?? '').trim() || `http-vs-${Date.now()}-${Math.random().toString(16).slice(2)}`;
           const versionName = String(payload.versionName ?? '').trim() || path.basename(versionPath || gamePath || 'Version');
+          const gameName = path.basename(gamePath || 'Game');
           if (!gamePath || !versionPath) {
             sendError(response, 400, 'invalid_version_storage_payload', 'Game path and version path are required for compression.');
             return;
           }
 
-          const result = await compressVersionForStorage(gamePath, versionPath, versionName, 'http-service-version-storage', appendLogEvent);
+          setVersionStorageProgress({
+            operationId,
+            operation: 'compress',
+            phase: 'preparing',
+            percent: 0.02,
+            processedBytes: 0,
+            totalBytes: 0,
+            gamePath,
+            versionPath,
+            gameName,
+            versionName,
+          });
+
+          const result = await compressVersionForStorage(
+            gamePath,
+            versionPath,
+            versionName,
+            'http-service-version-storage',
+            appendLogEvent,
+            (update) => {
+              setVersionStorageProgress({
+                operationId,
+                operation: update.operation,
+                phase: update.phase,
+                percent: update.percent,
+                processedBytes: update.processedBytes ?? 0,
+                totalBytes: update.totalBytes ?? 0,
+                gamePath,
+                versionPath,
+                gameName,
+                versionName,
+              }, update.phase === 'finalizing' && update.percent >= 1);
+            },
+          );
+          setVersionStorageProgress({
+            operationId,
+            operation: 'compress',
+            phase: 'finalizing',
+            percent: 1,
+            processedBytes: 0,
+            totalBytes: 0,
+            gamePath,
+            versionPath,
+            gameName,
+            versionName,
+          }, true);
           sendOk(response, result);
         } catch (error) {
           sendError(response, 400, 'compress_version_failed', toErrorMessage(error, 'Failed to compress version.'));
@@ -1106,17 +1185,84 @@ export async function startGalleryHttpService({
           const payload = await readJsonBody<DecompressGameVersionPayload>(request);
           const gamePath = String(payload.gamePath ?? '').trim();
           const versionPath = String(payload.versionPath ?? '').trim();
+          const operationId = String(payload.operationId ?? '').trim() || `http-vs-${Date.now()}-${Math.random().toString(16).slice(2)}`;
           const versionName = String(payload.versionName ?? '').trim() || path.basename(versionPath || gamePath || 'Version');
+          const gameName = path.basename(gamePath || 'Game');
           if (!gamePath || !versionPath) {
             sendError(response, 400, 'invalid_version_storage_payload', 'Game path and version path are required for decompression.');
             return;
           }
 
-          const result = await decompressVersionFromStorage(gamePath, versionPath, versionName, 'http-service-version-storage', appendLogEvent);
+          setVersionStorageProgress({
+            operationId,
+            operation: 'decompress',
+            phase: 'preparing',
+            percent: 0.02,
+            processedBytes: 0,
+            totalBytes: 0,
+            gamePath,
+            versionPath,
+            gameName,
+            versionName,
+          });
+
+          const result = await decompressVersionFromStorage(
+            gamePath,
+            versionPath,
+            versionName,
+            'http-service-version-storage',
+            appendLogEvent,
+            (update) => {
+              setVersionStorageProgress({
+                operationId,
+                operation: update.operation,
+                phase: update.phase,
+                percent: update.percent,
+                processedBytes: update.processedBytes ?? 0,
+                totalBytes: update.totalBytes ?? 0,
+                gamePath,
+                versionPath,
+                gameName,
+                versionName,
+              }, update.phase === 'finalizing' && update.percent >= 1);
+            },
+          );
+          setVersionStorageProgress({
+            operationId,
+            operation: 'decompress',
+            phase: 'finalizing',
+            percent: 1,
+            processedBytes: 0,
+            totalBytes: 0,
+            gamePath,
+            versionPath,
+            gameName,
+            versionName,
+          }, true);
           sendOk(response, result);
         } catch (error) {
           sendError(response, 400, 'decompress_version_failed', toErrorMessage(error, 'Failed to decompress version.'));
         }
+        return;
+      }
+
+      if (method === 'GET' && route === '/api/version-storage/progress') {
+        const operationId = String(requestUrl.searchParams.get('operationId') ?? '').trim();
+        if (!operationId) {
+          sendError(response, 400, 'missing_operation_id', 'Operation id is required.');
+          return;
+        }
+
+        const snapshot = versionStorageProgressByOperationId.get(operationId);
+        sendOk(response, {
+          progress: snapshot
+            ? {
+                ...snapshot.event,
+                completed: snapshot.completed,
+                updatedAt: snapshot.updatedAt,
+              }
+            : null,
+        });
         return;
       }
 
@@ -1138,6 +1284,21 @@ export async function startGalleryHttpService({
           sendOk(response, { game });
         } catch (error) {
           sendError(response, 400, 'scan_game_failed', toErrorMessage(error, 'Failed to refresh game.'));
+        }
+        return;
+      }
+
+      if (method === 'POST' && route === '/api/scan-game-sizes') {
+        try {
+          const payload = await readJsonBody<ScanGameSizesPayload>(request);
+          const gamePaths = Array.isArray(payload?.gamePaths) ? payload.gamePaths : [];
+          const config = await loadRuntimeConfig();
+          const result: ScanGameSizesResult = {
+            sizes: await scanGameSizes(config, gamePaths),
+          };
+          sendOk(response, result);
+        } catch (error) {
+          sendError(response, 400, 'scan_game_sizes_failed', toErrorMessage(error, 'Failed to scan game sizes.'));
         }
         return;
       }

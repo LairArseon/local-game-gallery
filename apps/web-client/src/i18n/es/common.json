@@ -2,6 +2,8 @@
   "app": {
     "title": "Galería Local de Juegos",
     "gamesFound": "Juegos encontrados: {{count}}",
+    "gamesFoundWithSize": "Juegos encontrados: {{count}} ({{size}})",
+    "calculating": "Calculando...",
     "loadingConfig": "Cargando configuración...",
     "mirrorFallbackBannerTitle": "Carpeta principal de juegos no disponible",
     "mirrorFallbackBannerBody": "Navegando desde el espejo de metadatos de respaldo. Las acciones de lanzamiento están deshabilitadas hasta que la carpeta principal vuelva a estar disponible."
@@ -13,6 +15,7 @@
     "open": "Abrir",
     "back": "Volver",
     "rescan": "Reescanear",
+    "rescanWithSize": "Reescanear y calcular tamaños",
     "scanning": "Escaneando...",
     "showTagPool": "Mostrar pool de etiquetas",
     "hideTagPool": "Ocultar pool de etiquetas",
@@ -67,7 +70,9 @@
     "alpha-asc": "Alfabético ascendente",
     "alpha-desc": "Alfabético descendente",
     "score-asc": "Puntuación ascendente",
-    "score-desc": "Puntuación descendente"
+    "score-desc": "Puntuación descendente",
+    "size-asc": "Tamaño ascendente",
+    "size-desc": "Tamaño descendente"
   },
   "topbar": {
     "searchAria": "Buscar juegos",
@@ -278,6 +283,7 @@
     "none": "Ninguno",
     "note": "Nota",
     "bootstrapped": "Inicializado",
+    "size": "Tamaño",
     "lastPlayed": "Última fecha jugada",
     "previousScreenshot": "Captura anterior",
     "nextScreenshot": "Siguiente captura",
@@ -382,6 +388,7 @@
     "failedUpdateVault": "No se pudo actualizar el vault.",
     "scanCompletedNoMatches": "Escaneo completado. Todavía no hay juegos que coincidan.",
     "launchDisabledMirrorFallback": "El lanzamiento de juegos está deshabilitado mientras navegas desde el espejo de metadatos de respaldo.",
-    "failedScanGameFolders": "No se pudieron escanear las carpetas de juegos."
+    "failedScanGameFolders": "No se pudieron escanear las carpetas de juegos.",
+    "failedScanGameSizes": "No se pudieron escanear los tamaños de juegos."
   }
 }

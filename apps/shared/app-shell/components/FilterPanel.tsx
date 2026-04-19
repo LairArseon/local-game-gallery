@@ -4,7 +4,7 @@ import { CustomSelect } from './CustomSelect';
 import type { FilterOrderByModeLike, FilterPresetLike } from '../types/filterManagerTypes';
 import type { FilterPanelProps } from '../types/filterPanelTypes';
 
-const filterOrderByModes: FilterOrderByModeLike[] = ['alpha-asc', 'alpha-desc', 'score-asc', 'score-desc'];
+const filterOrderByModes: FilterOrderByModeLike[] = ['alpha-asc', 'alpha-desc', 'score-asc', 'score-desc', 'size-asc', 'size-desc'];
 
 type PresetContextMenuState = {
   x: number;
@@ -25,6 +25,7 @@ export function FilterPanel<
   draftOrderBy,
   draftStatus,
   orderByModeLabels,
+  isSizeOrderingEnabled,
   statusChoices,
   isPresetNamingOpen,
   draftPresetName,
@@ -240,6 +241,7 @@ export function FilterPanel<
                 options={filterOrderByModes.map((mode) => ({
                   value: mode,
                   label: orderByModeLabels[mode as TOrderBy],
+                  disabled: (mode === 'size-asc' || mode === 'size-desc') && !isSizeOrderingEnabled,
                 }))}
                 onChange={(nextValue) => onChangeDraftOrderBy(nextValue as TOrderBy)}
               />

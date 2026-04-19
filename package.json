@@ -1,6 +1,6 @@
 {
   "name": "local-game-gallery",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "private": true,
   "author": "Lair Arseon",
   "license": "CC0-1.0",
@@ -53,16 +53,20 @@
     "dist:all:win": "node scripts/package-all.mjs"
   },
   "dependencies": {
+    "archiver": "^7.0.1",
     "i18next": "^26.0.4",
     "lucide-react": "^1.8.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "react-i18next": "^17.0.2"
+    "react-i18next": "^17.0.2",
+    "unzipper": "^0.12.3"
   },
   "devDependencies": {
+    "@types/archiver": "^7.0.0",
     "@types/node": "^24.6.0",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
+    "@types/unzipper": "^0.10.11",
     "@vitejs/plugin-react": "^5.0.0",
     "concurrently": "^9.2.0",
     "cross-env": "^10.0.0",

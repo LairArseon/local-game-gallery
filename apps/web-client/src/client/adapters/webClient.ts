@@ -36,11 +36,14 @@ import type {
   StageGameArchiveUploadResult,
   SaveGameMetadataPayload,
   ScanRequestOptions,
+  ScanGameSizesPayload,
+  ScanGameSizesResult,
   ScanResult,
   ServiceApiVersionInfo,
   ServiceCapabilities,
   ServiceHealthStatus,
   StageDroppedAppIconPayload,
+  VersionStorageProgressEvent,
   VaultContextMenuAction,
   VaultContextMenuPayload,
   VersionContextMenuAction,
@@ -116,7 +119,15 @@ let cachedServiceCapabilities: ServiceCapabilities | null = null;
 const gameContextMenuListeners = new Set<(payload: GameContextMenuAction) => void>();
 const versionContextMenuListeners = new Set<(payload: VersionContextMenuAction) => void>();
 const vaultContextMenuListeners = new Set<(payload: VaultContextMenuAction) => void>();
+const versionStorageProgressListeners = new Set<(payload: VersionStorageProgressEvent) => void>();
+const activeVersionStorageProgressPolls = new Map<string, { stopped: boolean }>();
+const versionStorageProgressPollIntervalMs = 220;
 let disposeActiveBrowserContextMenu: (() => void) | null = null;
+
+type VersionStorageProgressSnapshot = VersionStorageProgressEvent & {
+  completed: boolean;
+  updatedAt: number;
+};
 
 function arrayBufferToBase64(buffer: ArrayBuffer) {
   const bytes = new Uint8Array(buffer);
@@ -441,6 +452,60 @@ function notifyVaultContextMenu(payload: VaultContextMenuAction) {
   }
 }
 
+function notifyVersionStorageProgress(payload: VersionStorageProgressEvent) {
+  for (const listener of versionStorageProgressListeners) {
+    listener(payload);
+  }
+}
+
+function stopVersionStorageProgressPolling(operationId: string) {
+  const activePoll = activeVersionStorageProgressPolls.get(operationId);
+  if (!activePoll) {
+    return;
+  }
+
+  activePoll.stopped = true;
+  activeVersionStorageProgressPolls.delete(operationId);
+}
+
+function startVersionStorageProgressPolling(operationId: string) {
+  const normalizedOperationId = String(operationId ?? '').trim();
+  if (!normalizedOperationId || activeVersionStorageProgressPolls.has(normalizedOperationId)) {
+    return;
+  }
+
+  const activePoll = { stopped: false };
+  activeVersionStorageProgressPolls.set(normalizedOperationId, activePoll);
+
+  const poll = async () => {
+    try {
+      while (!activePoll.stopped) {
+        try {
+          const response = await requestApi<{ progress: VersionStorageProgressSnapshot | null }>(
+            `/api/version-storage/progress?operationId=${encodeURIComponent(normalizedOperationId)}`,
+          );
+          if (response.progress) {
+            notifyVersionStorageProgress(response.progress);
+            if (response.progress.completed) {
+              break;
+            }
+          }
+        } catch {
+          // Best-effort polling: keep trying while operation is active.
+        }
+
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, versionStorageProgressPollIntervalMs);
+        });
+      }
+    } finally {
+      activeVersionStorageProgressPolls.delete(normalizedOperationId);
+    }
+  };
+
+  void poll();
+}
+
 function closeBrowserContextMenu() {
   if (!disposeActiveBrowserContextMenu) {
     return;
@@ -733,6 +798,12 @@ export const webClient: GalleryClient = {
     });
     return response.selectedPath ?? null;
   },
+    onVersionStorageProgress(callback: (payload: VersionStorageProgressEvent) => void) {
+      versionStorageProgressListeners.add(callback);
+      return () => {
+        versionStorageProgressListeners.delete(callback);
+      };
+    },
   async pickAppIconPng() {
     return null;
   },
@@ -767,6 +838,12 @@ export const webClient: GalleryClient = {
     });
 
     return response.game;
+  },
+  async scanGameSizes(payload: ScanGameSizesPayload): Promise<ScanGameSizesResult> {
+    return requestApi<ScanGameSizesResult>('/api/scan-game-sizes', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
   async showGameContextMenu(payload: GameContextMenuPayload) {
     const capabilities = await getRuntimeCapabilities();
@@ -1003,16 +1080,40 @@ export const webClient: GalleryClient = {
     );
   },
   async compressGameVersion(payload: CompressGameVersionPayload): Promise<CompressGameVersionResult> {
-    return requestApi<CompressGameVersionResult>('/api/version-storage/compress', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+    const operationId = String(payload.operationId ?? '').trim() || `vs-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const requestPayload: CompressGameVersionPayload = {
+      ...payload,
+      operationId,
+    };
+
+    startVersionStorageProgressPolling(operationId);
+    try {
+      return await requestApi<CompressGameVersionResult>('/api/version-storage/compress', {
+        method: 'POST',
+        body: JSON.stringify(requestPayload),
+      });
+    } catch (error) {
+      stopVersionStorageProgressPolling(operationId);
+      throw error;
+    }
   },
   async decompressGameVersion(payload: DecompressGameVersionPayload): Promise<DecompressGameVersionResult> {
-    return requestApi<DecompressGameVersionResult>('/api/version-storage/decompress', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+    const operationId = String(payload.operationId ?? '').trim() || `vs-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const requestPayload: DecompressGameVersionPayload = {
+      ...payload,
+      operationId,
+    };
+
+    startVersionStorageProgressPolling(operationId);
+    try {
+      return await requestApi<DecompressGameVersionResult>('/api/version-storage/decompress', {
+        method: 'POST',
+        body: JSON.stringify(requestPayload),
+      });
+    } catch (error) {
+      stopVersionStorageProgressPolling(operationId);
+      throw error;
+    }
   },
   async pickArchiveUploadFile(): Promise<PickArchiveUploadFileResult | null> {
     const response = await requestApi<{ selectedFile: PickArchiveUploadFileResult | null }>('/api/pick-archive-upload-file', {

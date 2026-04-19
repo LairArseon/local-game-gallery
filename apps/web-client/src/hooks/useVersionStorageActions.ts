@@ -36,12 +36,25 @@ export function useVersionStorageActions({
   t,
   logAppEvent,
 }: UseVersionStorageActionsArgs) {
+  const normalizeSizePathKey = (value: string) => String(value ?? '').trim().replace(/\\/g, '/').toLowerCase();
+
   const refreshSingleGame = useCallback(async (gamePath: string) => {
     try {
       const updatedGame = await galleryClient.scanGame(gamePath);
       if (!updatedGame) {
         await refreshScan('scan-only');
         return;
+      }
+
+      let resolvedSizeBytes: number | null = null;
+      try {
+        const result = await galleryClient.scanGameSizes({ gamePaths: [gamePath] });
+        const normalizedTargetPath = normalizeSizePathKey(gamePath);
+        const numericEntries = Object.entries(result.sizes).filter((entry) => Number.isFinite(entry[1]));
+        const exactEntry = numericEntries.find((entry) => normalizeSizePathKey(entry[0]) === normalizedTargetPath);
+        resolvedSizeBytes = exactEntry ? exactEntry[1] : (numericEntries.length === 1 ? numericEntries[0][1] : null);
+      } catch {
+        resolvedSizeBytes = null;
       }
 
       setScanResult((current) => {
@@ -51,7 +64,11 @@ export function useVersionStorageActions({
         }
 
         const nextGames = [...current.games];
-        nextGames[currentIndex] = updatedGame;
+        const previousSizeBytes = current.games[currentIndex]?.sizeBytes ?? null;
+        nextGames[currentIndex] = {
+          ...updatedGame,
+          sizeBytes: resolvedSizeBytes ?? previousSizeBytes,
+        };
         return {
           ...current,
           scannedAt: new Date().toISOString(),

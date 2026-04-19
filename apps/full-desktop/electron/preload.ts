@@ -20,6 +20,8 @@ import type {
   PlayGamePayload,
   PickArchiveUploadFileResult,
   ReorderScreenshotsPayload,
+  ScanGameSizesPayload,
+  ScanGameSizesResult,
   SaveGameMetadataPayload,
   ScanRequestOptions,
   ServiceApiVersionInfo,
@@ -35,6 +37,7 @@ import type {
   CompressGameVersionResult,
   DecompressGameVersionPayload,
   DecompressGameVersionResult,
+  VersionStorageProgressEvent,
   VaultContextMenuAction,
   VaultContextMenuPayload,
   VersionContextMenuAction,
@@ -59,6 +62,7 @@ const api: GalleryApi = {
     ipcRenderer.invoke('gallery:apply-runtime-app-icon', payload),
   scanGames: (options?: ScanRequestOptions) => ipcRenderer.invoke('gallery:scan-games', options),
   scanGame: (gamePath: string) => ipcRenderer.invoke('gallery:scan-game', { gamePath }),
+  scanGameSizes: (payload: ScanGameSizesPayload): Promise<ScanGameSizesResult> => ipcRenderer.invoke('gallery:scan-game-sizes', payload),
   showGameContextMenu: (payload: GameContextMenuPayload) => ipcRenderer.invoke('gallery:show-game-context-menu', payload),
   showVersionContextMenu: (payload: VersionContextMenuPayload) => ipcRenderer.invoke('gallery:show-version-context-menu', payload),
   showVaultContextMenu: (payload: VaultContextMenuPayload) => ipcRenderer.invoke('gallery:show-vault-context-menu', payload),
@@ -78,6 +82,16 @@ const api: GalleryApi = {
   saveVersionDownload: (payload: SaveVersionDownloadPayload): Promise<SaveVersionDownloadResult> => ipcRenderer.invoke('gallery:save-version-download', payload),
   compressGameVersion: (payload: CompressGameVersionPayload): Promise<CompressGameVersionResult> => ipcRenderer.invoke('gallery:compress-game-version', payload),
   decompressGameVersion: (payload: DecompressGameVersionPayload): Promise<DecompressGameVersionResult> => ipcRenderer.invoke('gallery:decompress-game-version', payload),
+  onVersionStorageProgress: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: VersionStorageProgressEvent) => {
+      callback(payload);
+    };
+
+    ipcRenderer.on('gallery:version-storage-progress', listener);
+    return () => {
+      ipcRenderer.removeListener('gallery:version-storage-progress', listener);
+    };
+  },
   pickArchiveUploadFile: (): Promise<PickArchiveUploadFileResult | null> => ipcRenderer.invoke('gallery:pick-archive-upload-file'),
   stageGameArchiveUpload: (payload: StageGameArchiveUploadPayload): Promise<StageGameArchiveUploadResult> => ipcRenderer.invoke('gallery:stage-game-archive-upload', payload),
   cancelStagedGameArchiveUpload: (payload: CancelStagedGameArchiveUploadPayload): Promise<void> => ipcRenderer.invoke('gallery:cancel-staged-game-archive-upload', payload),

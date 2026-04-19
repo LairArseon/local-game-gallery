@@ -29,7 +29,7 @@ export type ServiceApiVersionInfo = {
 export const GALLERY_VIEW_MODES = ['poster', 'card', 'compact', 'expanded'] as const;
 export type GalleryViewMode = (typeof GALLERY_VIEW_MODES)[number];
 
-export const FILTER_ORDER_BY_MODES = ['alpha-asc', 'alpha-desc', 'score-asc', 'score-desc'] as const;
+export const FILTER_ORDER_BY_MODES = ['alpha-asc', 'alpha-desc', 'score-asc', 'score-desc', 'size-asc', 'size-desc'] as const;
 export type FilterOrderByMode = (typeof FILTER_ORDER_BY_MODES)[number];
 
 export const APP_LANGUAGES = ['en', 'es'] as const;
@@ -143,6 +143,7 @@ export type GameExtraEntry = {
 export type GameSummary = {
   name: string;
   path: string;
+  sizeBytes: number | null;
   isVaulted: boolean;
   lastPlayedAt: string | null;
   hasNfo: boolean;
@@ -173,6 +174,14 @@ export type ScanResult = {
 export type ScanRequestOptions = {
   syncMirror?: boolean;
   mirrorParity?: boolean;
+};
+
+export type ScanGameSizesPayload = {
+  gamePaths: string[];
+};
+
+export type ScanGameSizesResult = {
+  sizes: Record<string, number>;
 };
 
 export type GameContextMenuPayload = {
@@ -294,6 +303,7 @@ export type CompressGameVersionPayload = {
   gamePath: string;
   versionPath: string;
   versionName?: string;
+  operationId?: string;
 };
 
 export type CompressGameVersionResult = {
@@ -307,6 +317,20 @@ export type DecompressGameVersionPayload = {
   gamePath: string;
   versionPath: string;
   versionName?: string;
+  operationId?: string;
+};
+
+export type VersionStorageProgressEvent = {
+  operationId: string;
+  operation: 'compress' | 'decompress';
+  phase: 'preparing' | 'compressing' | 'finalizing';
+  percent: number;
+  processedBytes: number;
+  totalBytes: number;
+  gamePath: string;
+  versionPath: string;
+  gameName: string;
+  versionName: string;
 };
 
 export type DecompressGameVersionResult = {
@@ -368,6 +392,7 @@ export type GalleryApi = {
   applyRuntimeAppIcon: (payload: ApplyRuntimeAppIconPayload) => Promise<ApplyRuntimeAppIconResult>;
   scanGames: (options?: ScanRequestOptions) => Promise<ScanResult>;
   scanGame: (gamePath: string) => Promise<GameSummary | null>;
+  scanGameSizes: (payload: ScanGameSizesPayload) => Promise<ScanGameSizesResult>;
   showGameContextMenu: (payload: GameContextMenuPayload) => Promise<void>;
   onGameContextMenuAction: (callback: (payload: GameContextMenuAction) => void) => () => void;
   showVersionContextMenu: (payload: VersionContextMenuPayload) => Promise<void>;
@@ -390,6 +415,7 @@ export type GalleryApi = {
   saveVersionDownload: (payload: SaveVersionDownloadPayload) => Promise<SaveVersionDownloadResult>;
   compressGameVersion: (payload: CompressGameVersionPayload) => Promise<CompressGameVersionResult>;
   decompressGameVersion: (payload: DecompressGameVersionPayload) => Promise<DecompressGameVersionResult>;
+  onVersionStorageProgress?: (callback: (payload: VersionStorageProgressEvent) => void) => () => void;
   pickArchiveUploadFile: () => Promise<PickArchiveUploadFileResult | null>;
   stageGameArchiveUpload: (payload: StageGameArchiveUploadPayload) => Promise<StageGameArchiveUploadResult>;
   cancelStagedGameArchiveUpload: (payload: CancelStagedGameArchiveUploadPayload) => Promise<void>;

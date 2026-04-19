@@ -23,6 +23,7 @@ type UseFilterManagerArgs = {
   tagPoolUsageOverride?: Record<string, number> | null;
   searchQuery: string;
   setStatus: Dispatch<SetStateAction<string>>;
+  isSizeOrderingEnabled?: boolean;
   logAppEvent: (message: string, level?: 'info' | 'warn' | 'error', source?: string) => Promise<void>;
   toErrorMessage: (error: unknown, fallback: string) => string;
   setActiveTagAutocomplete: Dispatch<SetStateAction<TagAutocompleteState>>;
@@ -35,6 +36,7 @@ export function useFilterManager({
   tagPoolUsageOverride,
   searchQuery,
   setStatus,
+  isSizeOrderingEnabled,
   logAppEvent,
   toErrorMessage,
   setActiveTagAutocomplete,
@@ -54,6 +56,7 @@ export function useFilterManager({
     t,
     normalizeTagRules,
     normalizedScore,
+    isSizeOrderingEnabled,
     saveConfig: (nextConfig) => galleryClient.saveConfig(nextConfig),
   });
 }

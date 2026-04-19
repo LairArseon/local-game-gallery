@@ -1,7 +1,10 @@
-import { spawn } from 'node:child_process';
 import { copyFile, cp, mkdtemp, mkdir, readdir, rm, stat, unlink } from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pipeline } from 'node:stream/promises';
+import archiver from 'archiver';
+import unzipper from 'unzipper';
 import type { CompressGameVersionResult, DecompressGameVersionResult } from '../../src/types';
 
 /**
@@ -27,6 +30,24 @@ type VersionStorageLogEvent = {
 };
 
 type VersionStorageLogFn = (event: VersionStorageLogEvent) => Promise<void>;
+
+export type VersionStorageProgressUpdate = {
+  operation: 'compress' | 'decompress';
+  phase: 'preparing' | 'compressing' | 'finalizing';
+  percent: number;
+  processedBytes?: number;
+  totalBytes?: number;
+};
+
+type VersionStorageProgressFn = (update: VersionStorageProgressUpdate) => void;
+
+function clampPercent(value: number) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(1, value));
+}
 
 function toErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -84,86 +105,166 @@ export function isPathInside(parentPath: string, targetPath: string) {
 }
 
 export async function createZipFromFolder(folderPath: string, outputZipPath: string) {
-  if (process.platform !== 'win32') {
-    throw new Error('Folder download compression is currently supported on Windows hosts only.');
-  }
+  await createZipFromFolderWithProgress(folderPath, outputZipPath);
+}
 
-  const folderArg = `'${folderPath.replace(/'/g, "''")}'`;
-  const outputArg = `'${outputZipPath.replace(/'/g, "''")}'`;
-  const command = [
-    "$ErrorActionPreference = 'Stop'",
-    'Add-Type -AssemblyName System.IO.Compression.FileSystem',
-    `if (Test-Path -LiteralPath ${outputArg}) { Remove-Item -LiteralPath ${outputArg} -Force }`,
-    `[System.IO.Compression.ZipFile]::CreateFromDirectory(${folderArg}, ${outputArg}, [System.IO.Compression.CompressionLevel]::Optimal, $true)`,
-  ].join('; ');
+export async function createZipFromFolderWithProgress(
+  folderPath: string,
+  outputZipPath: string,
+  onProgress?: VersionStorageProgressFn,
+) {
+  await mkdir(path.dirname(outputZipPath), { recursive: true });
+  await unlink(outputZipPath).catch(() => undefined);
 
   await new Promise<void>((resolve, reject) => {
-    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command], {
-      windowsHide: true,
-    });
-
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (chunk) => {
-      stdout += String(chunk ?? '');
-    });
-    child.stderr.on('data', (chunk) => {
-      stderr += String(chunk ?? '');
-    });
-
-    child.on('error', reject);
-    child.on('exit', (code) => {
-      if (code === 0) {
-        resolve();
+    let settled = false;
+    const finish = (error?: unknown) => {
+      if (settled) {
         return;
       }
 
-      const stdoutText = stdout.trim();
-      const stderrText = stderr.trim();
-      reject(new Error(
-        stderrText
-        || stdoutText
-        || `Compression failed with exit code ${code}.`,
-      ));
+      settled = true;
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    };
+
+    const output = createWriteStream(outputZipPath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    output.on('close', () => finish());
+    output.on('error', (error) => finish(error));
+    archive.on('error', (error) => finish(error));
+    archive.on('progress', (event) => {
+      const processedBytes = event.fs.processedBytes ?? 0;
+      const totalBytes = event.fs.totalBytes ?? 0;
+      const percent = totalBytes > 0 ? processedBytes / totalBytes : 0;
+      onProgress?.({
+        operation: 'compress',
+        phase: 'compressing',
+        percent: clampPercent(percent),
+        processedBytes,
+        totalBytes,
+      });
     });
+
+    archive.pipe(output);
+    archive.directory(folderPath, false);
+    void archive.finalize();
+  });
+}
+
+export async function createZipFromEntriesWithProgress(
+  basePath: string,
+  entries: Array<{ name: string; isDirectory: boolean; isFile: boolean }>,
+  outputZipPath: string,
+  onProgress?: VersionStorageProgressFn,
+) {
+  await mkdir(path.dirname(outputZipPath), { recursive: true });
+  await unlink(outputZipPath).catch(() => undefined);
+
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const finish = (error?: unknown) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    };
+
+    const output = createWriteStream(outputZipPath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    output.on('close', () => finish());
+    output.on('error', (error) => finish(error));
+    archive.on('error', (error) => finish(error));
+    archive.on('progress', (event) => {
+      const processedBytes = event.fs.processedBytes ?? 0;
+      const totalBytes = event.fs.totalBytes ?? 0;
+      const percent = totalBytes > 0 ? processedBytes / totalBytes : 0;
+      onProgress?.({
+        operation: 'compress',
+        phase: 'compressing',
+        percent: clampPercent(percent),
+        processedBytes,
+        totalBytes,
+      });
+    });
+
+    archive.pipe(output);
+    for (const entry of entries) {
+      const sourcePath = path.join(basePath, entry.name);
+      if (entry.isDirectory) {
+        archive.directory(sourcePath, entry.name);
+        continue;
+      }
+
+      if (entry.isFile) {
+        archive.file(sourcePath, { name: entry.name });
+      }
+    }
+    void archive.finalize();
   });
 }
 
 export async function extractZipToFolder(zipPath: string, outputFolderPath: string) {
-  if (process.platform !== 'win32') {
-    throw new Error('Archive extraction is currently supported on Windows hosts only.');
+  await extractZipToFolderWithProgress(zipPath, outputFolderPath);
+}
+
+export async function extractZipToFolderWithProgress(
+  zipPath: string,
+  outputFolderPath: string,
+  onProgress?: VersionStorageProgressFn,
+) {
+  await rm(outputFolderPath, { recursive: true, force: true }).catch(() => undefined);
+  await mkdir(outputFolderPath, { recursive: true });
+
+  const directory = await unzipper.Open.file(zipPath);
+  const fileEntries = directory.files.filter((entry) => entry.type !== 'Directory');
+  const totalBytes = fileEntries.reduce((sum, entry) => {
+    const entrySize = Number(entry.uncompressedSize ?? 0);
+    return sum + (Number.isFinite(entrySize) ? Math.max(0, entrySize) : 0);
+  }, 0);
+
+  let processedBytes = 0;
+
+  for (const entry of directory.files) {
+    const relativePath = entry.path.replace(/\\/g, '/');
+    const destinationPath = path.resolve(outputFolderPath, relativePath);
+    if (!isPathInside(outputFolderPath, destinationPath)) {
+      throw new Error(`Archive contains invalid path: "${entry.path}".`);
+    }
+
+    if (entry.type === 'Directory') {
+      await mkdir(destinationPath, { recursive: true });
+      continue;
+    }
+
+    await mkdir(path.dirname(destinationPath), { recursive: true });
+    const readStream = entry.stream();
+    readStream.on('data', (chunk: Buffer) => {
+      processedBytes += chunk.length;
+      const percent = totalBytes > 0 ? processedBytes / totalBytes : 0;
+      onProgress?.({
+        operation: 'decompress',
+        phase: 'compressing',
+        percent: clampPercent(percent),
+        processedBytes,
+        totalBytes,
+      });
+    });
+    await pipeline(readStream, createWriteStream(destinationPath));
   }
-
-  const zipArg = `'${zipPath.replace(/'/g, "''")}'`;
-  const outputArg = `'${outputFolderPath.replace(/'/g, "''")}'`;
-  const command = [
-    "$ErrorActionPreference = 'Stop'",
-    'Add-Type -AssemblyName System.IO.Compression.FileSystem',
-    `if (Test-Path -LiteralPath ${outputArg}) { Remove-Item -LiteralPath ${outputArg} -Recurse -Force }`,
-    `New-Item -ItemType Directory -Path ${outputArg} -Force | Out-Null`,
-    `[System.IO.Compression.ZipFile]::ExtractToDirectory(${zipArg}, ${outputArg})`,
-  ].join('; ');
-
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command], {
-      windowsHide: true,
-    });
-
-    let stderr = '';
-    child.stderr.on('data', (chunk) => {
-      stderr += String(chunk ?? '');
-    });
-
-    child.on('error', reject);
-    child.on('exit', (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-
-      reject(new Error(stderr.trim() || `Extraction failed with exit code ${code}.`));
-    });
-  });
 }
 
 export async function copyExtractedArchiveIntoVersion(extractedRootPath: string, targetVersionPath: string) {
@@ -238,6 +339,7 @@ export async function compressVersionForStorage(
   versionName: string,
   source: string,
   appendLogEvent: VersionStorageLogFn,
+  onProgress?: VersionStorageProgressFn,
 ): Promise<CompressGameVersionResult> {
   const resolvedGamePath = path.resolve(gamePath);
   const resolvedVersionPath = path.resolve(versionPath);
@@ -272,7 +374,6 @@ export async function compressVersionForStorage(
   const archiveFileName = `${versionStorageBaseName}.${archiveExtension}`;
   const archiveOutputPath = path.join(resolvedVersionPath, archiveFileName);
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'lgg-version-compress-'));
-  const tempPayloadRoot = path.join(tempDir, 'payload');
   const tempArchivePath = path.join(tempDir, archiveFileName);
 
   await appendLogEvent({
@@ -282,22 +383,35 @@ export async function compressVersionForStorage(
   }).catch(() => undefined);
 
   try {
-    await mkdir(tempPayloadRoot, { recursive: true });
+    onProgress?.({ operation: 'compress', phase: 'preparing', percent: 0.02 });
+    await appendLogEvent({
+      level: 'info',
+      source,
+      message: `Preparing direct archive stream from "${resolvedVersionPath}" (${runtimeEntries.length} entries).`,
+    }).catch(() => undefined);
 
-    for (const entry of runtimeEntries) {
-      const sourcePath = path.join(resolvedVersionPath, entry.name);
-      const destinationPath = path.join(tempPayloadRoot, entry.name);
-      if (entry.isDirectory()) {
-        await cp(sourcePath, destinationPath, { recursive: true, force: true, errorOnExist: false });
-        continue;
-      }
+    await appendLogEvent({
+      level: 'info',
+      source,
+      message: `Starting archive creation to temporary path "${tempArchivePath}".`,
+    }).catch(() => undefined);
 
-      if (entry.isFile()) {
-        await copyFile(sourcePath, destinationPath);
-      }
-    }
-
-    await createZipFromFolder(tempPayloadRoot, tempArchivePath);
+    await createZipFromEntriesWithProgress(
+      resolvedVersionPath,
+      runtimeEntries.map((entry) => ({
+        name: entry.name,
+        isDirectory: entry.isDirectory(),
+        isFile: entry.isFile(),
+      })),
+      tempArchivePath,
+      onProgress,
+    );
+    onProgress?.({ operation: 'compress', phase: 'finalizing', percent: 0.95 });
+    await appendLogEvent({
+      level: 'info',
+      source,
+      message: `Archive created at temporary path "${tempArchivePath}". Writing final archive to "${archiveOutputPath}".`,
+    }).catch(() => undefined);
     await copyFile(tempArchivePath, archiveOutputPath);
 
     for (const entry of runtimeEntries) {
@@ -315,6 +429,8 @@ export async function compressVersionForStorage(
       source,
       message: `Compression completed for "${resolvedVersionPath}" -> "${archiveOutputPath}" (${archiveStats?.size ?? 0} bytes).`,
     }).catch(() => undefined);
+
+    onProgress?.({ operation: 'compress', phase: 'finalizing', percent: 1 });
 
     return {
       compressed: true,
@@ -341,6 +457,7 @@ export async function decompressVersionFromStorage(
   versionName: string,
   source: string,
   appendLogEvent: VersionStorageLogFn,
+  onProgress?: VersionStorageProgressFn,
 ): Promise<DecompressGameVersionResult> {
   const resolvedGamePath = path.resolve(gamePath);
   const resolvedVersionPath = path.resolve(versionPath);
@@ -377,7 +494,9 @@ export async function decompressVersionFromStorage(
   }).catch(() => undefined);
 
   try {
-    await extractZipToFolder(archiveInfo.archivePath, extractRoot);
+    onProgress?.({ operation: 'decompress', phase: 'preparing', percent: 0.02 });
+    await extractZipToFolderWithProgress(archiveInfo.archivePath, extractRoot, onProgress);
+    onProgress?.({ operation: 'decompress', phase: 'finalizing', percent: 0.95 });
     const extractedEntries = (await readdir(extractRoot, { withFileTypes: true }))
       .filter((entry) => entry.name !== '__MACOSX');
 
@@ -407,6 +526,8 @@ export async function decompressVersionFromStorage(
       source,
       message: `Decompression completed for "${resolvedVersionPath}" (${extractedEntries.length} extracted entries).`,
     }).catch(() => undefined);
+
+    onProgress?.({ operation: 'decompress', phase: 'finalizing', percent: 1 });
 
     return {
       decompressed: true,

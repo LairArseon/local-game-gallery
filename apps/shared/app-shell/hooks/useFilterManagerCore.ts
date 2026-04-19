@@ -28,6 +28,7 @@ export function useFilterManagerCore<
   t,
   normalizeTagRules,
   normalizedScore,
+  isSizeOrderingEnabled = false,
   saveConfig,
 }: UseFilterManagerCoreArgs<TOrderBy, TPreset, TConfig, TGame>) {
   const [draftTagRules, setDraftTagRules] = useState<string[]>([]);
@@ -204,8 +205,14 @@ export function useFilterManagerCore<
     setAppliedMinScore(Number.isFinite(parsedMinScore) ? parsedMinScore : null);
 
     setAppliedStatus(draftStatus.trim());
+    const isSizeSort = draftOrderBy === 'size-asc' || draftOrderBy === 'size-desc';
+    if (isSizeSort && !isSizeOrderingEnabled) {
+      setAppliedOrderBy('alpha-asc' as TOrderBy);
+      return;
+    }
+
     setAppliedOrderBy(draftOrderBy);
-  }, [draftTagRules, draftMinScore, draftStatus, draftOrderBy, normalizeTagRules]);
+  }, [draftTagRules, draftMinScore, draftStatus, draftOrderBy, normalizeTagRules, isSizeOrderingEnabled]);
 
   const filteredGames = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -260,8 +267,27 @@ export function useFilterManagerCore<
 
       const leftScore = normalizedScore(left.metadata.score);
       const rightScore = normalizedScore(right.metadata.score);
-      if (leftScore !== rightScore) {
-        return appliedOrderBy === 'score-asc' ? leftScore - rightScore : rightScore - leftScore;
+      if (appliedOrderBy === 'score-asc' || appliedOrderBy === 'score-desc') {
+        if (leftScore !== rightScore) {
+          return appliedOrderBy === 'score-asc' ? leftScore - rightScore : rightScore - leftScore;
+        }
+
+        return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
+      }
+
+      if (appliedOrderBy === 'size-asc' || appliedOrderBy === 'size-desc') {
+        const leftSize = Number.isFinite(left.sizeBytes) ? Number(left.sizeBytes) : Number.POSITIVE_INFINITY;
+        const rightSize = Number.isFinite(right.sizeBytes) ? Number(right.sizeBytes) : Number.POSITIVE_INFINITY;
+
+        if (leftSize !== rightSize) {
+          return appliedOrderBy === 'size-asc' ? leftSize - rightSize : rightSize - leftSize;
+        }
+
+        if (leftScore !== rightScore) {
+          return rightScore - leftScore;
+        }
+
+        return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
       }
 
       return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
