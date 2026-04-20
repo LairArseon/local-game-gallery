@@ -99,12 +99,19 @@ function createRuntimeDependencyCollector(repoRoot) {
   const rootNodeModules = path.join(repoRoot, 'node_modules');
 
   function resolvePackageDir(packageName, fromDir) {
+    const packageMetadataSpecifiers = [`${packageName}/package.json`, `${packageName}/package`];
+    for (const specifier of packageMetadataSpecifiers) {
+      try {
+        const packageJsonPath = requireFromRepo.resolve(specifier, {
+          paths: [fromDir],
+        });
+        return path.dirname(packageJsonPath);
+      } catch {
+        // Try next metadata specifier.
+      }
+    }
+
     try {
-      const packageJsonPath = requireFromRepo.resolve(`${packageName}/package.json`, {
-        paths: [fromDir],
-      });
-      return path.dirname(packageJsonPath);
-    } catch {
       const resolvedEntryPath = requireFromRepo.resolve(packageName, {
         paths: [fromDir],
       });
@@ -128,6 +135,8 @@ function createRuntimeDependencyCollector(repoRoot) {
       }
 
       throw new Error(`Unable to resolve package root for ${packageName} from ${fromDir}`);
+    } catch {
+      throw new Error(`Unable to resolve package root for ${packageName} from ${fromDir}`);
     }
   }
 
@@ -142,7 +151,16 @@ function createRuntimeDependencyCollector(repoRoot) {
       }
 
       const fromDir = current.fromDir ?? repoRoot;
-      const packageDir = resolvePackageDir(current.packageName, fromDir);
+      let packageDir;
+      try {
+        packageDir = resolvePackageDir(current.packageName, fromDir);
+      } catch {
+        if (current.optional) {
+          continue;
+        }
+        throw new Error(`Unable to resolve required runtime package "${current.packageName}" from ${fromDir}`);
+      }
+
       if (visitedPackageDirs.has(packageDir)) {
         continue;
       }
@@ -152,9 +170,14 @@ function createRuntimeDependencyCollector(repoRoot) {
       const packageJsonRaw = await readFile(packageJsonPath, 'utf8');
       const packageJson = JSON.parse(packageJsonRaw);
       const dependencies = Object.keys(packageJson.dependencies ?? {});
+      const optionalDependencies = Object.keys(packageJson.optionalDependencies ?? {});
 
       for (const dependencyName of dependencies) {
-        queue.push({ packageName: dependencyName, fromDir: packageDir });
+        queue.push({ packageName: dependencyName, fromDir: packageDir, optional: false });
+      }
+
+      for (const optionalDependencyName of optionalDependencies) {
+        queue.push({ packageName: optionalDependencyName, fromDir: packageDir, optional: true });
       }
     }
 
@@ -417,6 +440,8 @@ async function main() {
   const runtimeDependencyDirs = await collectRuntimeDependencyDirs([
     { packageName: 'archiver', fromDir: repoRoot },
     { packageName: 'unzipper', fromDir: repoRoot },
+    { packageName: 'sharp', fromDir: repoRoot },
+    { packageName: '@img/sharp-win32-x64', fromDir: repoRoot },
   ]);
 
   for (const dependencyDir of runtimeDependencyDirs) {

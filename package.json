@@ -1,6 +1,6 @@
 {
   "name": "local-game-gallery",
-  "version": "2.6.2",
+  "version": "2.7.0",
   "private": true,
   "author": "Lair Arseon",
   "license": "CC0-1.0",
@@ -38,6 +38,7 @@
     "up:baremetal:stack": "concurrently --kill-others-on-fail \"npm:start:service\" \"npm:start:web-client\" \"npm:start:standalone-client\"",
     "up:baremetal:stack:dev": "cross-env LGG_DEBUG_VIRTUALIZATION=1 concurrently --kill-others-on-fail \"npm:start:service\" \"npm:start:web-client\" \"npm:start:standalone-client\"",
     "down:baremetal": "node scripts/down-baremetal.mjs",
+    "unlock:install-folder": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/kill-install-locks.ps1",
     "compose:up": "docker compose --env-file docker/.env -f docker/compose.yml up --build",
     "compose:down": "docker compose --env-file docker/.env -f docker/compose.yml down",
     "docker:image:service": "node scripts/dockerhub-image.mjs",

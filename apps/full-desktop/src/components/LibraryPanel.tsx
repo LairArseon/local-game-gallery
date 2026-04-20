@@ -12,11 +12,13 @@
 import type { CSSProperties, ReactNode, RefObject } from 'react';
 import { DetailPage } from './DetailPage';
 import type { GalleryViewMode, GameSummary, ScanResult } from '../types';
+import type { MediaImageVariant } from '../../../shared/app-shell/types/gameDisplayTypes';
 import { LibraryPanel as SharedLibraryPanel } from '../../../shared/app-shell/components/LibraryPanel';
 
 const galleryViewModes: GalleryViewMode[] = ['poster', 'card', 'compact', 'expanded'];
 
 type LibraryPanelProps = {
+  isNarrowViewport: boolean;
   detailGame: GameSummary | null;
   detailBackgroundSrc: string | null;
   contentScaleStyle: CSSProperties;
@@ -29,7 +31,7 @@ type LibraryPanelProps = {
     playByVersion: string;
   };
   renderFocusCard: (game: GameSummary, isVertical: boolean, showActions?: boolean) => ReactNode;
-  getImageSrc: (filePath: string | null) => string | null;
+  getImageSrc: (filePath: string | null, variant?: MediaImageVariant) => string | null;
   onBackFromDetail: () => void;
   onPlay: (game: GameSummary, event: React.MouseEvent<HTMLButtonElement>) => void;
   onPlayWithVersionPrompt: (game: GameSummary, event: React.MouseEvent<HTMLButtonElement>) => void;
@@ -53,6 +55,7 @@ type LibraryPanelProps = {
 };
 
 export function LibraryPanel({
+  isNarrowViewport,
   detailGame,
   detailBackgroundSrc,
   contentScaleStyle,
@@ -85,6 +88,7 @@ export function LibraryPanel({
 }: LibraryPanelProps) {
   return (
     <SharedLibraryPanel<GameSummary, GalleryViewMode, ScanResult>
+      isNarrowViewport={isNarrowViewport}
       detailGame={detailGame}
       detailBackgroundSrc={detailBackgroundSrc}
       contentScaleStyle={contentScaleStyle}

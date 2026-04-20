@@ -591,7 +591,7 @@ function App() {
     setConfig,
     searchInputRef,
     isScanning,
-    onRefreshRequest: handleRefreshRequest,
+    refreshScan: handleRefreshRequest,
     screenshotModalPath,
     setScreenshotModalPath,
   });
