@@ -63,12 +63,17 @@ jobs:
       - name: Ensure EXE assets exist
         shell: pwsh
         run: |
-          $assets = Get-ChildItem -Path release -Recurse -File -Filter *.exe
+          $assets = @(
+            Get-ChildItem -Path release/full-desktop -File -Filter '* Setup *.exe' -ErrorAction SilentlyContinue
+            Get-ChildItem -Path release/standalone-client -File -Filter '* Setup *.exe' -ErrorAction SilentlyContinue
+            Get-ChildItem -Path release/bundle-installer -File -Filter '* Setup *.exe' -ErrorAction SilentlyContinue
+          )
+
           if (-not $assets -or $assets.Count -eq 0) {
-            throw 'No .exe files found in release/. Packaging may have failed.'
+            throw 'No installer Setup .exe files found in release/. Packaging may have failed.'
           }
 
-          Write-Host 'Found executable assets:'
+          Write-Host 'Found installer assets:'
           $assets | ForEach-Object { Write-Host "- $($_.FullName)" }
 
       - name: Create GitHub release and upload assets
@@ -80,6 +85,8 @@ jobs:
           draft: ${{ github.event.inputs.draft == 'true' }}
           prerelease: ${{ github.event.inputs.prerelease == 'true' }}
           files: |
-            release/**/*.exe
+            release/full-desktop/* Setup *.exe
+            release/standalone-client/* Setup *.exe
+            release/bundle-installer/* Setup *.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
