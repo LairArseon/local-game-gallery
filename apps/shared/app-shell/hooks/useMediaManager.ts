@@ -1,5 +1,6 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { MediaImageVariant } from '../types/gameDisplayTypes';
 
 type GalleryClientLike = {
   importDroppedGameMedia: (payload: {
@@ -239,13 +240,13 @@ export function useMediaManager({
     }
   }
 
-  function filePathToSrc(filePath: string | null) {
+  function filePathToSrc(filePath: string | null, variant: MediaImageVariant = 'original') {
     if (!filePath) {
       return null;
     }
 
     if (typeof window !== 'undefined' && !('gallery' in window)) {
-      return `${resolvePreferredServiceBaseUrl()}/api/media-file?path=${encodeURIComponent(filePath)}&v=${mediaRenderVersion}`;
+      return `${resolvePreferredServiceBaseUrl()}/api/media-file?path=${encodeURIComponent(filePath)}&variant=${encodeURIComponent(variant)}&v=${mediaRenderVersion}`;
     }
 
     const base = encodeURI(`file:///${filePath.replace(/\\/g, '/')}`);

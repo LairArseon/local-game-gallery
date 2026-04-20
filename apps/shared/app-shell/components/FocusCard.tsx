@@ -27,10 +27,10 @@ export function FocusCard<TGame extends GameDisplayLike>({
     ? ((carouselIndex % game.media.screenshots.length) + game.media.screenshots.length) % game.media.screenshots.length
     : 0;
   const focusImgSrc = hasScreenshotCarousel
-    ? getImageSrc(game.media.screenshots[normalizedCarouselIndex] ?? null)
+    ? getImageSrc(game.media.screenshots[normalizedCarouselIndex] ?? null, 'mediumPreview')
     : isVertical
-      ? getImageSrc(game.media.poster ?? game.media.card)
-      : getImageSrc(game.media.card ?? game.media.poster);
+      ? getImageSrc(game.media.poster ?? game.media.card, 'mediumPreview')
+      : getImageSrc(game.media.card ?? game.media.poster, 'mediumPreview');
   const currentCarouselImagePath = hasScreenshotCarousel
     ? game.media.screenshots[normalizedCarouselIndex] ?? null
     : null;
@@ -47,10 +47,10 @@ export function FocusCard<TGame extends GameDisplayLike>({
               onOpenScreenshot(currentCarouselImagePath);
             }}
           >
-            <img src={focusImgSrc} alt={game.name} className="media-preview media-preview--cover" />
+            <img src={focusImgSrc} alt={game.name} className="media-preview media-preview--cover" loading="lazy" decoding="async" />
           </button>
         ) : focusImgSrc ? (
-          <img src={focusImgSrc} alt={game.name} className="media-preview media-preview--cover" />
+          <img src={focusImgSrc} alt={game.name} className="media-preview media-preview--cover" loading="lazy" decoding="async" />
         ) : null}
         {hasScreenshotCarousel && game.media.screenshots.length > 1 ? (
           <div className="focus-carousel-controls">

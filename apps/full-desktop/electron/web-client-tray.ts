@@ -23,6 +23,7 @@ const defaultServiceEndpoint = 'http://127.0.0.1:37995';
 const defaultWebClientHost = '0.0.0.0';
 const defaultWebClientDisplayHost = '127.0.0.1';
 const defaultWebClientPort = 4173;
+const forceVirtualizationDebugBadge = /^(1|true|yes|on)$/i.test(String(process.env.LGG_DEBUG_VIRTUALIZATION ?? '').trim());
 let serviceSnapshot: ServiceProbeSnapshot = {
   statusLabel: 'Checking',
   endpoint: defaultServiceEndpoint,
@@ -403,7 +404,16 @@ async function proxyApiRequest(request: IncomingMessage, response: ServerRespons
 }
 
 async function serveStaticFile(response: ServerResponse, filePath: string) {
-  const payload = await readFile(filePath);
+  let payload = await readFile(filePath);
+  if (forceVirtualizationDebugBadge && path.extname(filePath).toLowerCase() === '.html') {
+    const html = payload.toString('utf8');
+    const debugBootstrap = '<script>window.__LGG_DEBUG_VIRTUALIZATION__=true;window.__LGG_ALWAYS_DEBUG_MARKER__=true;window.__LGG_DEBUG_DIAGNOSTICS__=true;try{localStorage.setItem("lgg.debugVirtualization","1");localStorage.setItem("lgg.debugDiagnostics","1")}catch{}</script>';
+    const withBootstrap = html.includes('</head>')
+      ? html.replace('</head>', `${debugBootstrap}</head>`)
+      : `${debugBootstrap}${html}`;
+    payload = Buffer.from(withBootstrap, 'utf8');
+  }
+
   response.statusCode = 200;
   response.setHeader('Content-Type', resolveContentType(filePath));
   response.end(payload);

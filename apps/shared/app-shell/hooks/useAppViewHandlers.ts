@@ -83,6 +83,14 @@ export function useAppViewHandlers<TGame extends GameSummaryLike>({
   }, [applyAppIconNow]);
 
   const onBackFromDetail = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      const state = window.history.state;
+      if (state && typeof state === 'object' && (state as Record<string, unknown>).__lggDetailOpen === true) {
+        window.history.back();
+        return;
+      }
+    }
+
     setDetailGamePath(null);
   }, [setDetailGamePath]);
 

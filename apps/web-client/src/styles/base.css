@@ -121,8 +121,17 @@ button {
   align-items: start;
   margin-bottom: 18px;
   padding: 18px 22px;
-  position: relative;
-  z-index: 60;
+  position: sticky;
+  top: 8px;
+  z-index: 120;
+  backdrop-filter: blur(8px) saturate(130%);
+  -webkit-backdrop-filter: blur(8px) saturate(130%);
+}
+
+.topbar--compact {
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 14px 22px;
 }
 
 .floating-fallback-alert {
@@ -294,6 +303,11 @@ button {
   opacity: 0.95;
 }
 
+.topbar--actions-only .topbar-sync-progress {
+  left: 10px;
+  right: 10px;
+}
+
 .topbar-sync-progress__bar {
   position: relative;
   display: block;
@@ -340,9 +354,18 @@ button {
   margin: 0;
 }
 
+.topbar__title {
+  display: grid;
+  gap: 2px;
+  align-content: start;
+  min-height: 2.4rem;
+}
+
 .topbar__title p:last-child {
   color: rgba(247, 246, 242, 0.74);
   font-size: 0.9rem;
+  line-height: 1.25;
+  min-height: 1.15rem;
 }
 
 .topbar__actions {
@@ -351,6 +374,33 @@ button {
   flex-wrap: wrap;
   justify-content: end;
   align-items: center;
+}
+
+.topbar--actions-only {
+  grid-template-columns: 1fr;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.topbar--actions-only .topbar__title,
+.topbar--actions-only .topbar__search-group {
+  display: none;
+}
+
+.topbar--actions-only .topbar__actions {
+  width: 100%;
+  justify-content: center;
+}
+
+.topbar--actions-only .topbar__action-buttons {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.topbar--actions-only .button--icon-only {
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0;
 }
 
 .topbar-notification-button {
@@ -1025,17 +1075,6 @@ button {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.layout .settings {
-  position: absolute;
-  left: 0;
-  top: 0;
-  z-index: 30;
-}
-
-.layout .settings--closed {
-  pointer-events: none;
-}
-
 .panel {
   background: rgba(14, 18, 26, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -1209,38 +1248,34 @@ button {
 }
 
 .settings {
-  --settings-panel-width: min(360px, 34vw);
-  width: min(360px, 34vw);
-  max-height: calc(100vh - 120px);
+  width: 100%;
+  max-width: none;
+  max-height: min(72vh, 820px);
   overflow: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable both-edges;
-  clip-path: inset(0 0 0 0 round 24px);
-  transition: clip-path 240ms ease, border-color 220ms ease, opacity 180ms ease;
+  animation: topbarPanelReveal 300ms cubic-bezier(0.22, 0.78, 0.2, 1);
+}
+
+.topbar > .settings {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  border-radius: 18px;
 }
 
 .settings__form {
-  /* Keep inner layout at target width so controls don't "squish" while opening. */
   width: 100%;
-  max-width: var(--settings-panel-width);
+  max-width: none;
   box-sizing: border-box;
   padding-right: 8px;
-  opacity: 1;
-  transform: translateX(0);
-  transition: opacity 140ms ease 70ms, transform 220ms ease;
 }
 
 .settings--closed {
-  width: var(--settings-panel-width);
-  border-color: transparent;
-  opacity: 0;
-  overflow: hidden;
-  clip-path: inset(0 100% 0 0 round 24px);
+  display: none;
 }
 
 .settings--closed .settings__form {
-  opacity: 0;
-  transform: translateX(-10px);
+  display: none;
 }
 
 .panel-heading {

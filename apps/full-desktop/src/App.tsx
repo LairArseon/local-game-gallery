@@ -832,7 +832,7 @@ function App() {
     return <main className="shell"><section className="panel panel--loading">{status}</section></main>;
   }
 
-  const detailBackgroundSrc = filePathToSrc(detailBackgroundPath);
+  const detailBackgroundSrc = filePathToSrc(detailBackgroundPath, 'mediumPreview');
   const hasPendingSizeValues = isSizeScanning
     || (scanResult.games.length > 0 && scanResult.games.every((game) => game.sizeBytes === null));
   const totalLibrarySizeBytes = scanResult.games.reduce((total, game) => total + (game.sizeBytes ?? 0), 0);
@@ -1004,6 +1004,7 @@ function App() {
         />
 
         <LibraryPanel
+          isNarrowViewport={isNarrowViewport}
           detailGame={detailGame}
           detailBackgroundSrc={detailBackgroundSrc}
           contentScaleStyle={contentScaleStyle}

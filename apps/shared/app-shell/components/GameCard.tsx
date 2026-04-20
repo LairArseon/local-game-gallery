@@ -22,11 +22,11 @@ export function GameCard<TGame extends GameDisplayLike>({
   const scoreValue = game.metadata.score.trim() || '-';
   const statusValue = game.metadata.status || t('detail.notSet');
 
-  const artImgSrc = getImageSrc(viewMode === 'poster' ? game.media.poster : game.media.card);
+  const artImgSrc = getImageSrc(viewMode === 'poster' ? game.media.poster : game.media.card, 'smallThumbnail');
   const art = (
     <div className={`game-card__art ${game.usesPlaceholderArt ? 'game-card__art--placeholder' : ''}`}>
       {artImgSrc ? (
-        <img src={artImgSrc} alt={game.name} className="media-preview media-preview--cover" />
+        <img src={artImgSrc} alt={game.name} className="media-preview media-preview--cover" loading="lazy" decoding="async" fetchPriority="low" />
       ) : null}
       {!isNarrowPosterCardLayout ? <span>{game.usesPlaceholderArt ? t('gameView.usingPlaceholderArt') : t('gameView.imageCount', { count: game.imageCount })}</span> : null}
     </div>

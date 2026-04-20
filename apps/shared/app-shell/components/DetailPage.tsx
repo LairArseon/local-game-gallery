@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type 
 import { Archive, ArrowLeft, FolderOpen, ListVideo, Play } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
+import type { MediaImageVariant } from '../types/gameDisplayTypes';
 
 type DetailPageVersionLike = {
   path: string;
@@ -47,7 +48,7 @@ type DetailPageProps<TGame extends DetailPageGameLike> = {
     playByVersion: string;
   };
   focusCard: ReactNode;
-  getImageSrc: (filePath: string | null) => string | null;
+  getImageSrc: (filePath: string | null, variant?: MediaImageVariant) => string | null;
   onBack: () => void;
   onPlay: (game: TGame, event: MouseEvent<HTMLButtonElement>) => void;
   onPlayWithVersionPrompt: (game: TGame, event: MouseEvent<HTMLButtonElement>) => void;
@@ -373,7 +374,7 @@ export function DetailPage<TGame extends DetailPageGameLike>({
                 className="screenshot-grid__item"
                 onClick={() => onOpenScreenshot(imagePath)}
               >
-                <img src={getImageSrc(imagePath) ?? undefined} alt="Screenshot" className="media-preview" />
+                <img src={getImageSrc(imagePath, 'mediumPreview') ?? undefined} alt="Screenshot" className="media-preview" loading="lazy" decoding="async" />
               </button>
             ))}
           </div>

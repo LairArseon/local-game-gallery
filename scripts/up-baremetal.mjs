@@ -8,6 +8,9 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 const netstatBuffer = 12 * 1024 * 1024;
 const processListBuffer = 8 * 1024 * 1024;
+const isDevMode = process.argv.includes('--dev');
+const launcherTag = isDevMode ? 'up:baremetal:dev' : 'up:baremetal';
+const stackScriptName = isDevMode ? 'up:baremetal:stack:dev' : 'up:baremetal:stack';
 
 const defaultServicePort = 37995;
 const defaultWebPort = 4173;
@@ -219,7 +222,7 @@ async function collectStaleBuildTargets() {
 }
 
 function printStaleBuildTargets(targets) {
-  console.log('[up:baremetal] detected stale or missing build artifacts:');
+  console.log(`[${launcherTag}] detected stale or missing build artifacts:`);
   for (const target of targets) {
     if (target.hasMissingOutputs) {
       console.log(`  - ${target.label}: missing ${target.missingOutputs.join(', ')}`);
@@ -405,7 +408,7 @@ function printBlockers(blockers) {
   }
 
   const blockedPorts = [...blockedPortSet].sort((left, right) => left - right);
-  console.error(`[up:baremetal] required ports are currently in use: ${blockedPorts.join(', ')}`);
+  console.error(`[${launcherTag}] required ports are currently in use: ${blockedPorts.join(', ')}`);
 
   for (const blocker of blockers) {
     const plural = blocker.ports.length > 1 ? 'ports' : 'port';
@@ -415,7 +418,7 @@ function printBlockers(blockers) {
 
 async function askForConfirmation() {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    console.error('[up:baremetal] interactive confirmation is not available in this terminal.');
+    console.error(`[${launcherTag}] interactive confirmation is not available in this terminal.`);
     return false;
   }
 
@@ -425,7 +428,7 @@ async function askForConfirmation() {
   });
 
   try {
-    const answer = await prompt.question('[up:baremetal] kill blocking process(es) and continue? [y/N] ');
+    const answer = await prompt.question(`[${launcherTag}] kill blocking process(es) and continue? [y/N] `);
     return /^y(es)?$/i.test(answer.trim());
   } finally {
     prompt.close();
@@ -435,7 +438,7 @@ async function askForConfirmation() {
 async function askYesNo(question, { defaultYes }) {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     const fallback = defaultYes ? 'yes' : 'no';
-    console.log(`[up:baremetal] no interactive TTY available; defaulting to ${fallback}.`);
+    console.log(`[${launcherTag}] no interactive TTY available; defaulting to ${fallback}.`);
     return defaultYes;
   }
 
@@ -504,12 +507,12 @@ async function waitForPortsToBeFree(ports, timeoutMs = 6000) {
 
 function runBaremetalStack() {
   const child = process.platform === 'win32'
-    ? spawn('cmd.exe', ['/d', '/s', '/c', 'npm run up:baremetal:stack'], { stdio: 'inherit' })
-    : spawn('npm', ['run', 'up:baremetal:stack'], { stdio: 'inherit' });
+    ? spawn('cmd.exe', ['/d', '/s', '/c', `npm run ${stackScriptName}`], { stdio: 'inherit' })
+    : spawn('npm', ['run', stackScriptName], { stdio: 'inherit' });
 
   child.on('error', (error) => {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[up:baremetal] failed to launch stack: ${message}`);
+    console.error(`[${launcherTag}] failed to launch stack: ${message}`);
     process.exitCode = 1;
   });
 
@@ -523,18 +526,18 @@ async function main() {
   if (staleTargets.length) {
     printStaleBuildTargets(staleTargets);
 
-    const shouldBuild = await askYesNo('[up:baremetal] rebuild these artifacts before startup? [Y/n] ', {
+    const shouldBuild = await askYesNo(`[${launcherTag}] rebuild these artifacts before startup? [Y/n] `, {
       defaultYes: true,
     });
 
     if (shouldBuild) {
       const commands = [...new Set(staleTargets.map((target) => target.command))];
       for (const command of commands) {
-        console.log(`[up:baremetal] running npm run ${command}...`);
+        console.log(`[${launcherTag}] running npm run ${command}...`);
         await runNpmScript(command);
       }
     } else {
-      console.warn('[up:baremetal] continuing without rebuild; runtime may use stale UI/code artifacts.');
+      console.warn(`[${launcherTag}] continuing without rebuild; runtime may use stale UI/code artifacts.`);
     }
   }
 
@@ -545,13 +548,13 @@ async function main() {
     const confirmed = await askForConfirmation();
 
     if (!confirmed) {
-      console.error('[up:baremetal] cancelled. No blocking processes were terminated.');
+      console.error(`[${launcherTag}] cancelled. No blocking processes were terminated.`);
       process.exitCode = 1;
       return;
     }
 
     for (const blocker of blockers) {
-      console.log(`[up:baremetal] stopping PID ${blocker.pid} (${blocker.name})...`);
+      console.log(`[${launcherTag}] stopping PID ${blocker.pid} (${blocker.name})...`);
       await terminateProcess(blocker.pid);
     }
 
@@ -561,12 +564,12 @@ async function main() {
       if (remaining.length) {
         printBlockers(remaining);
       }
-      console.error('[up:baremetal] ports are still blocked after termination attempt.');
+      console.error(`[${launcherTag}] ports are still blocked after termination attempt.`);
       process.exitCode = 1;
       return;
     }
 
-    console.log('[up:baremetal] required ports are now free.');
+    console.log(`[${launcherTag}] required ports are now free.`);
   }
 
   runBaremetalStack();
@@ -574,6 +577,6 @@ async function main() {
 
 main().catch((error) => {
   const message = error instanceof Error ? error.message : String(error);
-  console.error(`[up:baremetal] failed: ${message}`);
+  console.error(`[${launcherTag}] failed: ${message}`);
   process.exitCode = 1;
 });

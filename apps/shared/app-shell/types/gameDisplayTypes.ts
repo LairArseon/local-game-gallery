@@ -1,6 +1,7 @@
 import type { MouseEvent } from 'react';
 
 export type GalleryViewModeLike = 'poster' | 'card' | 'compact' | 'expanded';
+export type MediaImageVariant = 'original' | 'smallThumbnail' | 'mediumPreview';
 
 export type GameVersionDisplayLike = {
   name: string;
@@ -57,7 +58,7 @@ export type SharedGameCardProps<TGame extends GameDisplayLike = GameDisplayLike>
   isNarrowViewport: boolean;
   canLaunch: boolean;
   actionLabels: GameCardActionLabels;
-  getImageSrc: (filePath: string | null) => string | null;
+  getImageSrc: (filePath: string | null, variant?: MediaImageVariant) => string | null;
   onToggleSelection: (path: string) => void;
   onPlayClick: (game: TGame, event: MouseEvent<HTMLButtonElement>) => void;
   onOpenDetail: (game: TGame, event: MouseEvent<HTMLButtonElement>) => void;
@@ -71,7 +72,7 @@ export type SharedFocusCardProps<TGame extends GameDisplayLike = GameDisplayLike
   showActions?: boolean;
   canLaunch: boolean;
   carouselIndex: number;
-  getImageSrc: (filePath: string | null) => string | null;
+  getImageSrc: (filePath: string | null, variant?: MediaImageVariant) => string | null;
   onMoveCarousel: (delta: number) => void;
   onOpenScreenshot: (imagePath: string) => void;
   onPlayClick: (game: TGame, event: MouseEvent<HTMLButtonElement>) => void;

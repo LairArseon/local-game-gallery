@@ -66,6 +66,7 @@ import { createEmptyScan, getInitialServiceCapabilities, narrowViewportMaxWidthP
 import { useAppLanguageSync } from './hooks/useAppLanguageSync';
 import { useNarrowViewport } from './hooks/useNarrowViewport';
 import { useDetailScrollReset } from './hooks/useDetailScrollReset';
+import { useTopbarSetupAnchor } from './hooks/useTopbarSetupAnchor';
 import { useGalleryClient } from './client/context';
 import { formatByteSize } from '../../shared/app-shell/utils/app-helpers';
 
@@ -135,6 +136,7 @@ function App() {
   const sizeScanInFlightRef = useRef<Promise<void> | null>(null);
   const sizeScanBatchIdRef = useRef(0);
   const hasAutoTriggeredSizeScanRef = useRef(false);
+  const previousDetailGamePathRef = useRef<string | null>(null);
   const logAppEvent = createLogAppEvent(galleryClient);
 
   const {
@@ -150,6 +152,42 @@ function App() {
   } = useModalConfirmations();
 
   useAppLanguageSync(config?.language, i18n);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const previousDetailPath = previousDetailGamePathRef.current;
+    if (!previousDetailPath && detailGamePath) {
+      const currentState = window.history.state;
+      const safeCurrentState = currentState && typeof currentState === 'object'
+        ? currentState as Record<string, unknown>
+        : {};
+      window.history.pushState({ ...safeCurrentState, __lggDetailOpen: true }, '');
+    }
+
+    previousDetailGamePathRef.current = detailGamePath;
+  }, [detailGamePath]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const onPopState = () => {
+      if (!detailGamePath) {
+        return;
+      }
+
+      setDetailGamePath(null);
+    };
+
+    window.addEventListener('popstate', onPopState);
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+    };
+  }, [detailGamePath]);
 
   useServiceCapabilitiesLoader({
     galleryClient,
@@ -664,7 +702,7 @@ function App() {
     setConfig,
     searchInputRef,
     isScanning,
-    onRefreshRequest: handleRefreshRequest,
+    refreshScan: handleRefreshRequest,
     screenshotModalPath,
     setScreenshotModalPath,
   });
@@ -935,13 +973,19 @@ function App() {
   const compressionProgressLabel = useVersionStorageProgressLabel(compressionProgress, t);
   const activeDownloadProgress = extraDownloadProgress ?? versionDownloadProgress;
   const { title: downloadProgressLabel, percentText: downloadProgressPercentText } = useDownloadProgressLabel(activeDownloadProgress, t);
+  const {
+    topbarRef,
+    topbarClassName,
+  } = useTopbarSetupAnchor({
+    isNarrowViewport,
+  });
 
   if (!config) {
     // Hard gate: render loading surface until initial config bootstrap finishes.
     return <main className="shell"><section className="panel panel--loading">{status}</section></main>;
   }
 
-  const detailBackgroundImageSrc = detailBackgroundSrc ? filePathToSrc(detailBackgroundSrc) : null;
+  const detailBackgroundImageSrc = detailBackgroundSrc ? filePathToSrc(detailBackgroundSrc, 'mediumPreview') : null;
   const hasPendingSizeValues = isSizeScanning
     || (scanResult.games.length > 0 && scanResult.games.every((game) => game.sizeBytes === null));
   const totalLibrarySizeBytes = scanResult.games.reduce((total, game) => total + (game.sizeBytes ?? 0), 0);
@@ -951,6 +995,39 @@ function App() {
   const totalLibrarySizeLabel = hasPendingSizeValues
     ? (isSizeScanning ? `${t('app.calculating')} (${sizeScanPercent}%)` : t('app.calculating'))
     : formatByteSize(totalLibrarySizeBytes);
+
+  const toggleTagPoolPanel = () => {
+    const nextIsOpen = !isTagPoolPanelOpen;
+    setIsTagPoolPanelOpen(nextIsOpen);
+    if (!isNarrowViewport || !nextIsOpen) {
+      return;
+    }
+
+    setIsFilterPanelOpen(false);
+    setIsSidebarOpen(false);
+  };
+
+  const toggleFilterPanel = () => {
+    const nextIsOpen = !isFilterPanelOpen;
+    setIsFilterPanelOpen(nextIsOpen);
+    if (!isNarrowViewport || !nextIsOpen) {
+      return;
+    }
+
+    setIsTagPoolPanelOpen(false);
+    setIsSidebarOpen(false);
+  };
+
+  const toggleSetupPanel = () => {
+    const nextIsOpen = !isSidebarOpen;
+    setIsSidebarOpen(nextIsOpen);
+    if (!isNarrowViewport || !nextIsOpen) {
+      return;
+    }
+
+    setIsTagPoolPanelOpen(false);
+    setIsFilterPanelOpen(false);
+  };
 
   return (
     <main className="shell">
@@ -969,7 +1046,7 @@ function App() {
 
       {/* Topbar flow: search + panel toggles + staged tag/filter editing surfaces. */}
       {!hideTopbarForDetail ? (
-      <header className="topbar panel">
+      <header ref={topbarRef} className={topbarClassName}>
         <div className="topbar__title">
           <p className="eyebrow">{t('app.title')}</p>
           <p>{t('app.gamesFoundWithSize', { count: scanResult.games.length, size: totalLibrarySizeLabel })}</p>
@@ -987,9 +1064,9 @@ function App() {
           isVersionNotificationsOpen={isVersionNotificationsOpen}
           isScanning={isScanning}
           versionMismatchCount={vaultAwareVersionMismatchGames.length + announcedMissingVaultedPaths.length}
-          onToggleTagPoolPanel={() => setIsTagPoolPanelOpen((current) => !current)}
-          onToggleFilterPanel={() => setIsFilterPanelOpen((current) => !current)}
-          onToggleSidebar={() => setIsSidebarOpen((current) => !current)}
+          onToggleTagPoolPanel={toggleTagPoolPanel}
+          onToggleFilterPanel={toggleFilterPanel}
+          onToggleSidebar={toggleSetupPanel}
           onToggleVault={requestVaultToggle}
           onOpenVaultContextMenu={onOpenVaultContextMenu}
           onToggleVersionNotifications={() => setIsVersionNotificationsOpen((current) => !current)}
@@ -1073,6 +1150,39 @@ function App() {
             onResetStagedFilters: resetStagedFilters,
           }}
         />
+        {isSidebarOpen ? (
+          <SetupPanel
+            appVersion={appVersion}
+            config={config}
+            isSidebarOpen={isSidebarOpen}
+            isSaving={isSaving}
+            isScanning={isScanning}
+            isGamesRootEditable={isGamesRootEditable}
+            supportsFolderPicker={supportsFolderPicker}
+            chooseLibraryFolderLabel={actionLabels.chooseLibraryFolder}
+            onSaveConfig={saveConfig}
+            onPickRoot={pickRoot}
+            onPickMetadataMirrorRoot={pickMetadataMirrorRoot}
+            onRunMirrorParitySync={() => {
+              void runMirrorParitySync();
+            }}
+            onConfigChange={setConfig}
+            onToggleSystemMenuBar={onToggleSystemMenuBar}
+            onOpenLogViewer={onOpenLogViewer}
+            onOpenLogFolder={onOpenLogFolder}
+            supportsAppIconPicker={hasDesktopBridge}
+            appIconPreviewSrc={appIconPreviewSrc}
+            appIconSummary={appIconSummary}
+            appIconPath={config.appIconPngPath}
+            onPickAppIcon={onPickAppIcon}
+            onDropAppIconFile={onDropAppIconFile}
+            onAppIconDragEnter={handleAppIconDragEnter}
+            onAppIconDragLeave={handleAppIconDragLeave}
+            isAppIconDragActive={isAppIconDragActive}
+            onApplyAppIconNow={onApplyAppIconNow}
+            onResetAppIcon={resetAppIcon}
+          />
+        ) : null}
         <div className={`topbar-sync-progress ${scanProgress > 0 ? 'is-visible' : ''}`} aria-hidden="true">
           <span
             className={`topbar-sync-progress__bar ${isScanning ? 'is-active' : ''}`}
@@ -1082,41 +1192,10 @@ function App() {
       </header>
       ) : null}
 
-      {/* Main split flow: setup/config controls on the left, library/detail on the right. */}
+      {/* Main content flow: gallery/detail content below topbar controls and panels. */}
       <section className={`layout ${detailGame ? 'layout--detail' : ''}`}>
-        <SetupPanel
-          appVersion={appVersion}
-          config={config}
-          isSidebarOpen={isSidebarOpen}
-          isSaving={isSaving}
-          isScanning={isScanning}
-          isGamesRootEditable={isGamesRootEditable}
-          supportsFolderPicker={supportsFolderPicker}
-          chooseLibraryFolderLabel={actionLabels.chooseLibraryFolder}
-          onSaveConfig={saveConfig}
-          onPickRoot={pickRoot}
-          onPickMetadataMirrorRoot={pickMetadataMirrorRoot}
-          onRunMirrorParitySync={() => {
-            void runMirrorParitySync();
-          }}
-          onConfigChange={setConfig}
-          onToggleSystemMenuBar={onToggleSystemMenuBar}
-          onOpenLogViewer={onOpenLogViewer}
-          onOpenLogFolder={onOpenLogFolder}
-          supportsAppIconPicker={hasDesktopBridge}
-          appIconPreviewSrc={appIconPreviewSrc}
-          appIconSummary={appIconSummary}
-          appIconPath={config.appIconPngPath}
-          onPickAppIcon={onPickAppIcon}
-          onDropAppIconFile={onDropAppIconFile}
-          onAppIconDragEnter={handleAppIconDragEnter}
-          onAppIconDragLeave={handleAppIconDragLeave}
-          isAppIconDragActive={isAppIconDragActive}
-          onApplyAppIconNow={onApplyAppIconNow}
-          onResetAppIcon={resetAppIcon}
-        />
-
         <LibraryPanel
+          isNarrowViewport={isNarrowViewport}
           detailGame={detailGame}
           detailBackgroundSrc={detailBackgroundImageSrc}
           contentScaleStyle={contentScaleStyle}

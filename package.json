@@ -15,6 +15,8 @@
     "dev:standalone-renderer": "vite --config apps/standalone-client/vite.config.ts --host 127.0.0.1",
     "dev:web": "npm run dev:web-client",
     "dev:service": "npm run build:electron && npm run start:service",
+    "dev:service:headless": "npm run build:electron && concurrently -k \"npm:watch:electron\" \"npm:dev:service:headless:run\"",
+    "dev:service:headless:run": "nodemon --watch dist-electron --ext js,cjs --exec node dist-electron/electron/service-cli.js",
     "watch:electron": "tsc -p apps/full-desktop/electron/tsconfig.json --watch --preserveWatchOutput",
     "watch:standalone-electron": "tsc -p apps/standalone-client/electron/tsconfig.json --watch --preserveWatchOutput",
     "dev:electron": "cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 wait-on tcp:127.0.0.1:5173 file:dist-electron/electron/main.js && nodemon --watch dist-electron --ext js,cjs --exec electron .",
@@ -32,7 +34,9 @@
     "start:service:headless": "node dist-electron/electron/service-cli.js",
     "start:web-client": "electron dist-electron/electron/web-client-tray.js",
     "up:baremetal": "node scripts/up-baremetal.mjs",
+    "up:baremetal:dev": "node scripts/up-baremetal.mjs --dev",
     "up:baremetal:stack": "concurrently --kill-others-on-fail \"npm:start:service\" \"npm:start:web-client\" \"npm:start:standalone-client\"",
+    "up:baremetal:stack:dev": "cross-env LGG_DEBUG_VIRTUALIZATION=1 concurrently --kill-others-on-fail \"npm:start:service\" \"npm:start:web-client\" \"npm:start:standalone-client\"",
     "down:baremetal": "node scripts/down-baremetal.mjs",
     "compose:up": "docker compose --env-file docker/.env -f docker/compose.yml up --build",
     "compose:down": "docker compose --env-file docker/.env -f docker/compose.yml down",
@@ -59,6 +63,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-i18next": "^17.0.2",
+    "sharp": "^0.34.5",
     "unzipper": "^0.12.3"
   },
   "devDependencies": {
@@ -74,7 +79,6 @@
     "electron-builder": "^26.8.1",
     "nodemon": "^3.1.10",
     "png-to-ico": "^2.1.8",
-    "sharp": "^0.34.3",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
     "wait-on": "^9.0.4"

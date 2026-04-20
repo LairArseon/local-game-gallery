@@ -10,6 +10,7 @@ import { spawn } from 'node:child_process';
 import { copyFile, cp, mkdtemp, mkdir, readFile, readdir, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import sharp from 'sharp';
 import {
   type GameMetadata,
   type GalleryConfig,
@@ -138,6 +139,26 @@ const imageContentTypes = new Map<string, string>([
   ['.gif', 'image/gif'],
   ['.bmp', 'image/bmp'],
 ]);
+const mediaVariantDirectoryByVariant = {
+  smallThumbnail: 'smallThumbnail',
+  mediumPreview: 'mediumPreview',
+} as const;
+const mediaVariantSpecByVariant = {
+  smallThumbnail: {
+    maxWidth: 360,
+    maxHeight: 360,
+    quality: 72,
+  },
+  mediumPreview: {
+    maxWidth: 1280,
+    maxHeight: 1280,
+    quality: 80,
+  },
+} as const;
+const mediaVariantDirectoryNames = new Set<string>(Object.values(mediaVariantDirectoryByVariant));
+
+type MediaImageVariant = keyof typeof mediaVariantDirectoryByVariant | 'original';
+type SupportedMediaVariant = keyof typeof mediaVariantSpecByVariant;
 const imageMimeToExtension = new Map<string, string>([
   ['image/png', '.png'],
   ['image/jpeg', '.jpg'],
@@ -299,6 +320,154 @@ function parseRequestUrl(request: IncomingMessage, fallbackHost: string, fallbac
 
 function resolveImageContentType(filePath: string) {
   return imageContentTypes.get(path.extname(filePath).toLowerCase()) ?? null;
+}
+
+function normalizeMediaImageVariant(rawVariant: string | null | undefined): MediaImageVariant {
+  const normalized = String(rawVariant ?? '').trim();
+  if (!normalized || normalized === 'original') {
+    return 'original';
+  }
+
+  if (normalized === 'smallThumbnail' || normalized === 'thumb') {
+    return 'smallThumbnail';
+  }
+
+  if (normalized === 'mediumPreview' || normalized === 'preview') {
+    return 'mediumPreview';
+  }
+
+  return 'original';
+}
+
+function resolvePicturesRootForMediaPath(mediaPath: string, picturesFolderName: string) {
+  const normalizedPicturesFolderName = String(picturesFolderName ?? '').trim();
+  if (!normalizedPicturesFolderName) {
+    return null;
+  }
+
+  const mediaFolderPath = path.dirname(mediaPath);
+  const mediaFolderName = path.basename(mediaFolderPath);
+  if (mediaFolderName === normalizedPicturesFolderName) {
+    return mediaFolderPath;
+  }
+
+  if (!mediaVariantDirectoryNames.has(mediaFolderName)) {
+    return null;
+  }
+
+  const parentFolderPath = path.dirname(mediaFolderPath);
+  if (path.basename(parentFolderPath) !== normalizedPicturesFolderName) {
+    return null;
+  }
+
+  return parentFolderPath;
+}
+
+function resolveMediaVariantPath(mediaPath: string, variant: MediaImageVariant, picturesFolderName: string) {
+  if (variant === 'original') {
+    return mediaPath;
+  }
+
+  const variantDirectoryName = mediaVariantDirectoryByVariant[variant];
+  const picturesRootPath = resolvePicturesRootForMediaPath(mediaPath, picturesFolderName);
+  if (!picturesRootPath) {
+    return null;
+  }
+
+  return path.join(picturesRootPath, variantDirectoryName, path.basename(mediaPath));
+}
+
+function toSupportedMediaVariant(variant: MediaImageVariant): SupportedMediaVariant | null {
+  if (variant === 'smallThumbnail' || variant === 'mediumPreview') {
+    return variant;
+  }
+
+  return null;
+}
+
+function isSupportedImagePath(filePath: string) {
+  return resolveImageContentType(filePath) !== null;
+}
+
+async function ensureMediaVariantGenerated(
+  sourcePath: string,
+  targetPath: string,
+  variant: SupportedMediaVariant,
+): Promise<boolean> {
+  const sourceStats = await stat(sourcePath).catch(() => null);
+  if (!sourceStats?.isFile()) {
+    return false;
+  }
+
+  const targetStats = await stat(targetPath).catch(() => null);
+  if (targetStats?.isFile() && targetStats.mtimeMs >= sourceStats.mtimeMs) {
+    return true;
+  }
+
+  const targetDir = path.dirname(targetPath);
+  await mkdir(targetDir, { recursive: true });
+
+  const variantSpec = mediaVariantSpecByVariant[variant];
+
+  try {
+    let pipeline = sharp(sourcePath, { failOn: 'none' })
+      .rotate()
+      .resize({
+        width: variantSpec.maxWidth,
+        height: variantSpec.maxHeight,
+        fit: 'inside',
+        withoutEnlargement: true,
+      });
+
+    const ext = path.extname(sourcePath).toLowerCase();
+    if (ext === '.jpg' || ext === '.jpeg') {
+      pipeline = pipeline.jpeg({ quality: variantSpec.quality, mozjpeg: true });
+    } else if (ext === '.png') {
+      pipeline = pipeline.png({ quality: variantSpec.quality, compressionLevel: 9 });
+    } else if (ext === '.webp') {
+      pipeline = pipeline.webp({ quality: variantSpec.quality });
+    }
+
+    await pipeline.toFile(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function syncMediaVariantsForPicturesFolder(picturesPath: string, picturesFolderName: string) {
+  if (!picturesPath || path.basename(picturesPath) !== picturesFolderName) {
+    return;
+  }
+
+  const entries = await readdir(picturesPath, { withFileTypes: true }).catch(() => []);
+  const originalFiles = entries
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+    .filter((entryName) => isSupportedImagePath(path.join(picturesPath, entryName)));
+  const originalFileNameSet = new Set(originalFiles);
+
+  for (const [variant, variantDirectoryName] of Object.entries(mediaVariantDirectoryByVariant) as Array<[SupportedMediaVariant, string]>) {
+    const variantFolderPath = path.join(picturesPath, variantDirectoryName);
+    await mkdir(variantFolderPath, { recursive: true });
+
+    const variantEntries = await readdir(variantFolderPath, { withFileTypes: true }).catch(() => []);
+    for (const entry of variantEntries) {
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      if (!originalFileNameSet.has(entry.name)) {
+        await unlink(path.join(variantFolderPath, entry.name)).catch(() => undefined);
+      }
+    }
+
+    for (const sourceName of originalFiles) {
+      const sourcePath = path.join(picturesPath, sourceName);
+      const targetPath = path.join(variantFolderPath, sourceName);
+      await ensureMediaVariantGenerated(sourcePath, targetPath, variant);
+    }
+  }
 }
 
 function resolveUploadExtension(fileName: string, mimeType?: string) {
@@ -864,6 +1033,7 @@ export async function startGalleryHttpService({
 
       if (method === 'GET' && route === '/api/media-file') {
         const mediaPath = String(requestUrl.searchParams.get('path') ?? '').trim();
+        const variant = normalizeMediaImageVariant(requestUrl.searchParams.get('variant'));
         if (!mediaPath) {
           sendError(response, 400, 'missing_media_path', 'Query parameter "path" is required.');
           return;
@@ -882,14 +1052,26 @@ export async function startGalleryHttpService({
           return;
         }
 
+        let resolvedRenderPath = resolvedMediaPath;
+        if (variant !== 'original') {
+          const variantPath = resolveMediaVariantPath(resolvedMediaPath, variant, config.picturesFolderName);
+          const supportedVariant = toSupportedMediaVariant(variant);
+          if (variantPath && supportedVariant && isAllowedMediaPath(variantPath, config)) {
+            const generated = await ensureMediaVariantGenerated(resolvedMediaPath, variantPath, supportedVariant);
+            if (generated && await fileExists(variantPath)) {
+              resolvedRenderPath = variantPath;
+            }
+          }
+        }
+
         try {
-          const fileStats = await stat(resolvedMediaPath);
+          const fileStats = await stat(resolvedRenderPath);
           if (!fileStats.isFile()) {
             sendError(response, 404, 'media_not_found', 'Media file not found.');
             return;
           }
 
-          const fileContents = await readFile(resolvedMediaPath);
+          const fileContents = await readFile(resolvedRenderPath);
           withCorsHeaders(response);
           response.statusCode = 200;
           response.setHeader('Content-Type', contentType);
@@ -1340,7 +1522,9 @@ export async function startGalleryHttpService({
       if (method === 'POST' && route === '/api/media/reorder') {
         try {
           const payload = await readJsonBody<ReorderScreenshotsPayload>(request);
+          const config = await loadRuntimeConfig();
           await reorderScreenshots(payload.fromPath, payload.toPath);
+          await syncMediaVariantsForPicturesFolder(path.dirname(payload.fromPath), config.picturesFolderName);
           sendOk(response, { reordered: true });
         } catch (error) {
           sendError(response, 400, 'screenshot_reorder_failed', toErrorMessage(error, 'Failed to reorder screenshots.'));
@@ -1351,7 +1535,9 @@ export async function startGalleryHttpService({
       if (method === 'POST' && route === '/api/media/remove-screenshot') {
         try {
           const payload = await readJsonBody<RemoveScreenshotPayload>(request);
+          const config = await loadRuntimeConfig();
           await removeScreenshot(payload.screenshotPath);
+          await syncMediaVariantsForPicturesFolder(path.dirname(payload.screenshotPath), config.picturesFolderName);
           sendOk(response, { removed: true });
         } catch (error) {
           sendError(response, 400, 'screenshot_remove_failed', toErrorMessage(error, 'Failed to remove screenshot.'));
@@ -1430,6 +1616,8 @@ export async function startGalleryHttpService({
               }
             }
           }
+
+          await syncMediaVariantsForPicturesFolder(picturesPath, config.picturesFolderName);
 
           sendOk(response, {
             importedCount,

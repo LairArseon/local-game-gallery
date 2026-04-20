@@ -1,6 +1,7 @@
 import type { Dispatch, DragEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, ArrowRight, X } from 'lucide-react';
+import type { MediaImageVariant } from '../types/gameDisplayTypes';
 
 type FeaturedTarget = 'poster' | 'card' | 'background' | null;
 type DragSection = 'featured' | 'gallery' | null;
@@ -32,7 +33,7 @@ type MediaModalProps<TGame extends GameWithMedia> = {
   draggedScreenshotPath: string | null;
   dragOverScreenshotPath: string | null;
   screenshotContextMenu: ScreenshotContextMenu;
-  getImageSrc: (filePath: string | null) => string | null;
+  getImageSrc: (filePath: string | null, variant?: MediaImageVariant) => string | null;
   setFeaturedImportTarget: Dispatch<SetStateAction<FeaturedTarget>>;
   setPendingFeaturedDropPaths: Dispatch<SetStateAction<string[]>>;
   setDragSection: Dispatch<SetStateAction<DragSection>>;
@@ -138,7 +139,7 @@ export function MediaModal<TGame extends GameWithMedia>({
                 {(['poster', 'card', 'background'] as const).map((key) => (
                   <div className="media-tile" key={key}>
                     <strong>{key === 'background' ? t('media.background') : t(`viewMode.${key}`)}</strong>
-                    {game.media[key] ? <img src={getImageSrc(game.media[key]) ?? undefined} alt={key === 'background' ? t('media.background') : t(`viewMode.${key}`)} className="media-preview" /> : <p>{t('media.noImage')}</p>}
+                    {game.media[key] ? <img src={getImageSrc(game.media[key], 'mediumPreview') ?? undefined} alt={key === 'background' ? t('media.background') : t(`viewMode.${key}`)} className="media-preview" loading="lazy" decoding="async" /> : <p>{t('media.noImage')}</p>}
                   </div>
                 ))}
               </div>
@@ -274,7 +275,7 @@ export function MediaModal<TGame extends GameWithMedia>({
                     >
                       <X size={12} aria-hidden="true" />
                     </button>
-                    <img src={getImageSrc(imagePath) ?? undefined} alt={t('media.screenshotAlt')} className="media-preview" draggable={false} />
+                    <img src={getImageSrc(imagePath, 'mediumPreview') ?? undefined} alt={t('media.screenshotAlt')} className="media-preview" loading="lazy" decoding="async" draggable={false} />
                     <div className="media-grid__reorder">
                       <button
                         className="button button--icon"

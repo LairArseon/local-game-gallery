@@ -2,6 +2,7 @@ import { Fragment, useCallback, type Dispatch, type MouseEvent, type SetStateAct
 import { FocusCard } from '../components/FocusCard';
 import { GameCard } from '../components/GameCard';
 import type { GalleryViewMode, GameSummary } from '../types';
+import type { MediaImageVariant } from '../types/gameDisplayTypes';
 import { formatLastPlayed } from '../utils/app-helpers';
 
 type ActionLabels = {
@@ -19,7 +20,7 @@ type UseGalleryRenderersArgs = {
   gridColumns: number;
   canLaunch: boolean;
   actionLabels: ActionLabels;
-  getImageSrc: (filePath: string | null) => string | null;
+  getImageSrc: (filePath: string | null, variant?: MediaImageVariant) => string | null;
   onToggleSelection: (path: string) => void;
   onPlayClick: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;
   onPlayWithVersionPromptClick: (game: GameSummary, event: MouseEvent<HTMLButtonElement>) => void;

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import type { MediaImageVariant } from '../types/gameDisplayTypes';
 
 type GameWithScreenshots = {
   media: {
@@ -28,7 +29,7 @@ type ModalHostProps<TGame extends GameWithScreenshots> = {
   onCancelDecompressLaunch: () => void;
   screenshotModalPath: string | null;
   setScreenshotModalPath: (nextPath: string | null) => void;
-  filePathToSrc: (filePath: string | null) => string | null;
+  filePathToSrc: (filePath: string | null, variant?: MediaImageVariant) => string | null;
 };
 
 export function ModalHost<TGame extends GameWithScreenshots>({
@@ -220,7 +221,7 @@ export function ModalHost<TGame extends GameWithScreenshots>({
                     </span>
                   </button>
                 ) : null}
-                <img src={filePathToSrc(screenshotModalPath) ?? undefined} alt={t('media.screenshotAlt')} className="lightbox-image" />
+                <img src={filePathToSrc(screenshotModalPath, 'original') ?? undefined} alt={t('media.screenshotAlt')} className="lightbox-image" decoding="async" fetchPriority="high" />
                 {hasLightboxGallery ? (
                   <button
                     className="lightbox-nav-zone lightbox-nav-zone--next"
@@ -259,7 +260,7 @@ export function ModalHost<TGame extends GameWithScreenshots>({
                           className={`lightbox-thumb ${imagePath === screenshotModalPath ? 'lightbox-thumb--active' : ''}`}
                           onClick={() => setScreenshotModalPath(imagePath)}
                         >
-                          <img src={filePathToSrc(imagePath) ?? undefined} alt={t('media.screenshotAlt')} />
+                          <img src={filePathToSrc(imagePath, 'smallThumbnail') ?? undefined} alt={t('media.screenshotAlt')} loading="lazy" decoding="async" />
                         </button>
                       ))}
                     </div>
