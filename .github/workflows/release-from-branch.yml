@@ -30,6 +30,14 @@ on:
           - 'false'
           - 'true'
         default: 'false'
+      make_latest:
+        description: Mark as latest release
+        required: true
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+        default: 'true'
 
 permissions:
   contents: write
@@ -84,6 +92,7 @@ jobs:
           name: ${{ github.event.inputs.release_name != '' && github.event.inputs.release_name || github.event.inputs.tag }}
           draft: ${{ github.event.inputs.draft == 'true' }}
           prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+          make_latest: ${{ github.event.inputs.make_latest == 'true' }}
           files: |
             release/full-desktop/* Setup *.exe
             release/standalone-client/* Setup *.exe
