@@ -9,3 +9,4 @@ release/
 docker-data/
 docker/.env
 games/
+kill-install-locks.ps1
