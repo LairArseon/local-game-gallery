@@ -45,6 +45,7 @@ Use [Bare-Metal Service and Local Stack](operations/baremetal-service.md) for:
 
 - [Docker Compose Service Guide](operations/docker-compose.md)
 - [Bare-Metal Service and Local Stack](operations/baremetal-service.md)
+- [Required Game Folder Structure](operations/required-game-folder-structure.md)
 - [Component Bundle Matrix](operations/component-bundle-matrix.md)
 - [Bundle Installer Runtime Payload Guardrail](operations/bundle-installer-runtime-payload.md)
 
