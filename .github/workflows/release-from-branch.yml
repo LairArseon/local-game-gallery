@@ -7,37 +7,37 @@ on:
         description: Branch to release from
         required: true
         default: main
-      tag:
-        description: "Git tag for this release (example: v2.7.1)"
+      major_increment:
+        description: Major version increment
         required: true
+        default: '0'
+      minor_increment:
+        description: Minor version increment
+        required: true
+        default: '0'
+      patch_increment:
+        description: Patch version increment
+        required: true
+        default: '0'
       release_name:
-        description: Release title (optional, defaults to tag)
+        description: Release title (optional, defaults to v<new version>)
         required: false
         default: ''
       draft:
         description: Create as draft release
         required: true
-        type: choice
-        options:
-          - 'false'
-          - 'true'
-        default: 'false'
+        type: boolean
+        default: false
       prerelease:
         description: Mark as pre-release
         required: true
-        type: choice
-        options:
-          - 'false'
-          - 'true'
-        default: 'false'
+        type: boolean
+        default: false
       make_latest:
         description: Mark as latest release
         required: true
-        type: choice
-        options:
-          - 'false'
-          - 'true'
-        default: 'true'
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -53,8 +53,68 @@ jobs:
       - name: Checkout selected branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.branch }}
+          ref: ${{ inputs.branch }}
           fetch-depth: 0
+
+      - name: Configure git author
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version and create release tag
+        id: bump_version
+        shell: pwsh
+        run: |
+          $majorInc = [int]'${{ inputs.major_increment }}'
+          $minorInc = [int]'${{ inputs.minor_increment }}'
+          $patchInc = [int]'${{ inputs.patch_increment }}'
+
+          if ($majorInc -lt 0 -or $minorInc -lt 0 -or $patchInc -lt 0) {
+            throw 'Version increments must be non-negative integers.'
+          }
+
+          if (($majorInc + $minorInc + $patchInc) -eq 0) {
+            throw 'At least one of major_increment, minor_increment, or patch_increment must be greater than 0.'
+          }
+
+          $currentVersion = (node -p "require('./package.json').version").Trim()
+          if ($currentVersion -notmatch '^(\d+)\.(\d+)\.(\d+)$') {
+            throw "package.json version '$currentVersion' is not valid semver major.minor.patch"
+          }
+
+          $currentMajor = [int]$Matches[1]
+          $currentMinor = [int]$Matches[2]
+          $currentPatch = [int]$Matches[3]
+
+          $newMajor = $currentMajor + $majorInc
+          $newMinor = $currentMinor + $minorInc
+          $newPatch = $currentPatch + $patchInc
+          $newVersion = "$newMajor.$newMinor.$newPatch"
+          $newTag = "v$newVersion"
+
+          $existingTag = git tag -l $newTag
+          if ($existingTag) {
+            throw "Tag $newTag already exists. Choose different increments."
+          }
+
+          npm version $newVersion --no-git-tag-version
+
+          git add package.json package-lock.json
+          git commit -m "chore(release): bump version to $newVersion"
+          git tag $newTag
+          git push origin HEAD:${{ inputs.branch }}
+          git push origin $newTag
+
+          "new_version=$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "new_tag=$newTag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Ensure local checkout is up to date
+        shell: pwsh
+        run: |
+          git fetch origin ${{ inputs.branch }} --tags
+          git checkout ${{ inputs.branch }}
+          git pull --ff-only origin ${{ inputs.branch }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -87,12 +147,12 @@ jobs:
       - name: Create GitHub release and upload assets
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag }}
-          target_commitish: ${{ github.event.inputs.branch }}
-          name: ${{ github.event.inputs.release_name != '' && github.event.inputs.release_name || github.event.inputs.tag }}
-          draft: ${{ github.event.inputs.draft == 'true' }}
-          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
-          make_latest: ${{ github.event.inputs.make_latest == 'true' }}
+          tag_name: ${{ steps.bump_version.outputs.new_tag }}
+          target_commitish: ${{ inputs.branch }}
+          name: ${{ inputs.release_name != '' && inputs.release_name || steps.bump_version.outputs.new_tag }}
+          draft: ${{ inputs.draft }}
+          prerelease: ${{ inputs.prerelease }}
+          make_latest: ${{ inputs.make_latest }}
           files: |
             release/full-desktop/* Setup *.exe
             release/standalone-client/* Setup *.exe
