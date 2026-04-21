@@ -138,6 +138,7 @@ const imageContentTypes = new Map<string, string>([
   ['.webp', 'image/webp'],
   ['.gif', 'image/gif'],
   ['.bmp', 'image/bmp'],
+  ['.avif', 'image/avif'],
 ]);
 const mediaVariantDirectoryByVariant = {
   smallThumbnail: 'smallThumbnail',
@@ -165,6 +166,7 @@ const imageMimeToExtension = new Map<string, string>([
   ['image/webp', '.webp'],
   ['image/gif', '.gif'],
   ['image/bmp', '.bmp'],
+  ['image/avif', '.avif'],
 ]);
 const stagedArchiveUploads = new Map<string, { filePath: string; originalFileName: string }>();
 const versionStorageProgressRetentionMs = 10 * 60 * 1000;
@@ -176,6 +178,32 @@ const versionStorageProgressByOperationId = new Map<
     updatedAt: number;
   }
 >();
+const mediaMutationQueueByPicturesPath = new Map<string, Promise<void>>();
+
+async function runMediaMutationLocked<T>(picturesPath: string, operation: () => Promise<T>): Promise<T> {
+  const normalizedPath = path.resolve(picturesPath);
+  const pending = mediaMutationQueueByPicturesPath.get(normalizedPath) ?? Promise.resolve();
+
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  const enqueued = pending.then(() => gate);
+  mediaMutationQueueByPicturesPath.set(normalizedPath, enqueued);
+
+  try {
+    await pending;
+    return await operation();
+  } finally {
+    release();
+
+    const current = mediaMutationQueueByPicturesPath.get(normalizedPath);
+    if (current === enqueued) {
+      mediaMutationQueueByPicturesPath.delete(normalizedPath);
+    }
+  }
+}
 
 function setVersionStorageProgress(event: VersionStorageProgressEvent, completed = false) {
   versionStorageProgressByOperationId.set(event.operationId, {
@@ -408,6 +436,16 @@ async function ensureMediaVariantGenerated(
   await mkdir(targetDir, { recursive: true });
 
   const variantSpec = mediaVariantSpecByVariant[variant];
+  const ext = path.extname(sourcePath).toLowerCase();
+
+  if (ext === '.gif') {
+    try {
+      await copyFile(sourcePath, targetPath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   try {
     let pipeline = sharp(sourcePath, { failOn: 'none' })
@@ -419,13 +457,14 @@ async function ensureMediaVariantGenerated(
         withoutEnlargement: true,
       });
 
-    const ext = path.extname(sourcePath).toLowerCase();
     if (ext === '.jpg' || ext === '.jpeg') {
       pipeline = pipeline.jpeg({ quality: variantSpec.quality, mozjpeg: true });
     } else if (ext === '.png') {
       pipeline = pipeline.png({ quality: variantSpec.quality, compressionLevel: 9 });
     } else if (ext === '.webp') {
       pipeline = pipeline.webp({ quality: variantSpec.quality });
+    } else if (ext === '.avif') {
+      pipeline = pipeline.avif({ quality: variantSpec.quality });
     }
 
     await pipeline.toFile(targetPath);
@@ -435,7 +474,10 @@ async function ensureMediaVariantGenerated(
   }
 }
 
-async function syncMediaVariantsForPicturesFolder(picturesPath: string, picturesFolderName: string) {
+async function syncMediaVariantsForPicturesFolder(
+  picturesPath: string,
+  picturesFolderName: string,
+) {
   if (!picturesPath || path.basename(picturesPath) !== picturesFolderName) {
     return;
   }
@@ -466,6 +508,49 @@ async function syncMediaVariantsForPicturesFolder(picturesPath: string, pictures
       const sourcePath = path.join(picturesPath, sourceName);
       const targetPath = path.join(variantFolderPath, sourceName);
       await ensureMediaVariantGenerated(sourcePath, targetPath, variant);
+    }
+  }
+}
+
+function parseScreenshotIndex(value: string) {
+  const stem = path.parse(value).name;
+  const match = stem.match(/^screen(\d+)$/i);
+  if (!match) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(match[1] ?? '', 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return parsed;
+}
+
+async function invalidateScreenshotVariants(
+  picturesPath: string,
+  picturesFolderName: string,
+  shouldInvalidate: (index: number) => boolean,
+) {
+  if (!picturesPath || path.basename(picturesPath) !== picturesFolderName) {
+    return;
+  }
+
+  for (const variantDirectoryName of Object.values(mediaVariantDirectoryByVariant)) {
+    const variantFolderPath = path.join(picturesPath, variantDirectoryName);
+    const entries = await readdir(variantFolderPath, { withFileTypes: true }).catch(() => []);
+
+    for (const entry of entries) {
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      const index = parseScreenshotIndex(entry.name);
+      if (index === null || !shouldInvalidate(index)) {
+        continue;
+      }
+
+      await unlink(path.join(variantFolderPath, entry.name)).catch(() => undefined);
     }
   }
 }
@@ -1523,8 +1608,26 @@ export async function startGalleryHttpService({
         try {
           const payload = await readJsonBody<ReorderScreenshotsPayload>(request);
           const config = await loadRuntimeConfig();
-          await reorderScreenshots(payload.fromPath, payload.toPath);
-          await syncMediaVariantsForPicturesFolder(path.dirname(payload.fromPath), config.picturesFolderName);
+          const picturesPath = path.dirname(payload.fromPath);
+          const fromIndex = parseScreenshotIndex(payload.fromPath);
+          const toIndex = parseScreenshotIndex(payload.toPath);
+          await runMediaMutationLocked(picturesPath, async () => {
+            await reorderScreenshots(payload.fromPath, payload.toPath);
+
+            const affectedIndexes = new Set<number>();
+            if (fromIndex !== null) {
+              affectedIndexes.add(fromIndex);
+            }
+            if (toIndex !== null) {
+              affectedIndexes.add(toIndex);
+            }
+
+            if (affectedIndexes.size > 0) {
+              await invalidateScreenshotVariants(picturesPath, config.picturesFolderName, (index) => affectedIndexes.has(index));
+            }
+
+            await syncMediaVariantsForPicturesFolder(picturesPath, config.picturesFolderName);
+          });
           sendOk(response, { reordered: true });
         } catch (error) {
           sendError(response, 400, 'screenshot_reorder_failed', toErrorMessage(error, 'Failed to reorder screenshots.'));
@@ -1536,8 +1639,17 @@ export async function startGalleryHttpService({
         try {
           const payload = await readJsonBody<RemoveScreenshotPayload>(request);
           const config = await loadRuntimeConfig();
-          await removeScreenshot(payload.screenshotPath);
-          await syncMediaVariantsForPicturesFolder(path.dirname(payload.screenshotPath), config.picturesFolderName);
+          const picturesPath = path.dirname(payload.screenshotPath);
+          const removedIndex = parseScreenshotIndex(payload.screenshotPath);
+          await runMediaMutationLocked(picturesPath, async () => {
+            await removeScreenshot(payload.screenshotPath);
+
+            if (removedIndex !== null) {
+              await invalidateScreenshotVariants(picturesPath, config.picturesFolderName, (index) => index >= removedIndex);
+            }
+
+            await syncMediaVariantsForPicturesFolder(picturesPath, config.picturesFolderName);
+          });
           sendOk(response, { removed: true });
         } catch (error) {
           sendError(response, 400, 'screenshot_remove_failed', toErrorMessage(error, 'Failed to remove screenshot.'));
@@ -1575,49 +1687,52 @@ export async function startGalleryHttpService({
           }
 
           const picturesPath = path.join(resolvedGamePath, config.picturesFolderName);
-          await mkdir(picturesPath, { recursive: true });
+          const importedCount = await runMediaMutationLocked(picturesPath, async () => {
+            await mkdir(picturesPath, { recursive: true });
 
-          const pictureEntries = await readdir(picturesPath, { withFileTypes: true }).catch(() => []);
-          const existingFileNames = pictureEntries.filter((entry) => entry.isFile()).map((entry) => entry.name);
-          let importedCount = 0;
+            const pictureEntries = await readdir(picturesPath, { withFileTypes: true }).catch(() => []);
+            const existingFileNames = pictureEntries.filter((entry) => entry.isFile()).map((entry) => entry.name);
+            let nextImportedCount = 0;
 
-          if (target === 'screenshot') {
-            let screenshotIndex = nextScreenshotIndex(existingFileNames);
+            if (target === 'screenshot') {
+              let screenshotIndex = nextScreenshotIndex(existingFileNames);
 
-            for (const filePayload of files) {
-              const extension = resolveUploadExtension(String(filePayload.name ?? ''), filePayload.mimeType);
-              if (!extension) {
-                continue;
+              for (const filePayload of files) {
+                const extension = resolveUploadExtension(String(filePayload.name ?? ''), filePayload.mimeType);
+                if (!extension) {
+                  continue;
+                }
+
+                const contents = decodeBase64File(filePayload);
+                const destination = path.join(picturesPath, `Screen${screenshotIndex}${extension}`);
+                await writeFile(destination, contents);
+                screenshotIndex += 1;
+                nextImportedCount += 1;
+              }
+            } else {
+              for (const existingName of existingFileNames) {
+                const parsed = path.parse(existingName);
+                if (parsed.name.toLowerCase() !== target) {
+                  continue;
+                }
+
+                await unlink(path.join(picturesPath, existingName)).catch(() => undefined);
               }
 
-              const contents = decodeBase64File(filePayload);
-              const destination = path.join(picturesPath, `Screen${screenshotIndex}${extension}`);
-              await writeFile(destination, contents);
-              screenshotIndex += 1;
-              importedCount += 1;
-            }
-          } else {
-            for (const existingName of existingFileNames) {
-              const parsed = path.parse(existingName);
-              if (parsed.name.toLowerCase() !== target) {
-                continue;
-              }
-
-              await unlink(path.join(picturesPath, existingName)).catch(() => undefined);
-            }
-
-            const firstSupported = files.find((filePayload) => resolveUploadExtension(String(filePayload.name ?? ''), filePayload.mimeType));
-            if (firstSupported) {
-              const extension = resolveUploadExtension(String(firstSupported.name ?? ''), firstSupported.mimeType);
-              if (extension) {
-                const contents = decodeBase64File(firstSupported);
-                await writeFile(path.join(picturesPath, `${target}${extension}`), contents);
-                importedCount = 1;
+              const firstSupported = files.find((filePayload) => resolveUploadExtension(String(filePayload.name ?? ''), filePayload.mimeType));
+              if (firstSupported) {
+                const extension = resolveUploadExtension(String(firstSupported.name ?? ''), firstSupported.mimeType);
+                if (extension) {
+                  const contents = decodeBase64File(firstSupported);
+                  await writeFile(path.join(picturesPath, `${target}${extension}`), contents);
+                  nextImportedCount = 1;
+                }
               }
             }
-          }
 
-          await syncMediaVariantsForPicturesFolder(picturesPath, config.picturesFolderName);
+            await syncMediaVariantsForPicturesFolder(picturesPath, config.picturesFolderName);
+            return nextImportedCount;
+          });
 
           sendOk(response, {
             importedCount,

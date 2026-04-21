@@ -606,7 +606,7 @@ function App() {
       return;
     }
 
-    const result = await refreshScan('parity-sync');
+    const result = await refreshScan('parity-sync', { allowDestructiveMirrorChanges: true });
     if (!result) {
       return;
     }

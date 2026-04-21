@@ -1,4 +1,4 @@
-import { copyFile, cp, mkdtemp, mkdir, readdir, rm, stat, unlink } from 'node:fs/promises';
+import { copyFile, mkdtemp, mkdir, readdir, rm, stat, unlink } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -40,6 +40,15 @@ export type VersionStorageProgressUpdate = {
 };
 
 type VersionStorageProgressFn = (update: VersionStorageProgressUpdate) => void;
+
+const originalFs = (() => {
+  try {
+    // Electron exposes original-fs to bypass ASAR path interception.
+    return require('original-fs') as typeof import('node:fs');
+  } catch {
+    return null;
+  }
+})();
 
 function clampPercent(value: number) {
   if (!Number.isFinite(value)) {
@@ -102,6 +111,63 @@ export function toDefaultImportMetadata(versionName: string) {
 export function isPathInside(parentPath: string, targetPath: string) {
   const relative = path.relative(parentPath, targetPath);
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+async function withNoAsar<T>(operation: () => Promise<T>) {
+  const runtimeProcess = process as NodeJS.Process & { noAsar?: boolean };
+  const previousNoAsar = runtimeProcess.noAsar;
+  runtimeProcess.noAsar = true;
+
+  try {
+    return await operation();
+  } finally {
+    runtimeProcess.noAsar = previousNoAsar;
+  }
+}
+
+function createAsarSafeWriteStream(targetPath: string) {
+  if (originalFs?.createWriteStream) {
+    return originalFs.createWriteStream(targetPath);
+  }
+
+  return createWriteStream(targetPath);
+}
+
+async function copyFileAsarSafe(sourcePath: string, destinationPath: string) {
+  if (originalFs?.copyFile) {
+    await new Promise<void>((resolve, reject) => {
+      originalFs.copyFile(sourcePath, destinationPath, (error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
+    return;
+  }
+
+  await copyFile(sourcePath, destinationPath);
+}
+
+async function copyDirectoryRecursiveAsarSafe(sourcePath: string, destinationPath: string) {
+  await mkdir(destinationPath, { recursive: true });
+  const entries = await readdir(sourcePath, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const nestedSourcePath = path.join(sourcePath, entry.name);
+    const nestedDestinationPath = path.join(destinationPath, entry.name);
+
+    if (entry.isDirectory()) {
+      await copyDirectoryRecursiveAsarSafe(nestedSourcePath, nestedDestinationPath);
+      continue;
+    }
+
+    if (entry.isFile()) {
+      await copyFileAsarSafe(nestedSourcePath, nestedDestinationPath);
+    }
+  }
 }
 
 export async function createZipFromFolder(folderPath: string, outputZipPath: string) {
@@ -229,42 +295,44 @@ export async function extractZipToFolderWithProgress(
   await rm(outputFolderPath, { recursive: true, force: true }).catch(() => undefined);
   await mkdir(outputFolderPath, { recursive: true });
 
-  const directory = await unzipper.Open.file(zipPath);
-  const fileEntries = directory.files.filter((entry) => entry.type !== 'Directory');
-  const totalBytes = fileEntries.reduce((sum, entry) => {
-    const entrySize = Number(entry.uncompressedSize ?? 0);
-    return sum + (Number.isFinite(entrySize) ? Math.max(0, entrySize) : 0);
-  }, 0);
+  await withNoAsar(async () => {
+    const directory = await unzipper.Open.file(zipPath);
+    const fileEntries = directory.files.filter((entry) => entry.type !== 'Directory');
+    const totalBytes = fileEntries.reduce((sum, entry) => {
+      const entrySize = Number(entry.uncompressedSize ?? 0);
+      return sum + (Number.isFinite(entrySize) ? Math.max(0, entrySize) : 0);
+    }, 0);
 
-  let processedBytes = 0;
+    let processedBytes = 0;
 
-  for (const entry of directory.files) {
-    const relativePath = entry.path.replace(/\\/g, '/');
-    const destinationPath = path.resolve(outputFolderPath, relativePath);
-    if (!isPathInside(outputFolderPath, destinationPath)) {
-      throw new Error(`Archive contains invalid path: "${entry.path}".`);
-    }
+    for (const entry of directory.files) {
+      const relativePath = entry.path.replace(/\\/g, '/');
+      const destinationPath = path.resolve(outputFolderPath, relativePath);
+      if (!isPathInside(outputFolderPath, destinationPath)) {
+        throw new Error(`Archive contains invalid path: "${entry.path}".`);
+      }
 
-    if (entry.type === 'Directory') {
-      await mkdir(destinationPath, { recursive: true });
-      continue;
-    }
+      if (entry.type === 'Directory') {
+        await mkdir(destinationPath, { recursive: true });
+        continue;
+      }
 
-    await mkdir(path.dirname(destinationPath), { recursive: true });
-    const readStream = entry.stream();
-    readStream.on('data', (chunk: Buffer) => {
-      processedBytes += chunk.length;
-      const percent = totalBytes > 0 ? processedBytes / totalBytes : 0;
-      onProgress?.({
-        operation: 'decompress',
-        phase: 'compressing',
-        percent: clampPercent(percent),
-        processedBytes,
-        totalBytes,
+      await mkdir(path.dirname(destinationPath), { recursive: true });
+      const readStream = entry.stream();
+      readStream.on('data', (chunk: Buffer) => {
+        processedBytes += chunk.length;
+        const percent = totalBytes > 0 ? processedBytes / totalBytes : 0;
+        onProgress?.({
+          operation: 'decompress',
+          phase: 'compressing',
+          percent: clampPercent(percent),
+          processedBytes,
+          totalBytes,
+        });
       });
-    });
-    await pipeline(readStream, createWriteStream(destinationPath));
-  }
+      await pipeline(readStream, createAsarSafeWriteStream(destinationPath));
+    }
+  });
 }
 
 export async function copyExtractedArchiveIntoVersion(extractedRootPath: string, targetVersionPath: string) {
@@ -285,19 +353,21 @@ export async function copyExtractedArchiveIntoVersion(extractedRootPath: string,
     throw new Error('Target version folder already contains files. Choose another version name.');
   }
 
-  const entriesToCopy = await readdir(sourceRoot, { withFileTypes: true });
-  for (const entry of entriesToCopy) {
-    const sourcePath = path.join(sourceRoot, entry.name);
-    const destinationPath = path.join(targetVersionPath, entry.name);
-    if (entry.isDirectory()) {
-      await cp(sourcePath, destinationPath, { recursive: true, force: true, errorOnExist: false });
-      continue;
-    }
+  await withNoAsar(async () => {
+    const entriesToCopy = await readdir(sourceRoot, { withFileTypes: true });
+    for (const entry of entriesToCopy) {
+      const sourcePath = path.join(sourceRoot, entry.name);
+      const destinationPath = path.join(targetVersionPath, entry.name);
+      if (entry.isDirectory()) {
+        await copyDirectoryRecursiveAsarSafe(sourcePath, destinationPath);
+        continue;
+      }
 
-    if (entry.isFile()) {
-      await copyFile(sourcePath, destinationPath);
+      if (entry.isFile()) {
+        await copyFileAsarSafe(sourcePath, destinationPath);
+      }
     }
-  }
+  });
 }
 
 export async function resolveVersionStorageArchive(versionPath: string): Promise<VersionStorageArchiveInfo | null> {
@@ -511,12 +581,12 @@ export async function decompressVersionFromStorage(
       const sourcePath = path.join(sourceRoot, entry.name);
       const destinationPath = path.join(resolvedVersionPath, entry.name);
       if (entry.isDirectory()) {
-        await cp(sourcePath, destinationPath, { recursive: true, force: true, errorOnExist: false });
+        await copyDirectoryRecursiveAsarSafe(sourcePath, destinationPath);
         continue;
       }
 
       if (entry.isFile()) {
-        await copyFile(sourcePath, destinationPath);
+        await copyFileAsarSafe(sourcePath, destinationPath);
       }
     }
 

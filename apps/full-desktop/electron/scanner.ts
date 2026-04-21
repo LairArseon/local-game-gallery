@@ -4,7 +4,7 @@ import type { GalleryConfig, GameSummary, ScanRequestOptions, ScanResult } from 
 import { createDefaultMetadata, getLatestVersionName, readGameMetadata, scanGameMedia } from './game-library';
 import { appendLogEvent } from './logger';
 
-const imageExtensions = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']);
+const imageExtensions = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.avif']);
 const defaultGameNfoName = 'game.nfo';
 const defaultVersionNfoName = 'version.nfo';
 const activityLogFileName = 'activitylog';
@@ -23,6 +23,10 @@ type MirrorSyncStats = {
 
 type MirrorPicturesSyncOptions = {
   pruneMissingImages: boolean;
+};
+
+type MirrorNfoSyncOptions = {
+  pruneMissingNfoFiles: boolean;
 };
 
 async function pathExists(targetPath: string) {
@@ -280,7 +284,12 @@ async function detectVersionStorageState(versionPath: string) {
   };
 }
 
-async function syncNfoFiles(sourceFolderPath: string, mirrorFolderPath: string, stats: MirrorSyncStats) {
+async function syncNfoFiles(
+  sourceFolderPath: string,
+  mirrorFolderPath: string,
+  stats: MirrorSyncStats,
+  options: MirrorNfoSyncOptions,
+) {
   await mkdir(mirrorFolderPath, { recursive: true });
 
   const sourceEntries = await readDirectoryEntriesSafe(sourceFolderPath);
@@ -290,18 +299,20 @@ async function syncNfoFiles(sourceFolderPath: string, mirrorFolderPath: string, 
       .map((entry) => entry.name),
   );
 
-  const mirrorEntries = await readDirectoryEntriesSafe(mirrorFolderPath);
-  for (const mirrorEntry of mirrorEntries) {
-    if (!mirrorEntry.isFile() || path.extname(mirrorEntry.name).toLowerCase() !== '.nfo') {
-      continue;
-    }
+  if (options.pruneMissingNfoFiles) {
+    const mirrorEntries = await readDirectoryEntriesSafe(mirrorFolderPath);
+    for (const mirrorEntry of mirrorEntries) {
+      if (!mirrorEntry.isFile() || path.extname(mirrorEntry.name).toLowerCase() !== '.nfo') {
+        continue;
+      }
 
-    if (sourceNfoNames.has(mirrorEntry.name)) {
-      continue;
-    }
+      if (sourceNfoNames.has(mirrorEntry.name)) {
+        continue;
+      }
 
-    await unlink(path.join(mirrorFolderPath, mirrorEntry.name)).catch(() => undefined);
-    stats.nfoDeleted += 1;
+      await unlink(path.join(mirrorFolderPath, mirrorEntry.name)).catch(() => undefined);
+      stats.nfoDeleted += 1;
+    }
   }
 
   for (const sourceNfoName of sourceNfoNames) {
@@ -365,42 +376,48 @@ async function syncMirrorGameContent(
   versionNames: string[],
   versionPattern: RegExp,
   picturesFolderName: string,
-  mirrorParitySync: boolean,
+  allowDestructiveMirrorChanges: boolean,
   stats: MirrorSyncStats,
 ) {
   stats.syncedGames += 1;
   await mkdir(mirrorGamePath, { recursive: true });
-  await syncNfoFiles(sourceGamePath, mirrorGamePath, stats);
+  await syncNfoFiles(sourceGamePath, mirrorGamePath, stats, {
+    pruneMissingNfoFiles: allowDestructiveMirrorChanges,
+  });
 
   const sourceVersionNames = new Set(versionNames);
   for (const versionName of sourceVersionNames) {
     const sourceVersionPath = path.join(sourceGamePath, versionName);
     const mirrorVersionPath = path.join(mirrorGamePath, versionName);
-    await syncNfoFiles(sourceVersionPath, mirrorVersionPath, stats);
+    await syncNfoFiles(sourceVersionPath, mirrorVersionPath, stats, {
+      pruneMissingNfoFiles: allowDestructiveMirrorChanges,
+    });
   }
 
-  const mirrorGameEntries = await readDirectoryEntriesSafe(mirrorGamePath);
-  for (const mirrorEntry of mirrorGameEntries) {
-    if (!mirrorEntry.isDirectory()) {
-      continue;
-    }
+  if (allowDestructiveMirrorChanges) {
+    const mirrorGameEntries = await readDirectoryEntriesSafe(mirrorGamePath);
+    for (const mirrorEntry of mirrorGameEntries) {
+      if (!mirrorEntry.isDirectory()) {
+        continue;
+      }
 
-    if (!versionPattern.test(mirrorEntry.name)) {
-      continue;
-    }
+      if (!versionPattern.test(mirrorEntry.name)) {
+        continue;
+      }
 
-    if (sourceVersionNames.has(mirrorEntry.name)) {
-      continue;
-    }
+      if (sourceVersionNames.has(mirrorEntry.name)) {
+        continue;
+      }
 
-    await rm(path.join(mirrorGamePath, mirrorEntry.name), { recursive: true, force: true });
+      await rm(path.join(mirrorGamePath, mirrorEntry.name), { recursive: true, force: true });
+    }
   }
 
   await syncPicturesFolder(
     path.join(sourceGamePath, picturesFolderName),
     path.join(mirrorGamePath, picturesFolderName),
     stats,
-    { pruneMissingImages: mirrorParitySync },
+    { pruneMissingImages: allowDestructiveMirrorChanges },
   );
 }
 
@@ -441,7 +458,9 @@ export async function scanGames(config: GalleryConfig, requestOptions: ScanReque
   }
 
   const shouldSyncMirror = requestOptions.syncMirror !== false;
-  const mirrorParitySync = shouldSyncMirror && requestOptions.mirrorParity === true;
+  const mirrorParityRequested = shouldSyncMirror && requestOptions.mirrorParity === true;
+  const allowDestructiveMirrorChanges = requestOptions.allowDestructiveMirrorChanges === true;
+  const mirrorParitySync = mirrorParityRequested && allowDestructiveMirrorChanges;
 
   const sourceRootPath = path.resolve(configuredGamesRoot);
   const configuredMirrorRoot = String(config.metadataMirrorRoot ?? '').trim();
@@ -626,7 +645,7 @@ export async function scanGames(config: GalleryConfig, requestOptions: ScanReque
     });
   }
 
-  if (mirrorSyncRootPath) {
+  if (mirrorSyncRootPath && mirrorParitySync) {
     try {
       await pruneStaleMirrorGames(mirrorSyncRootPath, sourceGameNames, config, mirrorSyncStats);
     } catch (error) {

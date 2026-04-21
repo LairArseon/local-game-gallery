@@ -11,6 +11,10 @@ Use one folder per game, with version folders inside each game folder.
   MyGame/
     game.nfo
     activitylog
+    extras/
+      soundtrack/
+        track01.flac
+      artbook.pdf
     pictures/
       poster.png
       card.png
@@ -85,6 +89,7 @@ Recognized image extensions:
 - `.webp`
 - `.gif`
 - `.bmp`
+- `.avif`
 
 Recognized special file stems:
 
@@ -97,6 +102,20 @@ Screenshot behavior:
 
 - New screenshots are imported as `Screen1`, `Screen2`, etc.
 - Removing a screenshot reindexes remaining screenshots to keep sequence order.
+
+## `extras` Folder (Optional)
+
+Each game folder can include an optional `extras/` directory for bonus content (manuals, soundtracks, artbooks, patches, etc.).
+
+Rules and behavior:
+
+- Folder name must be exactly `extras` and must live directly under the game folder.
+- The scanner indexes top-level files and top-level folders inside `extras/`.
+- Dot-prefixed entries are hidden when `hideDotEntries` is enabled.
+- Extras can be downloaded from the app:
+  - files are downloaded directly
+  - folders are packaged as `.zip` for download
+- Downloads are path-validated to stay inside `<game>/extras`.
 
 ## `activitylog`
 

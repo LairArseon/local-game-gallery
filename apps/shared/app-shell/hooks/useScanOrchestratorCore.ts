@@ -9,6 +9,10 @@ import { useCallback, useRef, type Dispatch, type MutableRefObject, type SetStat
 
 export type RefreshScanMode = 'scan-only' | 'scan-and-sync' | 'parity-sync' | 'fallback-recovery-probe';
 
+type RefreshScanOptions = {
+  allowDestructiveMirrorChanges?: boolean;
+};
+
 type ScanResultLike<TGame extends { path: string; name: string; sizeBytes?: number | null }> = {
   games: TGame[];
   warnings: string[];
@@ -16,7 +20,7 @@ type ScanResultLike<TGame extends { path: string; name: string; sizeBytes?: numb
 };
 
 type UseScanRefreshCoreArgs<TGame extends { path: string; name: string }, TScanResult extends ScanResultLike<TGame>> = {
-  scanGames: (options?: { syncMirror?: boolean; mirrorParity?: boolean }) => Promise<TScanResult>;
+  scanGames: (options?: { syncMirror?: boolean; mirrorParity?: boolean; allowDestructiveMirrorChanges?: boolean }) => Promise<TScanResult>;
   emptyScan: TScanResult;
   t: (key: string, options?: Record<string, unknown>) => string;
   setScanResult: Dispatch<SetStateAction<TScanResult>>;
@@ -42,9 +46,9 @@ export function useScanRefreshCore<
   setScanProgress,
 }: UseScanRefreshCoreArgs<TGame, TScanResult>) {
   const scanInFlightRef = useRef<Promise<TScanResult | null> | null>(null);
-  const refreshScanRef = useRef<((mode?: RefreshScanMode) => Promise<TScanResult | null>) | null>(null);
+  const refreshScanRef = useRef<((mode?: RefreshScanMode, options?: RefreshScanOptions) => Promise<TScanResult | null>) | null>(null);
 
-  const refreshScan = useCallback(async (mode: RefreshScanMode = 'scan-and-sync') => {
+  const refreshScan = useCallback(async (mode: RefreshScanMode = 'scan-and-sync', options: RefreshScanOptions = {}) => {
     if (scanInFlightRef.current) {
       return scanInFlightRef.current;
     }
@@ -52,6 +56,7 @@ export function useScanRefreshCore<
     const isFallbackRecoveryProbe = mode === 'fallback-recovery-probe';
     const shouldSyncMirror = mode === 'scan-and-sync' || mode === 'parity-sync';
     const shouldMirrorParity = mode === 'parity-sync';
+    const shouldAllowDestructiveMirrorChanges = shouldMirrorParity && options.allowDestructiveMirrorChanges === true;
     if (!isFallbackRecoveryProbe) {
       setScanProgress?.(0.06);
     }
@@ -61,7 +66,7 @@ export function useScanRefreshCore<
       if (!isFallbackRecoveryProbe) {
         setIsScanning?.(true);
         void logAppEvent(
-          `Scan started (mode=${mode}, sync=${shouldSyncMirror ? 'enabled' : 'disabled'}, parity=${shouldMirrorParity ? 'full' : 'safe-media-preserve'}).`,
+          `Scan started (mode=${mode}, sync=${shouldSyncMirror ? 'enabled' : 'disabled'}, parity=${shouldAllowDestructiveMirrorChanges ? 'full' : 'safe-media-preserve'}).`,
           'info',
           'scan-orchestrator',
         );
@@ -71,6 +76,7 @@ export function useScanRefreshCore<
         const result = await scanGames({
           syncMirror: shouldSyncMirror,
           mirrorParity: shouldMirrorParity,
+          allowDestructiveMirrorChanges: shouldAllowDestructiveMirrorChanges,
         });
 
         if (isFallbackRecoveryProbe) {
@@ -106,7 +112,7 @@ export function useScanRefreshCore<
         const elapsedMs = Date.now() - startedAtMs;
         const completionLevel = result.warnings.length ? 'warn' : 'info';
         void logAppEvent(
-          `Scan completed in ${elapsedMs}ms (mode=${mode}, games=${result.games.length}, warnings=${result.warnings.length}, parity=${shouldMirrorParity ? 'full' : 'safe-media-preserve'}).`,
+          `Scan completed in ${elapsedMs}ms (mode=${mode}, games=${result.games.length}, warnings=${result.warnings.length}, parity=${shouldAllowDestructiveMirrorChanges ? 'full' : 'safe-media-preserve'}).`,
           completionLevel,
           'scan-orchestrator',
         );
@@ -150,7 +156,7 @@ export function useScanRefreshCore<
 type UseRefreshGameCoreArgs<TGame extends { path: string; name: string }, TScanResult extends { scannedAt: string; games: TGame[] }> = {
   scanGame: (gamePath: string) => Promise<TGame | null | undefined>;
   setScanResult: Dispatch<SetStateAction<TScanResult>>;
-  refreshScan: (mode?: RefreshScanMode) => Promise<TScanResult | null>;
+  refreshScan: (mode?: RefreshScanMode, options?: RefreshScanOptions) => Promise<TScanResult | null>;
   toErrorMessage: (error: unknown, fallback: string) => string;
   logAppEvent: (message: string, level?: 'info' | 'warn' | 'error', source?: string) => Promise<void>;
 };

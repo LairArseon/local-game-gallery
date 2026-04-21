@@ -350,6 +350,8 @@ function resolveContentType(filePath: string) {
       return 'image/jpeg';
     case '.webp':
       return 'image/webp';
+    case '.avif':
+      return 'image/avif';
     case '.gif':
       return 'image/gif';
     case '.ico':

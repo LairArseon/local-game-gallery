@@ -7,19 +7,32 @@
 import type {
   AppIconInspectPayload,
   AppIconInspectResult,
+  CancelStagedGameArchiveUploadPayload,
+  CompressGameVersionPayload,
+  CompressGameVersionResult,
+  DecompressGameVersionPayload,
+  DecompressGameVersionResult,
   GalleryConfig,
   GameContextMenuAction,
   GameContextMenuPayload,
+  GameSummary,
   ImportDroppedGameMediaPayload,
   ImportGameMediaPayload,
+  ImportStagedGameArchivePayload,
+  ImportStagedGameArchiveResult,
   LogEventPayload,
   OpenFolderPayload,
   OpenFolderResult,
+  PickArchiveUploadFileResult,
   PlayGamePayload,
   PlayGameResult,
   RemoveScreenshotPayload,
   ReorderScreenshotsPayload,
+  SaveExtraDownloadPayload,
+  SaveExtraDownloadResult,
   SaveGameMetadataPayload,
+  SaveVersionDownloadPayload,
+  SaveVersionDownloadResult,
   ScanRequestOptions,
   ScanGameSizesPayload,
   ScanGameSizesResult,
@@ -27,6 +40,8 @@ import type {
   ServiceApiVersionInfo,
   ServiceCapabilities,
   ServiceHealthStatus,
+  StageGameArchiveUploadPayload,
+  StageGameArchiveUploadResult,
   StageDroppedAppIconPayload,
   VersionStorageProgressEvent,
   VaultContextMenuAction,
@@ -98,7 +113,7 @@ function pickBrowserImageFiles(allowMultiple: boolean): Promise<File[]> {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'image/png,image/jpeg,image/webp,image/gif,image/bmp';
+    input.accept = 'image/png,image/jpeg,image/webp,image/gif,image/bmp,image/avif';
     input.multiple = allowMultiple;
 
     input.addEventListener('change', () => {
@@ -168,6 +183,9 @@ async function requestApi<T>(routePath: string, init?: RequestInit): Promise<T> 
   };
 
   const attemptedUrls: string[] = [];
+  let lastConnectivityError = '';
+  let lastResponseError = '';
+  let sawServiceResponseError = false;
 
   for (const baseUrl of buildServiceBaseUrls()) {
     attemptedUrls.push(baseUrl);
@@ -178,7 +196,8 @@ async function requestApi<T>(routePath: string, init?: RequestInit): Promise<T> 
         ...init,
         headers,
       });
-    } catch {
+    } catch (error) {
+      lastConnectivityError = error instanceof Error ? error.message : String(error);
       continue;
     }
 
@@ -188,27 +207,40 @@ async function requestApi<T>(routePath: string, init?: RequestInit): Promise<T> 
       try {
         payload = JSON.parse(responseText) as ApiEnvelope<T>;
       } catch {
-        throw new Error(`Service at ${baseUrl} returned a non-JSON response.`);
+        sawServiceResponseError = true;
+        lastResponseError = `Service at ${baseUrl} returned a non-JSON response.`;
+        continue;
       }
     }
 
     if (!response.ok) {
       if (payload && !payload.ok) {
-        throw new Error(payload.error.message);
+        sawServiceResponseError = true;
+        lastResponseError = payload.error.message;
+        continue;
       }
 
-      throw new Error(`Service request failed with status ${response.status}.`);
+      sawServiceResponseError = true;
+      lastResponseError = `Service request failed with status ${response.status}.`;
+      continue;
     }
 
     if (!payload || !payload.ok) {
-      throw new Error('Service returned an invalid response payload.');
+      sawServiceResponseError = true;
+      lastResponseError = 'Service returned an invalid response payload.';
+      continue;
     }
 
     return payload.data;
   }
 
+  if (sawServiceResponseError) {
+    throw new Error(lastResponseError || 'Service request failed.');
+  }
+
   throw new Error(
     `Could not reach gallery service (${routePath}). Tried: ${attemptedUrls.join(', ')}. `
+    + `Last connectivity error: ${lastConnectivityError || 'none'}. `
     + `Make sure the desktop app is running and port ${defaultServicePort} is reachable from this browser.`,
   );
 }
@@ -713,5 +745,53 @@ export const webClient: GalleryClient = {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  },
+  async saveExtraDownload(_payload: SaveExtraDownloadPayload): Promise<SaveExtraDownloadResult> {
+    return unsupportedOperation<SaveExtraDownloadResult>(
+      'saveExtraDownload',
+      'Desktop save dialog is only available on the host desktop app.',
+    );
+  },
+  async saveVersionDownload(_payload: SaveVersionDownloadPayload): Promise<SaveVersionDownloadResult> {
+    return unsupportedOperation<SaveVersionDownloadResult>(
+      'saveVersionDownload',
+      'Desktop save dialog is only available on the host desktop app.',
+    );
+  },
+  async compressGameVersion(_payload: CompressGameVersionPayload): Promise<CompressGameVersionResult> {
+    return unsupportedOperation<CompressGameVersionResult>(
+      'compressGameVersion',
+      'Version compression is only available on the host desktop app.',
+    );
+  },
+  async decompressGameVersion(_payload: DecompressGameVersionPayload): Promise<DecompressGameVersionResult> {
+    return unsupportedOperation<DecompressGameVersionResult>(
+      'decompressGameVersion',
+      'Version decompression is only available on the host desktop app.',
+    );
+  },
+  async pickArchiveUploadFile(): Promise<PickArchiveUploadFileResult | null> {
+    return unsupportedOperation<PickArchiveUploadFileResult | null>(
+      'pickArchiveUploadFile',
+      'Archive upload picker is only available on the host desktop app.',
+    );
+  },
+  async stageGameArchiveUpload(_payload: StageGameArchiveUploadPayload): Promise<StageGameArchiveUploadResult> {
+    return unsupportedOperation<StageGameArchiveUploadResult>(
+      'stageGameArchiveUpload',
+      'Archive staging is only available on the host desktop app.',
+    );
+  },
+  async cancelStagedGameArchiveUpload(_payload: CancelStagedGameArchiveUploadPayload): Promise<void> {
+    return unsupportedOperation<void>(
+      'cancelStagedGameArchiveUpload',
+      'Archive staging is only available on the host desktop app.',
+    );
+  },
+  async importStagedGameArchive(_payload: ImportStagedGameArchivePayload): Promise<ImportStagedGameArchiveResult> {
+    return unsupportedOperation<ImportStagedGameArchiveResult>(
+      'importStagedGameArchive',
+      'Archive import is only available on the host desktop app.',
+    );
   },
 };

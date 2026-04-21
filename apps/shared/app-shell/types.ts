@@ -174,6 +174,7 @@ export type ScanResult = {
 export type ScanRequestOptions = {
   syncMirror?: boolean;
   mirrorParity?: boolean;
+  allowDestructiveMirrorChanges?: boolean;
 };
 
 export type ScanGameSizesPayload = {

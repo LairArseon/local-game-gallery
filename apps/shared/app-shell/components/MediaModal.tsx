@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Dispatch, DragEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, ArrowRight, X } from 'lucide-react';
@@ -80,6 +81,21 @@ export function MediaModal<TGame extends GameWithMedia>({
   onRemoveScreenshot,
 }: MediaModalProps<TGame>) {
   const { t } = useTranslation();
+  const [isSwapPending, setIsSwapPending] = useState(false);
+  const isGalleryBusy = isMediaSaving || isSwapPending;
+
+  async function handleReorderScreenshots(fromPath: string, toPath: string) {
+    if (isGalleryBusy) {
+      return;
+    }
+
+    setIsSwapPending(true);
+    try {
+      await onReorderScreenshots(fromPath, toPath);
+    } finally {
+      setIsSwapPending(false);
+    }
+  }
 
   if (!isOpen || !game) {
     return null;
@@ -150,7 +166,12 @@ export function MediaModal<TGame extends GameWithMedia>({
             <section
               className={`media-section ${dragSection === 'gallery' ? 'media-section--drag' : ''}`}
               onDragOver={(event) => {
-                if (draggedScreenshotPath) {
+                if (isGalleryBusy) {
+                  return;
+                }
+
+                const activeDraggedScreenshotPath = draggedScreenshotPath || extractDraggedScreenshotPath(event);
+                if (activeDraggedScreenshotPath) {
                   event.preventDefault();
                   return;
                 }
@@ -166,8 +187,12 @@ export function MediaModal<TGame extends GameWithMedia>({
               onDragLeave={() => setDragSection((current) => current === 'gallery' ? null : current)}
               onDrop={(event) => {
                 event.preventDefault();
+                if (isGalleryBusy) {
+                  return;
+                }
                 setDragSection(null);
-                if (draggedScreenshotPath) {
+                const activeDraggedScreenshotPath = draggedScreenshotPath || extractDraggedScreenshotPath(event);
+                if (activeDraggedScreenshotPath) {
                   setDraggedScreenshotPath(null);
                   setDragOverScreenshotPath(null);
                   return;
@@ -183,8 +208,11 @@ export function MediaModal<TGame extends GameWithMedia>({
             >
               <div className="modal-group__header">
                 <strong>{t('media.galleryMedia')}</strong>
-                <button className="button button--icon" type="button" disabled={isMediaSaving} onClick={() => void onImportMedia('screenshot')}>{t('media.addScreenshot')}</button>
+                <button className="button button--icon" type="button" disabled={isGalleryBusy} onClick={() => void onImportMedia('screenshot')}>{t('media.addScreenshot')}</button>
               </div>
+              <small className="field__hint">
+                {t('media.swapScreenshotsHint', 'Drag a screenshot onto another to swap positions. Arrow buttons swap with adjacent screenshots.')}
+              </small>
               {isMediaSaving && mediaUploadProgress ? (
                 <small className="field__hint">
                   Uploading screenshots: {mediaUploadProgress.completed}/{mediaUploadProgress.total || 0}
@@ -192,13 +220,24 @@ export function MediaModal<TGame extends GameWithMedia>({
                   ({mediaUploadProgress.phase})
                 </small>
               ) : null}
-              <div className="media-grid">
+              <div className="media-grid-wrap">
+                {isSwapPending ? (
+                  <div className="media-grid__overlay" role="status" aria-live="polite" aria-label={t('media.swapInProgress', 'Swapping screenshots...')}>
+                    <div className="media-grid__overlay-spinner" aria-hidden="true" />
+                    <span>{t('media.swapInProgress', 'Swapping screenshots...')}</span>
+                  </div>
+                ) : null}
+                <div className="media-grid" aria-busy={isSwapPending}>
                 {game.media.screenshots.length ? game.media.screenshots.map((imagePath, index) => (
                   <div
                     key={imagePath}
                     className={`media-grid__item ${draggedScreenshotPath === imagePath ? 'media-grid__item--dragging' : ''} ${dragOverScreenshotPath === imagePath ? 'media-grid__item--drop-target' : ''}`}
-                    draggable={!isMediaSaving}
+                    draggable={!isGalleryBusy}
                     onDragStart={(event) => {
+                      if (isGalleryBusy) {
+                        return;
+                      }
+
                       setScreenshotContextMenu(null);
                       setDragSection(null);
                       setDraggedScreenshotPath(imagePath);
@@ -212,15 +251,25 @@ export function MediaModal<TGame extends GameWithMedia>({
                       setDragOverScreenshotPath(null);
                     }}
                     onDragOver={(event) => {
-                      if (!draggedScreenshotPath || draggedScreenshotPath === imagePath) {
+                      if (isGalleryBusy) {
+                        return;
+                      }
+
+                      const fromPath = draggedScreenshotPath || extractDraggedScreenshotPath(event);
+                      if (!fromPath || fromPath === imagePath) {
                         return;
                       }
 
                       event.preventDefault();
                       event.dataTransfer.dropEffect = 'move';
                     }}
-                    onDragEnter={() => {
-                      if (!draggedScreenshotPath || draggedScreenshotPath === imagePath) {
+                    onDragEnter={(event) => {
+                      if (isGalleryBusy) {
+                        return;
+                      }
+
+                      const fromPath = draggedScreenshotPath || extractDraggedScreenshotPath(event);
+                      if (!fromPath || fromPath === imagePath) {
                         return;
                       }
 
@@ -230,16 +279,20 @@ export function MediaModal<TGame extends GameWithMedia>({
                       setDragOverScreenshotPath((current) => current === imagePath ? null : current);
                     }}
                     onDrop={(event) => {
-                      const fromPath = draggedScreenshotPath || extractDraggedScreenshotPath(event);
                       event.preventDefault();
                       event.stopPropagation();
+                      if (isGalleryBusy) {
+                        return;
+                      }
+
+                      const fromPath = draggedScreenshotPath || extractDraggedScreenshotPath(event);
                       setDraggedScreenshotPath(null);
                       setDragOverScreenshotPath(null);
                       if (!fromPath || fromPath === imagePath) {
                         return;
                       }
 
-                      void onReorderScreenshots(fromPath, imagePath);
+                      void handleReorderScreenshots(fromPath, imagePath);
                     }}
                   >
                     <button
@@ -247,7 +300,7 @@ export function MediaModal<TGame extends GameWithMedia>({
                       className="media-grid__drag-handle"
                       onClick={(event) => {
                         event.stopPropagation();
-                        if (isMediaSaving) {
+                        if (isGalleryBusy) {
                           return;
                         }
 
@@ -261,7 +314,7 @@ export function MediaModal<TGame extends GameWithMedia>({
                       onContextMenu={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
-                        if (isMediaSaving) {
+                        if (isGalleryBusy) {
                           return;
                         }
 
@@ -280,10 +333,12 @@ export function MediaModal<TGame extends GameWithMedia>({
                       <button
                         className="button button--icon"
                         type="button"
-                        disabled={isMediaSaving || index === 0}
+                        disabled={isGalleryBusy || index === 0}
                         onClick={() => {
                           const prev = game.media.screenshots[index - 1];
-                          if (prev) void onReorderScreenshots(imagePath, prev);
+                          if (prev) {
+                            void handleReorderScreenshots(imagePath, prev);
+                          }
                         }}
                         aria-label={t('media.moveLeft')}
                       >
@@ -292,10 +347,12 @@ export function MediaModal<TGame extends GameWithMedia>({
                       <button
                         className="button button--icon"
                         type="button"
-                        disabled={isMediaSaving || index === game.media.screenshots.length - 1}
+                        disabled={isGalleryBusy || index === game.media.screenshots.length - 1}
                         onClick={() => {
                           const next = game.media.screenshots[index + 1];
-                          if (next) void onReorderScreenshots(imagePath, next);
+                          if (next) {
+                            void handleReorderScreenshots(imagePath, next);
+                          }
                         }}
                         aria-label={t('media.moveRight')}
                       >
@@ -304,6 +361,7 @@ export function MediaModal<TGame extends GameWithMedia>({
                     </div>
                   </div>
                 )) : <p>{t('media.noScreenshots')}</p>}
+                </div>
               </div>
             </section>
           </>

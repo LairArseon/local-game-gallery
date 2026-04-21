@@ -124,6 +124,8 @@ const activeVersionStorageProgressPolls = new Map<string, { stopped: boolean }>(
 const versionStorageProgressPollIntervalMs = 220;
 let disposeActiveBrowserContextMenu: (() => void) | null = null;
 
+class ServiceConnectivityError extends Error {}
+
 type VersionStorageProgressSnapshot = VersionStorageProgressEvent & {
   completed: boolean;
   updatedAt: number;
@@ -146,7 +148,7 @@ function pickBrowserImageFiles(allowMultiple: boolean): Promise<File[]> {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'image/png,image/jpeg,image/webp,image/gif,image/bmp';
+    input.accept = 'image/png,image/jpeg,image/webp,image/gif,image/bmp,image/avif';
     input.multiple = allowMultiple;
 
     let settled = false;
@@ -294,10 +296,16 @@ async function requestApiFromBase<T>(baseUrl: string, routePath: string, init?: 
     ...(init?.headers ?? {}),
   };
 
-  const response = await fetch(`${baseUrl}${routePath}`, {
-    ...init,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${routePath}`, {
+      ...init,
+      headers,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new ServiceConnectivityError(message || 'Unable to contact backend.');
+  }
 
   const responseText = await response.text();
   let payload: ApiEnvelope<T> | null = null;
@@ -396,7 +404,9 @@ export async function discoverCompatibleServiceBaseUrl(): Promise<WebServiceDisc
 
 async function requestApi<T>(routePath: string, init?: RequestInit): Promise<T> {
   const attemptedUrls: string[] = [];
-  let lastErrorMessage = '';
+  let lastConnectivityError = '';
+  let lastResponseError = '';
+  let sawServiceResponseError = false;
 
   for (const baseUrl of buildServiceBaseUrls()) {
     attemptedUrls.push(baseUrl);
@@ -404,13 +414,23 @@ async function requestApi<T>(routePath: string, init?: RequestInit): Promise<T> 
     try {
       return await requestApiFromBase<T>(baseUrl, routePath, init);
     } catch (error) {
-      lastErrorMessage = error instanceof Error ? error.message : String(error);
+      if (error instanceof ServiceConnectivityError) {
+        lastConnectivityError = error.message;
+        continue;
+      }
+
+      sawServiceResponseError = true;
+      lastResponseError = error instanceof Error ? error.message : String(error);
     }
+  }
+
+  if (sawServiceResponseError) {
+    throw new Error(lastResponseError || 'Service request failed.');
   }
 
   throw new Error(
     `Could not reach gallery service (${routePath}). Tried: ${attemptedUrls.join(', ')}. `
-    + `Last error: ${lastErrorMessage || 'none'}. `
+    + `Last connectivity error: ${lastConnectivityError || 'none'}. `
     + `Make sure the desktop app is running and port ${defaultServicePort} is reachable from this browser.`,
   );
 }

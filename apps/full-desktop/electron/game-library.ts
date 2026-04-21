@@ -9,7 +9,47 @@ import type {
 } from '../src/types';
 
 const defaultGameNfoName = 'game.nfo';
-const imageExtensions = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']);
+const imageExtensions = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.avif']);
+const retryableFsErrorCodes = new Set(['EBUSY', 'EPERM', 'EACCES']);
+
+function isRetryableFsError(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const code = (error as NodeJS.ErrnoException).code;
+  return typeof code === 'string' && retryableFsErrorCodes.has(code);
+}
+
+function waitFor(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function withFsRetry<T>(operation: () => Promise<T>, maxAttempts = 8) {
+  let attempt = 0;
+
+  while (attempt < maxAttempts) {
+    try {
+      return await operation();
+    } catch (error) {
+      attempt += 1;
+
+      if (!isRetryableFsError(error) || attempt >= maxAttempts) {
+        throw error;
+      }
+
+      await waitFor(Math.min(80 * attempt, 1000));
+    }
+  }
+
+  throw new Error('Filesystem retry exhausted.');
+}
+
+async function renameWithRetry(fromPath: string, toPath: string, maxAttempts = 24) {
+  await withFsRetry(() => rename(fromPath, toPath), maxAttempts);
+}
 
 export function createDefaultMetadata(latestVersion = ''): GameMetadata {
   return {
@@ -267,11 +307,60 @@ export async function importDroppedGameMedia(configPicturesFolderName: string, p
 }
 
 export async function reorderScreenshots(fromPath: string, toPath: string) {
-  const dir = path.dirname(fromPath);
-  const tempPath = path.join(dir, `_swap_tmp_${Date.now()}${path.extname(fromPath)}`);
-  await rename(fromPath, tempPath);
-  await rename(toPath, fromPath);
-  await rename(tempPath, toPath);
+  const fromStemMatch = path.parse(fromPath).name.match(/^screen(\d+)$/i);
+  const toStemMatch = path.parse(toPath).name.match(/^screen(\d+)$/i);
+  if (!fromStemMatch || !toStemMatch) {
+    throw new Error('Only gallery screenshots can be reordered.');
+  }
+
+  const picturesPath = path.dirname(fromPath);
+  if (path.dirname(toPath) !== picturesPath) {
+    throw new Error('Screenshots must be in the same pictures folder.');
+  }
+
+  const fromIndex = Number.parseInt(fromStemMatch[1] ?? '', 10);
+  const toIndex = Number.parseInt(toStemMatch[1] ?? '', 10);
+  if (!Number.isFinite(fromIndex) || !Number.isFinite(toIndex) || fromIndex <= 0 || toIndex <= 0) {
+    throw new Error('Invalid screenshot index for reorder.');
+  }
+
+  if (fromIndex === toIndex) {
+    return;
+  }
+
+  const screenshots = (await scanGameMedia(picturesPath)).screenshots;
+  const resolveScreenshotPathByIndex = (index: number) => screenshots.find((candidatePath) => {
+    const stem = path.parse(candidatePath).name;
+    const match = stem.match(/^screen(\d+)$/i);
+    return Number.parseInt(match?.[1] ?? '', 10) === index;
+  });
+
+  const resolvedFromPath = resolveScreenshotPathByIndex(fromIndex);
+  const resolvedToPath = resolveScreenshotPathByIndex(toIndex);
+  if (!resolvedFromPath || !resolvedToPath) {
+    throw new Error('Screenshot file was not found for reorder.');
+  }
+
+  if (resolvedFromPath.toLowerCase() === resolvedToPath.toLowerCase()) {
+    return;
+  }
+
+  const fromExt = path.extname(resolvedFromPath);
+  const toExt = path.extname(resolvedToPath);
+  const targetFromPath = path.join(picturesPath, `Screen${fromIndex}${toExt}`);
+  const targetToPath = path.join(picturesPath, `Screen${toIndex}${fromExt}`);
+  const tempPath = path.join(picturesPath, `_swap_tmp_${Date.now()}_${Math.random().toString(16).slice(2)}${fromExt}`);
+
+  await renameWithRetry(resolvedFromPath, tempPath);
+
+  try {
+    await renameWithRetry(resolvedToPath, targetFromPath);
+    await renameWithRetry(tempPath, targetToPath);
+  } catch (error) {
+    // If any step fails, attempt rollback and surface the original error.
+    await renameWithRetry(tempPath, resolvedFromPath).catch(() => undefined);
+    throw error;
+  }
 }
 
 async function reindexScreenshotsInFolder(picturesPath: string) {
@@ -282,13 +371,13 @@ async function reindexScreenshotsInFolder(picturesPath: string) {
     const screenshotPath = screenshots[index];
     const ext = path.extname(screenshotPath);
     const tempPath = path.join(picturesPath, `_reindex_tmp_${Date.now()}_${index}${ext}`);
-    await rename(screenshotPath, tempPath);
+    await renameWithRetry(screenshotPath, tempPath);
     tempEntries.push({ tempPath, ext });
   }
 
   for (let index = 0; index < tempEntries.length; index += 1) {
     const entry = tempEntries[index];
-    await rename(entry.tempPath, path.join(picturesPath, `Screen${index + 1}${entry.ext}`));
+    await renameWithRetry(entry.tempPath, path.join(picturesPath, `Screen${index + 1}${entry.ext}`));
   }
 }
 
