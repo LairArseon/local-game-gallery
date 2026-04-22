@@ -193,13 +193,22 @@ function buildTrayMenu() {
         if (!galleryHttpService) {
           return;
         }
-
         const health = galleryHttpService.getHealth();
         if (health.port <= 0) {
           return;
         }
-
         void shell.openExternal(`http://${health.host}:${health.port}/api/health`);
+      },
+    },
+    {
+      label: 'Restart Service',
+      enabled: snapshot.healthy,
+      click: async () => {
+        if (!galleryHttpService) {
+          return;
+        }
+        await stopServiceIfRunning();
+        await startService();
       },
     },
     {

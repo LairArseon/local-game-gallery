@@ -122,7 +122,7 @@ export type GalleryHttpService = {
   getBaseUrl: () => string;
 };
 
-const jsonBodyLimitBytes = 25 * 1024 * 1024;
+const jsonBodyLimitBytes = 50 * 1024 * 1024;
 const envHost = String(process.env.LGG_SERVICE_HOST ?? '').trim();
 const envPort = Number.parseInt(String(process.env.LGG_SERVICE_PORT ?? ''), 10);
 const envRuntimeContext = String(process.env.LGG_RUNTIME_CONTEXT ?? '').trim().toLowerCase();
@@ -307,6 +307,11 @@ async function readJsonBody<T>(request: IncomingMessage) {
     const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk);
     totalBytes += chunk.length;
     if (totalBytes > jsonBodyLimitBytes) {
+      await appendLogEvent({
+        level: 'error',
+        source: 'image-update-api',
+        message: `Request body exceeds the maximum allowed size. Limit: ${jsonBodyLimitBytes} bytes. Actual: ${totalBytes} bytes.`,
+      });
       throw new Error('Request body exceeds the maximum allowed size.');
     }
 
