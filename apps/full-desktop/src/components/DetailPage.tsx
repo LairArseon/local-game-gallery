@@ -25,6 +25,7 @@ type DetailPageProps = {
   onCompressVersion: (gamePath: string, gameName: string, versionPath: string, versionName: string) => Promise<void>;
   onOpenPictures: (gamePath: string) => void;
   onOpenScreenshot: (imagePath: string) => void;
+  moduleDetailContent?: ReactNode;
 };
 
 export function DetailPage({
@@ -46,6 +47,7 @@ export function DetailPage({
   onCompressVersion,
   onOpenPictures,
   onOpenScreenshot,
+  moduleDetailContent,
 }: DetailPageProps) {
   return (
     <SharedDetailPage<GameSummary>
@@ -70,6 +72,7 @@ export function DetailPage({
       enableArchiveUpload={false}
       enableInlineContextMenus={false}
       enableExtrasSection={false}
+      moduleDetailContent={moduleDetailContent}
     />
   );
 }

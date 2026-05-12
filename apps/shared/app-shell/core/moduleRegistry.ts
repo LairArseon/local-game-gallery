@@ -5,6 +5,11 @@ import type {
   ModuleHostConfigState,
 } from '../types/moduleHostTypes';
 
+export type ResolvedBuiltInModule = {
+  definition: BuiltInModuleDefinition;
+  configState: ModuleHostConfigState;
+};
+
 function compareModules(left: BuiltInModuleDefinition, right: BuiltInModuleDefinition) {
   return left.displayName.localeCompare(right.displayName, undefined, { sensitivity: 'base' });
 }
@@ -103,4 +108,14 @@ export function listEnabledModuleIds(
   return moduleDefinitions
     .filter((moduleDefinition) => resolveModuleConfigState(moduleDefinition, configuredStates?.[moduleDefinition.id]).enabled)
     .map((moduleDefinition) => moduleDefinition.id);
+}
+
+export function resolveConfiguredModules(
+  moduleDefinitions: BuiltInModuleDefinition[],
+  configuredStates: Record<string, ModuleHostConfigState> | null | undefined,
+): ResolvedBuiltInModule[] {
+  return moduleDefinitions.map((definition) => ({
+    definition,
+    configState: resolveModuleConfigState(definition, configuredStates?.[definition.id]),
+  }));
 }

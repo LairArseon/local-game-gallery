@@ -137,6 +137,9 @@
     "showSystemMenuBar": "Show system menu bar",
     "globalZoom": "Global zoom",
     "globalZoomHint": "Also works with Ctrl + mouse wheel and +/- keys. Ctrl+0 resets to 100%.",
+    "modulesTitle": "Modules",
+    "modulesHint": "Built-in modules can extend setup, notifications, and game views.",
+    "moduleEnabled": "Enabled",
     "viewLogs": "View logs",
     "openLogsFolder": "Open logs folder",
     "appIconWarningText": "Custom PNG icons update preview immediately, can be applied for the current session, and are used on next app startup. Packaged executable and installer icons are build-time assets on Windows, so true installed identity changes still require rebuilding."
@@ -193,6 +196,7 @@
     "notSet": "Not set",
     "description": "Description",
     "noDescription": "No description yet.",
+    "noModuleData": "No module metadata available for this game yet.",
     "notes": "Notes",
     "tags": "Tags",
     "additionalTags": "Additional tags",

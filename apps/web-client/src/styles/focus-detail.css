@@ -329,6 +329,19 @@
   margin-bottom: 8px;
 }
 
+.f95-module-detail {
+  display: grid;
+  gap: 12px;
+}
+
+.f95-module-tag-list {
+  margin-top: 0;
+}
+
+.f95-module-tag-list__label {
+  color: rgba(247, 246, 242, 0.92);
+}
+
 .screenshot-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

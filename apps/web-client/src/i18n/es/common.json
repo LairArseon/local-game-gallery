@@ -139,6 +139,9 @@
     "showSystemMenuBar": "Mostrar barra de menú del sistema",
     "globalZoom": "Zoom global",
     "globalZoomHint": "También funciona con Ctrl + rueda del ratón y teclas +/- . Ctrl+0 restablece al 100%.",
+    "modulesTitle": "Módulos",
+    "modulesHint": "Los módulos integrados pueden extender la configuración, las notificaciones y las vistas del juego.",
+    "moduleEnabled": "Habilitado",
     "viewLogs": "Ver logs",
     "openLogsFolder": "Abrir carpeta de logs",
     "appIconWarningText": "Los iconos PNG personalizados actualizan la vista previa de inmediato, se pueden aplicar a la sesión actual y se usan en el próximo inicio de la app. Los iconos del ejecutable e instalador empaquetados son recursos de compilación en Windows, por lo que para cambiar la identidad instalada real todavía hay que recompilar."
@@ -195,6 +198,7 @@
     "notSet": "Sin definir",
     "description": "Descripción",
     "noDescription": "Todavía no hay descripción.",
+    "noModuleData": "Todavía no hay metadatos de módulo disponibles para este juego.",
     "notes": "Notas",
     "tags": "Etiquetas",
     "additionalTags": "Etiquetas adicionales",

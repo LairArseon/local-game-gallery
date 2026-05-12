@@ -8,7 +8,7 @@
  *
  * New to this project: this sidebar exposes persisted app settings; trace save and picker callbacks to lifecycle/icon hooks to see what writes to config.
  */
-import type { DragEvent, FocusEvent, MouseEvent, SubmitEventHandler } from 'react';
+import type { DragEvent, FocusEvent, MouseEvent, ReactNode, SubmitEventHandler } from 'react';
 import type { GalleryConfig } from '../types';
 import { SetupPanel as SharedSetupPanel } from '../../../shared/app-shell/components/SetupPanel';
 
@@ -47,6 +47,7 @@ type SetupPanelProps = {
   isAppIconDragActive: boolean;
   onApplyAppIconNow: () => void;
   onResetAppIcon: () => void;
+  moduleSetupContent?: ReactNode;
 };
 
 export function SetupPanel({
@@ -76,6 +77,7 @@ export function SetupPanel({
   isAppIconDragActive,
   onApplyAppIconNow,
   onResetAppIcon,
+  moduleSetupContent,
 }: SetupPanelProps) {
   return (
     <SharedSetupPanel<GalleryConfig>
@@ -106,6 +108,7 @@ export function SetupPanel({
       isAppIconDragActive={isAppIconDragActive}
       onApplyAppIconNow={onApplyAppIconNow}
       onResetAppIcon={onResetAppIcon}
+      moduleSetupContent={moduleSetupContent}
     />
   );
 }

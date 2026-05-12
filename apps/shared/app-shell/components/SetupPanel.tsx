@@ -1,7 +1,7 @@
 /**
  * Configuration sidebar for library paths, layout tuning, and app preferences.
  */
-import type { DragEvent, FocusEvent, MouseEvent, SubmitEventHandler } from 'react';
+import type { DragEvent, FocusEvent, MouseEvent, ReactNode, SubmitEventHandler } from 'react';
 import { useState } from 'react';
 import { AlertTriangle, FolderOpen, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -62,6 +62,7 @@ type SetupPanelProps<TConfig extends SetupConfigLike> = {
   isAppIconDragActive: boolean;
   onApplyAppIconNow: () => void;
   onResetAppIcon: () => void;
+  moduleSetupContent?: ReactNode;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -96,6 +97,7 @@ export function SetupPanel<TConfig extends SetupConfigLike>({
   isAppIconDragActive,
   onApplyAppIconNow,
   onResetAppIcon,
+  moduleSetupContent,
 }: SetupPanelProps<TConfig>) {
   const { t, i18n } = useTranslation();
   const gamesRootLockedReason = t('setup.gamesRootLockedByDocker');
@@ -557,6 +559,8 @@ export function SetupPanel<TConfig extends SetupConfigLike>({
             />
             <small className="field__hint">{t('setup.globalZoomHint')}</small>
           </label>
+
+          {moduleSetupContent}
 
           <div className="setup-log-actions">
             <button className="button button--icon" type="button" onClick={onOpenLogViewer}>

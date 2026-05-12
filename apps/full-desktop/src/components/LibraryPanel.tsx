@@ -42,6 +42,7 @@ type LibraryPanelProps = {
   onCompressVersion: (gamePath: string, gameName: string, versionPath: string, versionName: string) => Promise<void>;
   onOpenPictures: (gamePath: string) => void;
   onOpenScreenshot: (imagePath: string) => void;
+  renderModuleDetailContent?: (game: GameSummary) => ReactNode;
   scanResult: ScanResult;
   viewMode: GalleryViewMode;
   viewModeLabels: Record<GalleryViewMode, string>;
@@ -75,6 +76,7 @@ export function LibraryPanel({
   onCompressVersion,
   onOpenPictures,
   onOpenScreenshot,
+  renderModuleDetailContent,
   scanResult,
   viewMode,
   viewModeLabels,
@@ -121,6 +123,7 @@ export function LibraryPanel({
           onCompressVersion={onCompressVersion}
           onOpenPictures={onOpenPictures}
           onOpenScreenshot={onOpenScreenshot}
+          moduleDetailContent={renderModuleDetailContent?.(game)}
         />
       )}
       renderFocusCard={renderFocusCard}

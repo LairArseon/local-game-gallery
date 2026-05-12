@@ -9,42 +9,59 @@
  * New to this project: this modal only renders diagnostics UI; follow its props to useLogViewer for loading, filtering, and clear-log behavior.
  */
 import { LogViewerModal as SharedLogViewerModal } from '../../../shared/app-shell/components/LogViewerModal';
+import type { ParsedGalleryLogEntry } from '../../../shared/app-shell/core/moduleLogSources';
 
 type LogLevelFilter = 'all' | 'info' | 'warn' | 'error';
+type LogSortOrder = 'newest' | 'oldest';
 
 type LogViewerModalProps = {
   isLogLoading: boolean;
   isLogClearing: boolean;
-  filteredLogContents: string;
+  filteredLogEntries: ParsedGalleryLogEntry[];
+  availableLogModules: string[];
   logLevelFilter: LogLevelFilter;
   logDateFilter: string;
+  logModuleFilter: string;
+  logSortOrder: LogSortOrder;
   onClose: () => void;
   onChangeLogLevel: (value: LogLevelFilter) => void;
   onChangeDateFilter: (value: string) => void;
+  onChangeLogModule: (value: string) => void;
+  onChangeLogSortOrder: (value: LogSortOrder) => void;
   onClearLogs: () => void;
 };
 
 export function LogViewerModal({
   isLogLoading,
   isLogClearing,
-  filteredLogContents,
+  filteredLogEntries,
+  availableLogModules,
   logLevelFilter,
   logDateFilter,
+  logModuleFilter,
+  logSortOrder,
   onClose,
   onChangeLogLevel,
   onChangeDateFilter,
+  onChangeLogModule,
+  onChangeLogSortOrder,
   onClearLogs,
 }: LogViewerModalProps) {
   return (
     <SharedLogViewerModal
       isLogLoading={isLogLoading}
       isLogClearing={isLogClearing}
-      filteredLogContents={filteredLogContents}
+      filteredLogEntries={filteredLogEntries}
+      availableLogModules={availableLogModules}
       logLevelFilter={logLevelFilter}
       logDateFilter={logDateFilter}
+      logModuleFilter={logModuleFilter}
+      logSortOrder={logSortOrder}
       onClose={onClose}
       onChangeLogLevel={onChangeLogLevel}
       onChangeDateFilter={onChangeDateFilter}
+      onChangeLogModule={onChangeLogModule}
+      onChangeLogSortOrder={onChangeLogSortOrder}
       onClearLogs={onClearLogs}
     />
   );

@@ -18,6 +18,7 @@ import { VaultUnlockModal } from './VaultUnlockModal';
 import type { GameMetadata, GameSummary } from '../types';
 import type { BrowserMediaUploadProgress } from '../client/adapters/webClient';
 import { ModalHost as SharedModalHost } from '../../../shared/app-shell/components/ModalHost';
+import type { ParsedGalleryLogEntry } from '../../../shared/app-shell/core/moduleLogSources';
 
 type TagAutocompleteState = {
   scope: 'pool' | 'filter' | 'metadata';
@@ -80,12 +81,17 @@ type ModalHostProps = {
   isLogModalOpen: boolean;
   isLogLoading: boolean;
   isLogClearing: boolean;
-  filteredLogContents: string;
+  filteredLogEntries: ParsedGalleryLogEntry[];
+  availableLogModules: string[];
   logLevelFilter: 'all' | 'info' | 'warn' | 'error';
   logDateFilter: string;
+  logModuleFilter: string;
+  logSortOrder: 'newest' | 'oldest';
   closeLogViewer: () => void;
   setLogLevelFilter: Dispatch<SetStateAction<'all' | 'info' | 'warn' | 'error'>>;
   setLogDateFilter: Dispatch<SetStateAction<string>>;
+  setLogModuleFilter: Dispatch<SetStateAction<string>>;
+  setLogSortOrder: Dispatch<SetStateAction<'newest' | 'oldest'>>;
   clearLogsFromViewer: () => Promise<void>;
   screenshotModalPath: string | null;
   setScreenshotModalPath: Dispatch<SetStateAction<string | null>>;
@@ -157,12 +163,17 @@ export function ModalHost({
   isLogModalOpen,
   isLogLoading,
   isLogClearing,
-  filteredLogContents,
+  filteredLogEntries,
+  availableLogModules,
   logLevelFilter,
   logDateFilter,
+  logModuleFilter,
+  logSortOrder,
   closeLogViewer,
   setLogLevelFilter,
   setLogDateFilter,
+  setLogModuleFilter,
+  setLogSortOrder,
   clearLogsFromViewer,
   screenshotModalPath,
   setScreenshotModalPath,
@@ -242,12 +253,17 @@ export function ModalHost({
     <LogViewerModal
       isLogLoading={isLogLoading}
       isLogClearing={isLogClearing}
-      filteredLogContents={filteredLogContents}
+      filteredLogEntries={filteredLogEntries}
+      availableLogModules={availableLogModules}
       logLevelFilter={logLevelFilter}
       logDateFilter={logDateFilter}
+      logModuleFilter={logModuleFilter}
+      logSortOrder={logSortOrder}
       onClose={closeLogViewer}
       onChangeLogLevel={(nextValue) => setLogLevelFilter(nextValue)}
       onChangeDateFilter={(nextValue) => setLogDateFilter(nextValue)}
+      onChangeLogModule={(nextValue) => setLogModuleFilter(nextValue)}
+      onChangeLogSortOrder={(nextValue) => setLogSortOrder(nextValue)}
       onClearLogs={() => void clearLogsFromViewer()}
     />
   ) : null;

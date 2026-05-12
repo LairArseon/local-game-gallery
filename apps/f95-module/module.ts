@@ -1,6 +1,11 @@
+import { createElement } from 'react';
 import type { BuiltInModuleDefinition } from '../shared/app-shell/types/moduleHostTypes';
+import { createModuleLogSource } from '../shared/app-shell/core/moduleLogSources';
+import { F95SetupSection } from './ui/F95SetupSection';
+import { F95DetailPanel } from './ui/F95DetailPanel';
 
 export const F95_MODULE_ID = 'f95';
+export const F95_MODULE_LOG_SOURCE = createModuleLogSource(F95_MODULE_ID);
 
 export const f95ModuleDefinition: BuiltInModuleDefinition = {
   id: F95_MODULE_ID,
@@ -15,6 +20,7 @@ export const f95ModuleDefinition: BuiltInModuleDefinition = {
       title: 'F95 Module Settings',
       description: 'Configuration and sync controls for the F95 module.',
       order: 100,
+      render: (context) => createElement(F95SetupSection, { context }),
     },
     {
       id: 'f95.notification.feed',
@@ -36,6 +42,7 @@ export const f95ModuleDefinition: BuiltInModuleDefinition = {
       title: 'F95 Detail Panel',
       description: 'Detailed F95 update history and metadata for the selected game.',
       order: 100,
+      render: (context) => createElement(F95DetailPanel, { context }),
     },
   ],
   getDefaultState: () => ({

@@ -21,13 +21,35 @@ export type KnownBuiltInModuleContributionSlot =
 
 export type BuiltInModuleContributionSlot = KnownBuiltInModuleContributionSlot | (string & {});
 
+export type ModuleHostGameTag = {
+  key: string;
+  value: string;
+};
+
+export type ModuleHostGameLike = {
+  path: string;
+  name: string;
+  metadata: {
+    customTags: ModuleHostGameTag[];
+  };
+};
+
+export type BuiltInModuleRenderContext = {
+  moduleId: string;
+  moduleDisplayName: string;
+  configState: ModuleHostConfigState;
+  onConfigStateChange?: (nextConfigState: ModuleHostConfigState) => void;
+  game?: ModuleHostGameLike;
+  moduleTags?: ModuleHostGameTag[];
+};
+
 export type BuiltInModuleContributionDescriptor = {
   id: string;
   slot: BuiltInModuleContributionSlot;
   title?: string;
   description?: string;
   order?: number;
-  render?: () => ReactNode;
+  render?: (context: BuiltInModuleRenderContext) => ReactNode;
   getItems?: () => BuiltInModuleNotificationDescriptor[];
 };
 

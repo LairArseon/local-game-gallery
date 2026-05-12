@@ -1,5 +1,6 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
+import { parseGalleryLogContents } from '../core/moduleLogSources';
 
 type GalleryClientLike = {
   getLogContents: () => Promise<string>;
@@ -14,29 +15,42 @@ type UseLogViewerArgs = {
   toErrorMessage: (error: unknown, fallback: string) => string;
 };
 
+type LogLevelFilter = 'all' | 'info' | 'warn' | 'error';
+type LogModuleFilter = 'all' | string;
+type LogSortOrder = 'newest' | 'oldest';
+
 export function useLogViewer({ galleryClient, setStatus, logAppEvent, toErrorMessage }: UseLogViewerArgs) {
   const { t } = useTranslation();
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [logContents, setLogContents] = useState('');
   const [isLogLoading, setIsLogLoading] = useState(false);
   const [isLogClearing, setIsLogClearing] = useState(false);
-  const [logLevelFilter, setLogLevelFilter] = useState<'all' | 'info' | 'warn' | 'error'>('all');
+  const [logLevelFilter, setLogLevelFilter] = useState<LogLevelFilter>('all');
   const [logDateFilter, setLogDateFilter] = useState('');
+  const [logModuleFilter, setLogModuleFilter] = useState<LogModuleFilter>('all');
+  const [logSortOrder, setLogSortOrder] = useState<LogSortOrder>('newest');
 
-  const filteredLogContents = useMemo(() => {
-    if (!logContents.trim()) {
-      return '';
-    }
+  const parsedLogEntries = useMemo(() => parseGalleryLogContents(logContents), [logContents]);
 
-    const lines = logContents.split(/\r?\n/).filter(Boolean);
-    const filtered = lines.filter((line) => {
-      const matchesLevel = logLevelFilter === 'all' || line.includes(`[${logLevelFilter.toUpperCase()}]`);
-      const matchesDate = !logDateFilter || line.startsWith(`[${logDateFilter}`);
-      return matchesLevel && matchesDate;
+  const availableLogModules = useMemo(
+    () => [...new Set(parsedLogEntries.map((entry) => entry.moduleId).filter((moduleId): moduleId is string => Boolean(moduleId)))].sort(),
+    [parsedLogEntries],
+  );
+
+  const filteredLogEntries = useMemo(() => {
+    const filtered = parsedLogEntries.filter((entry) => {
+      const matchesLevel = logLevelFilter === 'all' || entry.level === logLevelFilter;
+      const matchesDate = !logDateFilter || entry.timestamp.startsWith(logDateFilter);
+      const matchesModule = logModuleFilter === 'all' || entry.moduleId === logModuleFilter;
+      return matchesLevel && matchesDate && matchesModule;
     });
 
-    return filtered.join('\n');
-  }, [logContents, logDateFilter, logLevelFilter]);
+    return filtered.sort((left, right) => {
+      const leftValue = Number.isFinite(left.epochMs) ? left.epochMs : 0;
+      const rightValue = Number.isFinite(right.epochMs) ? right.epochMs : 0;
+      return logSortOrder === 'oldest' ? leftValue - rightValue : rightValue - leftValue;
+    });
+  }, [logDateFilter, logLevelFilter, logModuleFilter, logSortOrder, parsedLogEntries]);
 
   async function openLogViewer() {
     setIsLogModalOpen(true);
@@ -94,11 +108,17 @@ export function useLogViewer({ galleryClient, setStatus, logAppEvent, toErrorMes
     isLogModalOpen,
     isLogLoading,
     isLogClearing,
+    parsedLogEntries,
+    filteredLogEntries,
+    availableLogModules,
     logLevelFilter,
     logDateFilter,
-    filteredLogContents,
+    logModuleFilter,
+    logSortOrder,
     setLogLevelFilter,
     setLogDateFilter,
+    setLogModuleFilter,
+    setLogSortOrder,
     openLogViewer,
     closeLogViewer,
     clearLogsFromViewer,

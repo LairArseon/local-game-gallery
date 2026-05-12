@@ -46,6 +46,7 @@ type LibraryPanelProps = {
   onDownloadExtra: (gamePath: string, relativePath: string, itemName: string, isDirectory: boolean) => void;
   onOpenPictures: (gamePath: string) => void;
   onOpenScreenshot: (imagePath: string) => void;
+  renderModuleDetailContent?: (game: GameSummary) => ReactNode;
   scanResult: ScanResult;
   viewMode: GalleryViewMode;
   viewModeLabels: Record<GalleryViewMode, string>;
@@ -83,6 +84,7 @@ export function LibraryPanel({
   onDownloadExtra,
   onOpenPictures,
   onOpenScreenshot,
+  renderModuleDetailContent,
   scanResult,
   viewMode,
   viewModeLabels,
@@ -133,6 +135,7 @@ export function LibraryPanel({
           onDownloadExtra={onDownloadExtra}
           onOpenPictures={onOpenPictures}
           onOpenScreenshot={onOpenScreenshot}
+          moduleDetailContent={renderModuleDetailContent?.(game)}
         />
       )}
       renderFocusCard={renderFocusCard}

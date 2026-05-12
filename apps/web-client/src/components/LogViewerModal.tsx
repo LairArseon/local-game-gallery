@@ -11,34 +11,46 @@
 import { useState } from 'react';
 import { useRef } from 'react';
 import { LogViewerModal as SharedLogViewerModal } from '../../../shared/app-shell/components/LogViewerModal';
+import type { ParsedGalleryLogEntry } from '../../../shared/app-shell/core/moduleLogSources';
 
 type LogLevelFilter = 'all' | 'info' | 'warn' | 'error';
+type LogSortOrder = 'newest' | 'oldest';
 
 type LogViewerModalProps = {
   isLogLoading: boolean;
   isLogClearing: boolean;
-  filteredLogContents: string;
+  filteredLogEntries: ParsedGalleryLogEntry[];
+  availableLogModules: string[];
   logLevelFilter: LogLevelFilter;
   logDateFilter: string;
+  logModuleFilter: string;
+  logSortOrder: LogSortOrder;
   onClose: () => void;
   onChangeLogLevel: (value: LogLevelFilter) => void;
   onChangeDateFilter: (value: string) => void;
+  onChangeLogModule: (value: string) => void;
+  onChangeLogSortOrder: (value: LogSortOrder) => void;
   onClearLogs: () => void;
 };
 
 export function LogViewerModal({
   isLogLoading,
   isLogClearing,
-  filteredLogContents,
+  filteredLogEntries,
+  availableLogModules,
   logLevelFilter,
   logDateFilter,
+  logModuleFilter,
+  logSortOrder,
   onClose,
   onChangeLogLevel,
   onChangeDateFilter,
+  onChangeLogModule,
+  onChangeLogSortOrder,
   onClearLogs,
 }: LogViewerModalProps) {
   const [copyLabel, setCopyLabel] = useState('Copy logs');
-  const logViewerRef = useRef<HTMLPreElement | null>(null);
+  const logViewerRef = useRef<HTMLDivElement | null>(null);
 
   async function copyLogs() {
     const selection = window.getSelection();
@@ -80,12 +92,17 @@ export function LogViewerModal({
     <SharedLogViewerModal
       isLogLoading={isLogLoading}
       isLogClearing={isLogClearing}
-      filteredLogContents={filteredLogContents}
+      filteredLogEntries={filteredLogEntries}
+      availableLogModules={availableLogModules}
       logLevelFilter={logLevelFilter}
       logDateFilter={logDateFilter}
+      logModuleFilter={logModuleFilter}
+      logSortOrder={logSortOrder}
       onClose={onClose}
       onChangeLogLevel={onChangeLogLevel}
       onChangeDateFilter={onChangeDateFilter}
+      onChangeLogModule={onChangeLogModule}
+      onChangeLogSortOrder={onChangeLogSortOrder}
       onClearLogs={onClearLogs}
       logViewerRef={logViewerRef}
       extraFooterActions={(

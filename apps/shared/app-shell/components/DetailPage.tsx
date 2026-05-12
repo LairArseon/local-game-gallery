@@ -66,6 +66,7 @@ type DetailPageProps<TGame extends DetailPageGameLike> = {
   onDownloadVersion?: (gamePath: string, versionPath: string, versionName: string) => void;
   enableExtrasSection?: boolean;
   onDownloadExtra?: (gamePath: string, relativePath: string, itemName: string, isDirectory: boolean) => void;
+  moduleDetailContent?: ReactNode;
 };
 
 export function DetailPage<TGame extends DetailPageGameLike>({
@@ -94,6 +95,7 @@ export function DetailPage<TGame extends DetailPageGameLike>({
   onDownloadVersion,
   enableExtrasSection = false,
   onDownloadExtra,
+  moduleDetailContent,
 }: DetailPageProps<TGame>) {
   const { t } = useTranslation();
   const contextMenuWidth = 220;
@@ -358,6 +360,7 @@ export function DetailPage<TGame extends DetailPageGameLike>({
           </aside>
         </div>
       </section>
+      {moduleDetailContent}
       <section className="detail-section panel">
         <div className="detail-section__header">
           <h3>{t('detail.screenshots')}</h3>

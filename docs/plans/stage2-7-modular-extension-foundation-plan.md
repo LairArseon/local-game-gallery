@@ -488,6 +488,14 @@ Deliverable:
 Deliverable:
 - Shared UI surfaces ready for module contributions.
 
+Checkpoint note as of 2026-05-12:
+- The shared host now resolves built-in modules into real setup and detail seams, and the F95 scaffold is visible through those host-owned surfaces.
+- Work paused here for a UI polish stop because the first setup rendering looked visually out of place in the sidebar.
+- This stop also captures a logging follow-up: modules should use source strings in the `module:<moduleId>` form so the log viewer can filter by module and sort entries by timestamp.
+- The host render contract now passes module config state and game context into contribution renderers, which lets module-owned UI manage real setup inputs and detail summaries without moving F95 logic into the shell.
+- The F95 module now owns its first real setup and detail renderers: setup can edit feed/checkpoint state inside the module config namespace, and detail can summarize namespaced `module_f95_*` tags instead of falling back to a generic raw-tag dump.
+- The next continuation point has narrowed to the remaining open seams: add the focused-game seam, begin real F95 backend sync work, and continue the remaining notification genericization.
+
 ## Phase 5: Config extension support
 
 1. Add namespaced module state to config types.

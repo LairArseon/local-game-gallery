@@ -29,6 +29,7 @@ type DetailPageProps = {
   onDownloadExtra: (gamePath: string, relativePath: string, itemName: string, isDirectory: boolean) => void;
   onOpenPictures: (gamePath: string) => void;
   onOpenScreenshot: (imagePath: string) => void;
+  moduleDetailContent?: ReactNode;
 };
 
 export function DetailPage({
@@ -54,6 +55,7 @@ export function DetailPage({
   onOpenPictures,
   onOpenScreenshot,
   onPlayWithVersionPrompt,
+  moduleDetailContent,
 }: DetailPageProps) {
   return (
     <SharedDetailPage<GameSummary>
@@ -82,6 +84,7 @@ export function DetailPage({
       onDownloadVersion={onDownloadVersion}
       enableExtrasSection={true}
       onDownloadExtra={onDownloadExtra}
+      moduleDetailContent={moduleDetailContent}
     />
   );
 }

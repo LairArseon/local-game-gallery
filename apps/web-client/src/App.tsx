@@ -68,11 +68,16 @@ import { useNarrowViewport } from './hooks/useNarrowViewport';
 import { useDetailScrollReset } from './hooks/useDetailScrollReset';
 import { useTopbarSetupAnchor } from './hooks/useTopbarSetupAnchor';
 import { useGalleryClient } from './client/context';
+import { BuiltInModuleSetupSections } from '../../shared/app-shell/components/BuiltInModuleSetupSections';
+import { BuiltInModuleDetailPanels } from '../../shared/app-shell/components/BuiltInModuleDetailPanels';
+import { getBuiltInModuleRegistry } from '../../shared/app-shell/core/builtInModules';
+import { resolveConfiguredModules } from '../../shared/app-shell/core/moduleRegistry';
 import { formatByteSize } from '../../shared/app-shell/utils/app-helpers';
 
 const emptyScan: ScanResult = createEmptyScan();
 const fallbackRecoveryProbeIntervalMs = 12000;
 const maxConcurrentSizeRequests = 6;
+const builtInModuleRegistry = getBuiltInModuleRegistry();
 
 function normalizeSizePathKey(value: string) {
   return String(value ?? '').trim().replace(/\\/g, '/').toLowerCase();
@@ -273,11 +278,16 @@ function App() {
     isLogModalOpen,
     isLogLoading,
     isLogClearing,
+    filteredLogEntries,
+    availableLogModules,
     logLevelFilter,
     logDateFilter,
-    filteredLogContents,
+    logModuleFilter,
+    logSortOrder,
     setLogLevelFilter,
     setLogDateFilter,
+    setLogModuleFilter,
+    setLogSortOrder,
     openLogViewer,
     closeLogViewer,
     clearLogsFromViewer,
@@ -979,6 +989,28 @@ function App() {
     void handleNotificationFeedAction(item, action);
   }, [handleNotificationFeedAction]);
 
+  const resolvedBuiltInModules = useMemo(
+    () => resolveConfiguredModules(builtInModuleRegistry.getAll(), config?.modules ?? {}),
+    [config?.modules],
+  );
+
+  const onModuleConfigStateChange = useCallback((moduleId: string, nextModuleState: GalleryConfig['modules'][string]) => {
+    setConfig((current) => current ? {
+      ...current,
+      modules: {
+        ...current.modules,
+        [moduleId]: nextModuleState,
+      },
+    } : current);
+  }, [setConfig]);
+
+  const renderModuleDetailContent = useCallback((game: ScanResult['games'][number]) => (
+    <BuiltInModuleDetailPanels
+      game={game}
+      modules={resolvedBuiltInModules}
+    />
+  ), [resolvedBuiltInModules]);
+
   // Grid sizing reacts to container width and user column preferences.
   useResponsiveGrid({
     viewMode,
@@ -1202,6 +1234,12 @@ function App() {
             isAppIconDragActive={isAppIconDragActive}
             onApplyAppIconNow={onApplyAppIconNow}
             onResetAppIcon={resetAppIcon}
+            moduleSetupContent={(
+              <BuiltInModuleSetupSections
+                modules={resolvedBuiltInModules}
+                onConfigStateChange={onModuleConfigStateChange}
+              />
+            )}
           />
         ) : null}
         <div className={`topbar-sync-progress ${scanProgress > 0 ? 'is-visible' : ''}`} aria-hidden="true">
@@ -1244,6 +1282,7 @@ function App() {
           onDownloadVersion={onDownloadVersion}
           onOpenPictures={openPicturesModal}
           onOpenScreenshot={setScreenshotModalPath}
+          renderModuleDetailContent={renderModuleDetailContent}
           scanResult={scanResult}
           viewMode={viewMode}
           viewModeLabels={viewModeLabels}
@@ -1350,12 +1389,17 @@ function App() {
         isLogModalOpen={isLogModalOpen}
         isLogLoading={isLogLoading}
         isLogClearing={isLogClearing}
-        filteredLogContents={filteredLogContents}
+        filteredLogEntries={filteredLogEntries}
+        availableLogModules={availableLogModules}
         logLevelFilter={logLevelFilter}
         logDateFilter={logDateFilter}
+        logModuleFilter={logModuleFilter}
+        logSortOrder={logSortOrder}
         closeLogViewer={closeLogViewer}
         setLogLevelFilter={setLogLevelFilter}
         setLogDateFilter={setLogDateFilter}
+        setLogModuleFilter={setLogModuleFilter}
+        setLogSortOrder={setLogSortOrder}
         clearLogsFromViewer={clearLogsFromViewer}
         screenshotModalPath={screenshotModalPath}
         setScreenshotModalPath={setScreenshotModalPath}

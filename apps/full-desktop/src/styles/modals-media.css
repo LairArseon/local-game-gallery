@@ -517,13 +517,88 @@
 
 .log-viewer__filters {
   display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(170px, 220px);
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 10px;
   margin-bottom: 12px;
 }
 
 .log-viewer__filters .field {
   margin: 0;
+}
+
+.log-viewer__table-wrap {
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  resize: horizontal;
+  min-width: 0;
+}
+
+.log-viewer__table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.log-viewer__table th,
+.log-viewer__table td {
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  word-break: normal;
+}
+
+.log-viewer__table th {
+  position: sticky;
+  top: 0;
+  background: rgba(12, 16, 24, 0.96);
+  z-index: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.log-viewer__table th:nth-child(1),
+.log-viewer__table td:nth-child(1),
+.log-viewer__table th:nth-child(2),
+.log-viewer__table td:nth-child(2),
+.log-viewer__table th:nth-child(3),
+.log-viewer__table td:nth-child(3),
+.log-viewer__table th:nth-child(4),
+.log-viewer__table td:nth-child(4) {
+  white-space: nowrap;
+}
+
+.log-viewer__table th:nth-child(1),
+.log-viewer__table td:nth-child(1) {
+  min-width: 168px;
+}
+
+.log-viewer__table th:nth-child(2),
+.log-viewer__table td:nth-child(2) {
+  min-width: 84px;
+}
+
+.log-viewer__table th:nth-child(3),
+.log-viewer__table td:nth-child(3) {
+  min-width: 140px;
+}
+
+.log-viewer__table th:nth-child(4),
+.log-viewer__table td:nth-child(4) {
+  min-width: 92px;
+}
+
+.log-viewer__table td:last-child {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.log-viewer__empty {
+  margin: 0;
+  color: rgba(229, 232, 238, 0.72);
 }
 
 .media-grid__reorder {
