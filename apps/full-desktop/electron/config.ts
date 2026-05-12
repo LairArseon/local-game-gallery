@@ -84,11 +84,71 @@ function normalizeMetadataGapScale(value: number | string | undefined, fallback 
   return Math.min(maxMetadataGapScale, Math.max(minMetadataGapScale, parsed));
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeModuleStateValue(value: unknown): unknown {
+  if (
+    value === null
+    || typeof value === 'string'
+    || typeof value === 'boolean'
+  ) {
+    return value;
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => normalizeModuleStateValue(entry));
+  }
+
+  if (isPlainObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .map(([key, entry]) => [String(key).trim(), normalizeModuleStateValue(entry)] as const)
+        .filter(([key]) => key),
+    );
+  }
+
+  return null;
+}
+
+function normalizeModulesState(value: unknown): GalleryConfig['modules'] {
+  if (!isPlainObject(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([moduleId, moduleState]) => {
+        const normalizedModuleId = String(moduleId).trim();
+        if (!normalizedModuleId || !isPlainObject(moduleState)) {
+          return null;
+        }
+
+        const rawState = isPlainObject(moduleState.state) ? moduleState.state : {};
+        return [normalizedModuleId, {
+          enabled: Boolean(moduleState.enabled),
+          state: Object.fromEntries(
+            Object.entries(rawState)
+              .map(([stateKey, stateValue]) => [String(stateKey).trim(), normalizeModuleStateValue(stateValue)] as const)
+              .filter(([stateKey]) => stateKey),
+          ),
+        }] as const;
+      })
+      .filter((entry): entry is [string, GalleryConfig['modules'][string]] => entry !== null),
+  );
+}
+
 const defaultConfig: GalleryConfig = {
   language: 'en',
   dismissedVersionMismatches: {},
   vaultedGamePaths: [],
   vaultPin: '',
+  modules: {},
   gamesRoot: '',
   metadataMirrorRoot: '',
   excludePatterns: ['.git', 'Thumbs.db'],
@@ -126,6 +186,7 @@ export async function loadConfig() {
 
     return {
       ...merged,
+      modules: normalizeModulesState(parsed.modules ?? merged.modules),
       vaultPin: deobfuscateVaultPin(String(parsed.vaultPin ?? merged.vaultPin ?? '').trim()),
     };
   } catch {
@@ -145,6 +206,7 @@ export async function saveConfig(config: GalleryConfig) {
         .map(([gamePath, detectedVersion]) => [String(gamePath).trim(), String(detectedVersion ?? '').trim()])
         .filter(([gamePath, detectedVersion]) => gamePath && detectedVersion),
     ),
+    modules: normalizeModulesState(config.modules),
     vaultedGamePaths: [...new Set((config.vaultedGamePaths ?? []).map((gamePath) => String(gamePath).trim()).filter(Boolean))],
     vaultPin: String(config.vaultPin ?? '').trim(),
     metadataMirrorRoot: String(config.metadataMirrorRoot ?? '').trim(),

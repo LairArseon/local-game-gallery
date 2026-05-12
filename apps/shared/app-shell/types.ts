@@ -43,11 +43,25 @@ export type FilterPreset = {
   orderBy: FilterOrderByMode;
 };
 
+export type GalleryModuleStateValue =
+  | string
+  | number
+  | boolean
+  | null
+  | GalleryModuleStateValue[]
+  | { [key: string]: GalleryModuleStateValue };
+
+export type GalleryModuleState = {
+  enabled: boolean;
+  state: Record<string, GalleryModuleStateValue>;
+};
+
 export type GalleryConfig = {
   language: AppLanguage;
   dismissedVersionMismatches: Record<string, string>;
   vaultedGamePaths: string[];
   vaultPin: string;
+  modules: Record<string, GalleryModuleState>;
   gamesRoot: string;
   metadataMirrorRoot: string;
   excludePatterns: string[];
@@ -376,6 +390,34 @@ export type ImportStagedGameArchiveResult = {
   gamePath: string | null;
   versionPath: string | null;
   message: string;
+};
+
+export type NotificationFeedActionKind = 'open-game' | 'resolve' | 'dismiss' | 'open-url' | 'custom';
+
+export type NotificationFeedAction = {
+  id: string;
+  label: string;
+  kind: NotificationFeedActionKind;
+  disabled?: boolean;
+  payload?: Record<string, GalleryModuleStateValue>;
+};
+
+export type NotificationFeedSourceKind = 'version-mismatch' | 'vault-alert' | 'module' | 'system';
+
+export type NotificationFeedSeverity = 'info' | 'warn' | 'error';
+
+export type NotificationFeedItem = {
+  id: string;
+  sourceId: string;
+  sourceKind: NotificationFeedSourceKind;
+  title: string;
+  message: string;
+  createdAt: string;
+  gamePath: string | null;
+  severity: NotificationFeedSeverity;
+  dismissible: boolean;
+  actions: NotificationFeedAction[];
+  metadata?: Record<string, GalleryModuleStateValue>;
 };
 
 export type GalleryApi = {

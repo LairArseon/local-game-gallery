@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import type { TFunction } from 'i18next';
+import type { NotificationFeedAction, NotificationFeedItem } from '../types';
 
 type GalleryClientLike<TConfig, TMetadata> = {
   saveConfig: (config: TConfig) => Promise<unknown>;
@@ -100,6 +101,47 @@ export function useVersionMismatchManager<
     [mismatchedGames],
   );
 
+  const versionNotificationFeedItems = useMemo<NotificationFeedItem[]>(
+    () => visibleVersionMismatchGames.map((game) => ({
+      id: `version-mismatch:${game.path}`,
+      sourceId: game.path,
+      sourceKind: 'version-mismatch',
+      title: game.name,
+      message: `${String((game.metadata as { latestVersion?: string }).latestVersion ?? '').trim() || t('detail.unknown')} -> ${String(game.detectedLatestVersion ?? '').trim() || t('detail.unknown')}`,
+      createdAt: '1970-01-01T00:00:00.000Z',
+      gamePath: game.path,
+      severity: 'warn',
+      dismissible: true,
+      actions: [
+        {
+          id: `resolve:${game.path}`,
+          label: t('versionMismatch.resolve'),
+          kind: 'resolve',
+          payload: {
+            gamePath: game.path,
+            gameName: game.name,
+            detectedVersion: game.detectedLatestVersion,
+          },
+        },
+        {
+          id: `dismiss:${game.path}`,
+          label: t('versionMismatch.dismiss'),
+          kind: 'dismiss',
+          payload: {
+            gamePath: game.path,
+            gameName: game.name,
+            detectedVersion: game.detectedLatestVersion,
+          },
+        },
+      ],
+      metadata: {
+        currentVersion: String((game.metadata as { latestVersion?: string }).latestVersion ?? '').trim(),
+        detectedVersion: String(game.detectedLatestVersion ?? '').trim(),
+      },
+    })),
+    [t, visibleVersionMismatchGames],
+  );
+
   async function dismissVersionMismatch(gamePath: string, detectedVersion: string, gameName: string) {
     if (!config) {
       return;
@@ -174,12 +216,34 @@ export function useVersionMismatchManager<
     }, 0);
   }
 
+  async function handleNotificationFeedAction(item: NotificationFeedItem, action: NotificationFeedAction) {
+    const actionGamePath = String(action.payload?.gamePath ?? item.gamePath ?? '').trim();
+    const actionGameName = String(action.payload?.gameName ?? item.title ?? '').trim();
+    const detectedVersion = String(action.payload?.detectedVersion ?? item.metadata?.detectedVersion ?? '').trim();
+
+    if (action.kind === 'open-game' && actionGamePath) {
+      focusGameFromNotification(actionGamePath);
+      return;
+    }
+
+    if (action.kind === 'resolve' && actionGamePath && actionGameName && detectedVersion) {
+      await resolveVersionMismatch(actionGamePath, actionGameName, detectedVersion);
+      return;
+    }
+
+    if (action.kind === 'dismiss' && actionGamePath && actionGameName && detectedVersion) {
+      await dismissVersionMismatch(actionGamePath, detectedVersion, actionGameName);
+    }
+  }
+
   return {
     isVersionNotificationsOpen,
     setIsVersionNotificationsOpen,
     visibleVersionMismatchGames,
+    versionNotificationFeedItems,
     dismissVersionMismatch,
     resolveVersionMismatch,
     focusGameFromNotification,
+    handleNotificationFeedAction,
   };
 }

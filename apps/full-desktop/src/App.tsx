@@ -3,13 +3,13 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { GalleryConfig, GalleryViewMode, ScanResult, ServiceCapabilities } from './types';
+import type { GalleryConfig, GalleryViewMode, NotificationFeedAction, NotificationFeedItem, ScanResult, ServiceCapabilities } from './types';
 import { LibraryPanel } from './components/LibraryPanel';
 import { ModalHost } from './components/ModalHost';
 import { SetupPanel } from './components/SetupPanel';
 import { TopbarControls } from './components/TopbarControls';
 import { TopbarPanels } from './components/TopbarPanels';
-import { VersionMismatchPanel } from './components/VersionMismatchPanel';
+import { NotificationFeedPanel } from './components/NotificationFeedPanel';
 import { FloatingVersionStorageToast } from './components/FloatingVersionStorageToast';
 import { FloatingFallbackAlert } from './components/FloatingFallbackAlert';
 import { useAppIconSettings } from './hooks/useAppIconSettings';
@@ -653,9 +653,11 @@ function App() {
     isVersionNotificationsOpen,
     setIsVersionNotificationsOpen,
     visibleVersionMismatchGames,
+    versionNotificationFeedItems,
     dismissVersionMismatch,
     resolveVersionMismatch,
     focusGameFromNotification,
+    handleNotificationFeedAction,
   } = useVersionMismatchManager({
     config,
     setConfig,
@@ -811,6 +813,29 @@ function App() {
     gridColumns,
   });
 
+  const notificationFeedItems = useMemo<NotificationFeedItem[]>(
+    () => [
+      ...announcedMissingVaultedPaths.map((gamePath) => ({
+        id: `vault-alert:${gamePath}`,
+        sourceId: gamePath,
+        sourceKind: 'vault-alert' as const,
+        title: t('vaultNotifications.title'),
+        message: gamePath,
+        createdAt: '1970-01-01T00:00:00.000Z',
+        gamePath: null,
+        severity: 'warn' as const,
+        dismissible: false,
+        actions: [],
+      })),
+      ...versionNotificationFeedItems,
+    ],
+    [announcedMissingVaultedPaths, t, versionNotificationFeedItems],
+  );
+
+  const onNotificationFeedAction = useCallback((item: NotificationFeedItem, action: NotificationFeedAction) => {
+    void handleNotificationFeedAction(item, action);
+  }, [handleNotificationFeedAction]);
+
   // Grid sizing reacts to container width and user column preferences.
   useResponsiveGrid({
     viewMode,
@@ -875,7 +900,7 @@ function App() {
           supportsNativeContextMenu={supportsNativeContextMenu}
           isVersionNotificationsOpen={isVersionNotificationsOpen}
           isScanning={isScanning}
-          versionMismatchCount={vaultAwareVersionMismatchGames.length + announcedMissingVaultedPaths.length}
+          versionMismatchCount={notificationFeedItems.length}
           onToggleTagPoolPanel={() => setIsTagPoolPanelOpen((current) => !current)}
           onToggleFilterPanel={() => setIsFilterPanelOpen((current) => !current)}
           onToggleSidebar={() => setIsSidebarOpen((current) => !current)}
@@ -891,17 +916,13 @@ function App() {
           actionLabels={actionLabels}
         />
         {isVersionNotificationsOpen ? (
-          <VersionMismatchPanel
-            games={vaultAwareVersionMismatchGames}
-            missingVaultedPaths={announcedMissingVaultedPaths}
+          <NotificationFeedPanel
+            items={notificationFeedItems}
             onOpenGame={(gamePath) => {
               focusGameFromNotification(gamePath);
             }}
-            onResolve={(game) => {
-              void resolveVersionMismatch(game.path, game.name, game.detectedLatestVersion);
-            }}
-            onDismiss={(game) => {
-              void dismissVersionMismatch(game.path, game.detectedLatestVersion, game.name);
+            onAction={(item, action) => {
+              onNotificationFeedAction(item, action);
             }}
           />
         ) : null}
