@@ -18,7 +18,7 @@ export function BuiltInModuleDetailPanels<TGame extends ModuleHostGameLike>({
 }: BuiltInModuleDetailPanelsProps<TGame>) {
   const detailEntries = useMemo(
     () => modules
-      .filter((moduleEntry) => moduleEntry.configState.installed && moduleEntry.configState.enabled)
+      .filter((moduleEntry) => moduleEntry.configState.enabled)
       .flatMap(({ definition, configState }) =>
         definition.contributes
           .filter((contribution) => contribution.slot === 'game.detail.panel')

@@ -95,9 +95,7 @@ export function resolveModuleConfigState(
   moduleDefinition: BuiltInModuleDefinition,
   configuredState: ModuleHostConfigState | null | undefined,
 ): ModuleHostConfigState {
-  const installed = configuredState
-    ? (typeof configuredState.installed === 'boolean' ? configuredState.installed : true)
-    : Boolean(moduleDefinition.enabledByDefault);
+  const installed = true;
 
   return {
     installed,

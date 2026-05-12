@@ -2,6 +2,7 @@ import { createElement } from 'react';
 import type { NotificationFeedItem } from '../shared/app-shell/types';
 import type { BuiltInModuleDefinition, BuiltInModuleNotificationContext } from '../shared/app-shell/types/moduleHostTypes';
 import { createModuleLogSource } from '../shared/app-shell/core/moduleLogSources';
+import moduleManifest from './manifest.json';
 import { runF95RefreshSync } from './core/f95Refresh';
 import {
   F95_LAST_FEED_ITEM_ID_TAG,
@@ -44,14 +45,14 @@ function getF95NotificationFeedItems(context: BuiltInModuleNotificationContext):
       return {
         id: `module:f95:update:${game.path}:${notificationMarker}`,
         sourceId: F95_MODULE_ID,
-        sourceKind: 'module',
+        sourceKind: 'module' as const,
         title: game.name,
         message: lastUpdateTitle
           ? `Newer F95 update detected: ${lastUpdateTitle}`
           : 'Newer F95 update detected.',
         createdAt: lastUpdated || '1970-01-01T00:00:00.000Z',
         gamePath: game.path,
-        severity: 'info',
+        severity: 'info' as const,
         dismissible: true,
         actions: [
           ...(threadUrl ? [{
@@ -83,9 +84,9 @@ function getF95NotificationFeedItems(context: BuiltInModuleNotificationContext):
 
 export const f95ModuleDefinition: BuiltInModuleDefinition = {
   id: F95_MODULE_ID,
-  displayName: 'F95 Module',
-  description: 'Provides F95 game metadata, RSS-driven update state, and module-owned UI contributions.',
-  installerComponentId: F95_MODULE_ID,
+  displayName: moduleManifest.displayName,
+  description: moduleManifest.description,
+  installerComponentId: moduleManifest.installerComponentId,
   enabledByDefault: false,
   contributes: [
     {
@@ -149,3 +150,7 @@ export const f95ModuleDefinition: BuiltInModuleDefinition = {
   }),
   refresh: runF95RefreshSync,
 };
+
+export const moduleEntry = f95ModuleDefinition;
+
+export default f95ModuleDefinition;

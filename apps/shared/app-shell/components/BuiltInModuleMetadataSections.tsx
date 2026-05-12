@@ -19,7 +19,7 @@ export function BuiltInModuleMetadataSections({
 }: BuiltInModuleMetadataSectionsProps) {
   const metadataEntries = useMemo(
     () => modules
-      .filter((moduleEntry) => moduleEntry.configState.installed && moduleEntry.configState.enabled)
+      .filter((moduleEntry) => moduleEntry.configState.enabled)
       .flatMap(({ definition, configState }) =>
         definition.contributes
           .filter((contribution) => contribution.slot === 'metadata.editor.section')

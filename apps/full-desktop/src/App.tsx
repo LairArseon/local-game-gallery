@@ -50,13 +50,12 @@ import { BuiltInModuleGameBadges } from '../../shared/app-shell/components/Built
 import { BuiltInModuleFocusPanels } from '../../shared/app-shell/components/BuiltInModuleFocusPanels';
 import { BuiltInModuleMetadataSections } from '../../shared/app-shell/components/BuiltInModuleMetadataSections';
 import { useBuiltInModuleRefreshSync } from '../../shared/app-shell/hooks/useBuiltInModuleRefreshSync';
-import { getBuiltInModuleRegistry } from '../../shared/app-shell/core/builtInModules';
+import { useBuiltInModuleRegistry } from '../../shared/app-shell/hooks/useBuiltInModuleRegistry';
 import { resolveConfiguredModules } from '../../shared/app-shell/core/moduleRegistry';
 import { formatByteSize } from '../../shared/app-shell/utils/app-helpers';
 
 const emptyScan: ScanResult = createEmptyScan();
 const maxConcurrentSizeRequests = 6;
-const builtInModuleRegistry = getBuiltInModuleRegistry();
 
 function normalizeSizePathKey(value: string) {
   return String(value ?? '').trim().replace(/\\/g, '/').toLowerCase();
@@ -119,6 +118,7 @@ function App() {
   const sizeScanBatchIdRef = useRef(0);
   const hasAutoTriggeredSizeScanRef = useRef(false);
   const logAppEvent = createLogAppEvent(galleryClient);
+  const builtInModuleRegistry = useBuiltInModuleRegistry(logAppEvent);
 
   const {
     isMirrorSyncConfirmOpen,
@@ -795,7 +795,7 @@ function App() {
 
   const resolvedBuiltInModules = useMemo(
     () => resolveConfiguredModules(builtInModuleRegistry.getAll(), config?.modules ?? {}),
-    [config?.modules],
+    [builtInModuleRegistry, config?.modules],
   );
 
   const renderModuleFocusContent = useCallback((game: ScanResult['games'][number]) => (

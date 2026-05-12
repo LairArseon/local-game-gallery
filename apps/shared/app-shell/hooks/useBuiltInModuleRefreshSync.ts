@@ -50,7 +50,7 @@ function collectPersistentModuleNotificationItems(
   }
 
   return modules
-    .filter((moduleEntry) => moduleEntry.configState.installed && moduleEntry.configState.enabled)
+    .filter((moduleEntry) => moduleEntry.configState.enabled)
     .flatMap((moduleEntry) => {
       const dismissedNotificationMarkers = readDismissedNotificationMarkers(config, moduleEntry.definition.id);
       return moduleEntry.definition.contributes
@@ -117,7 +117,7 @@ export function useBuiltInModuleRefreshSync({
 
     lastProcessedScanMarkerRef.current = scanMarker;
     const enabledModules = modules.filter(
-      (moduleEntry) => moduleEntry.configState.installed && moduleEntry.configState.enabled && moduleEntry.definition.refresh,
+      (moduleEntry) => moduleEntry.configState.enabled && moduleEntry.definition.refresh,
     );
     if (!enabledModules.length) {
       return;

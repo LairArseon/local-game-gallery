@@ -13,7 +13,7 @@ export function BuiltInModuleFocusPanels<TGame extends ModuleHostGameLike>({
 }: BuiltInModuleFocusPanelsProps<TGame>) {
   const focusEntries = useMemo(
     () => modules
-      .filter((moduleEntry) => moduleEntry.configState.installed && moduleEntry.configState.enabled)
+      .filter((moduleEntry) => moduleEntry.configState.enabled)
       .flatMap(({ definition, configState }) =>
         definition.contributes
           .filter((contribution) => contribution.slot === 'game.focus.panel')

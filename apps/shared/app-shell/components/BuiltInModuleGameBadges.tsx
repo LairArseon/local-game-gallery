@@ -13,7 +13,7 @@ export function BuiltInModuleGameBadges<TGame extends ModuleHostGameLike>({
 }: BuiltInModuleGameBadgesProps<TGame>) {
   const badgeEntries = useMemo(
     () => modules
-      .filter((moduleEntry) => moduleEntry.configState.installed && moduleEntry.configState.enabled)
+      .filter((moduleEntry) => moduleEntry.configState.enabled)
       .flatMap(({ definition, configState }) =>
         definition.contributes
           .filter((contribution) => contribution.slot === 'game.card.badge')

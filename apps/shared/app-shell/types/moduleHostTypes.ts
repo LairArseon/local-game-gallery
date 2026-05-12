@@ -15,6 +15,8 @@ export type ModuleHostConfigState = {
   state: Record<string, ModuleHostStateValue>;
 };
 
+export const MODULE_HOST_API_VERSION = '1';
+
 export type KnownBuiltInModuleContributionSlot =
   | 'setup.section'
   | 'notification.feed'
@@ -74,6 +76,25 @@ export type BuiltInModuleContributionDescriptor = {
   order?: number;
   render?: (context: BuiltInModuleRenderContext) => ReactNode;
   getItems?: (context: BuiltInModuleNotificationContext) => NotificationFeedItem[];
+};
+
+export type BuiltInModuleManifestContribution = {
+  id: string;
+  slot: BuiltInModuleContributionSlot;
+  title?: string;
+  description?: string;
+  order?: number;
+};
+
+export type BuiltInModuleManifest = {
+  id: string;
+  displayName: string;
+  description?: string;
+  version: string;
+  entry: string;
+  hostApiVersion: string;
+  installerComponentId?: string;
+  contributes: BuiltInModuleManifestContribution[];
 };
 
 export type BuiltInModuleRefreshContext = {

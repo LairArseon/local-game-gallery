@@ -50,7 +50,9 @@
       "kind": "built-in-module",
       "selectionMode": "optional",
       "artifacts": [
-        "apps/f95-module"
+        "dist/modules/f95",
+        "dist-web-client/modules/f95",
+        "dist-standalone-client/modules/f95"
       ],
       "dependsOn": [],
       "conflictsWith": []

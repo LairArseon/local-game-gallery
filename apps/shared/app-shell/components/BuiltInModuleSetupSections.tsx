@@ -16,7 +16,6 @@ export function BuiltInModuleSetupSections({
 
   const setupEntries = useMemo(
     () => modules
-      .filter((moduleEntry) => moduleEntry.configState.installed)
       .flatMap(({ definition, configState }) =>
         definition.contributes
           .filter((contribution) => contribution.slot === 'setup.section')
