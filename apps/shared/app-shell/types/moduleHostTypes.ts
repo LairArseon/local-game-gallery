@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { GalleryApi, GalleryConfig, NotificationFeedItem, GameSummary } from '../types';
 
 export type ModuleHostStateValue =
   | string
@@ -9,6 +10,7 @@ export type ModuleHostStateValue =
   | { [key: string]: ModuleHostStateValue };
 
 export type ModuleHostConfigState = {
+  installed: boolean;
   enabled: boolean;
   state: Record<string, ModuleHostStateValue>;
 };
@@ -16,6 +18,8 @@ export type ModuleHostConfigState = {
 export type KnownBuiltInModuleContributionSlot =
   | 'setup.section'
   | 'notification.feed'
+  | 'metadata.editor.section'
+  | 'game.card.badge'
   | 'game.focus.panel'
   | 'game.detail.panel';
 
@@ -34,6 +38,10 @@ export type ModuleHostGameLike = {
   };
 };
 
+export type ModuleHostMetadataDraftLike = {
+  customTags: ModuleHostGameTag[];
+};
+
 export type BuiltInModuleRenderContext = {
   moduleId: string;
   moduleDisplayName: string;
@@ -41,6 +49,21 @@ export type BuiltInModuleRenderContext = {
   onConfigStateChange?: (nextConfigState: ModuleHostConfigState) => void;
   game?: ModuleHostGameLike;
   moduleTags?: ModuleHostGameTag[];
+  onGameMetadataTagsChange?: (
+    updater: ModuleHostGameTag[] | ((current: ModuleHostGameTag[]) => ModuleHostGameTag[])
+  ) => Promise<void>;
+  metadataDraft?: ModuleHostMetadataDraftLike;
+  onMetadataDraftChange?: (
+    updater: ModuleHostMetadataDraftLike | ((current: ModuleHostMetadataDraftLike) => ModuleHostMetadataDraftLike)
+  ) => void;
+};
+
+export type BuiltInModuleNotificationContext = {
+  moduleId: string;
+  moduleDisplayName: string;
+  config: GalleryConfig;
+  configState: ModuleHostConfigState;
+  games: GameSummary[];
 };
 
 export type BuiltInModuleContributionDescriptor = {
@@ -50,7 +73,24 @@ export type BuiltInModuleContributionDescriptor = {
   description?: string;
   order?: number;
   render?: (context: BuiltInModuleRenderContext) => ReactNode;
-  getItems?: () => BuiltInModuleNotificationDescriptor[];
+  getItems?: (context: BuiltInModuleNotificationContext) => NotificationFeedItem[];
+};
+
+export type BuiltInModuleRefreshContext = {
+  moduleId: string;
+  moduleDisplayName: string;
+  config: GalleryConfig;
+  configState: ModuleHostConfigState;
+  games: GameSummary[];
+  galleryClient: GalleryApi;
+  logAppEvent: (message: string, level?: 'info' | 'warn' | 'error', source?: string) => Promise<void>;
+  toErrorMessage: (error: unknown, fallback: string) => string;
+};
+
+export type BuiltInModuleRefreshResult = {
+  nextConfigState?: ModuleHostConfigState;
+  updatedGamePaths?: string[];
+  notifications?: NotificationFeedItem[];
 };
 
 export type BuiltInModuleDefinition = {
@@ -61,6 +101,7 @@ export type BuiltInModuleDefinition = {
   enabledByDefault?: boolean;
   contributes: BuiltInModuleContributionDescriptor[];
   getDefaultState?: () => Record<string, ModuleHostStateValue>;
+  refresh?: (context: BuiltInModuleRefreshContext) => Promise<BuiltInModuleRefreshResult | null>;
 };
 
 export type BuiltInModuleSetupSection = {
@@ -77,18 +118,6 @@ export type BuiltInModuleGamePanel = {
   title: string;
   order?: number;
   render: () => ReactNode;
-};
-
-export type BuiltInModuleNotificationDescriptor = {
-  id: string;
-  moduleId: string;
-  createdAt: string;
-  title: string;
-  message: string;
-  gamePath?: string | null;
-  severity?: 'info' | 'warn' | 'error';
-  dismissible?: boolean;
-  metadata?: Record<string, ModuleHostStateValue>;
 };
 
 export type BuiltInModuleHost = {

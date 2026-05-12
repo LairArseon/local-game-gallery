@@ -16,6 +16,7 @@ export function GameCard<TGame extends GameDisplayLike>({
   onOpenDetail,
   onResolveVersionMismatch,
   onContextMenu,
+  extraBadges,
 }: SharedGameCardProps<TGame>) {
   const { t } = useTranslation();
   const isNarrowPosterCardLayout = isNarrowViewport && (viewMode === 'poster' || viewMode === 'card');
@@ -86,6 +87,8 @@ export function GameCard<TGame extends GameDisplayLike>({
     </button>
   ) : null;
 
+  const moduleBadges = extraBadges ? <div className="game-card__module-badge-row">{extraBadges}</div> : null;
+
   const commonProps = {
     className: '',
     onClick: () => onToggleSelection(game.path),
@@ -100,6 +103,7 @@ export function GameCard<TGame extends GameDisplayLike>({
         {art}
         <div className="game-card__body game-card__body--narrow">
           <h3>{game.name}</h3>
+          {moduleBadges}
           <div className="game-card__narrow-meta-line">
             <p className="game-card__status-inline">{statusValue}</p>
             <span className="game-card__score-bubble">{scoreValue}</span>
@@ -114,6 +118,7 @@ export function GameCard<TGame extends GameDisplayLike>({
       <article className={`game-card game-card--poster game-card--narrow ${versionMismatchClass} ${vaultedClass}`} data-game-path={game.path} onClick={commonProps.onClick} onContextMenu={commonProps.onContextMenu}>
         {art}
         <div className="game-card__narrow-overlay">
+          {moduleBadges}
           <span className="game-card__score-bubble">{scoreValue}</span>
         </div>
       </article>
@@ -131,6 +136,7 @@ export function GameCard<TGame extends GameDisplayLike>({
         </div>
         <div className="game-card__compact-main">
           <div className="game-card__compact-meta">
+            {moduleBadges}
             <p><strong>{t('detail.status')}:</strong> {game.metadata.status || t('detail.notSet')}</p>
             <p><strong>{t('detail.score')}:</strong> {game.metadata.score || t('detail.notSet')}</p>
             <p className="game-card__compact-description"><strong>{t('detail.description')}:</strong> {compactDescription || t('detail.noDescription')}</p>
@@ -169,6 +175,7 @@ export function GameCard<TGame extends GameDisplayLike>({
         {art}
         <div className="game-card__body">
           <h3>{game.name}</h3>
+          {moduleBadges}
           {mismatchBadge}
           <p>{t('detail.latestVersion')}: {game.metadata.latestVersion || t('detail.unknown')}</p>
           <p>{t('detail.status')}: {game.metadata.status || t('detail.notSet')}</p>
@@ -187,6 +194,7 @@ export function GameCard<TGame extends GameDisplayLike>({
         <div className="game-card__body game-card__body--expanded">
           <div>
             <h3>{game.name}</h3>
+            {moduleBadges}
             {mismatchBadge}
             <p>{t('detail.status')}: {game.metadata.status || t('detail.notSet')}</p>
             <p>{t('detail.score')}: {game.metadata.score || t('detail.notSet')}</p>
@@ -237,6 +245,7 @@ export function GameCard<TGame extends GameDisplayLike>({
       {art}
       <div className="game-card__body">
         <h3>{game.name}</h3>
+        {moduleBadges}
         {mismatchBadge}
         <p>{t('detail.status')}: {game.metadata.status || t('detail.notSet')}</p>
         <p>{t('detail.score')}: {game.metadata.score || t('detail.notSet')}</p>

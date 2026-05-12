@@ -1,4 +1,5 @@
 import { Fragment, useCallback, type Dispatch, type MouseEvent, type SetStateAction } from 'react';
+import type { ReactNode } from 'react';
 import { FocusCard } from '../components/FocusCard';
 import { GameCard } from '../components/GameCard';
 import type { GalleryViewMode, GameSummary } from '../types';
@@ -30,6 +31,8 @@ type UseGalleryRenderersArgs = {
   focusCarouselIndexByGamePath: Record<string, number>;
   setFocusCarouselIndexByGamePath: Dispatch<SetStateAction<Record<string, number>>>;
   setScreenshotModalPath: Dispatch<SetStateAction<string | null>>;
+  renderFocusExtraContent?: (game: GameSummary) => ReactNode;
+  renderGameExtraBadges?: (game: GameSummary) => ReactNode;
 };
 
 export function useGalleryRenderers({
@@ -51,6 +54,8 @@ export function useGalleryRenderers({
   focusCarouselIndexByGamePath,
   setFocusCarouselIndexByGamePath,
   setScreenshotModalPath,
+  renderFocusExtraContent,
+  renderGameExtraBadges,
 }: UseGalleryRenderersArgs) {
   const renderFocusCard = useCallback((game: GameSummary, isVertical: boolean, showActions = true) => {
     const hasScreenshotCarousel = game.media.screenshots.length > 0;
@@ -86,9 +91,10 @@ export function useGalleryRenderers({
         onResolveVersionMismatch={onResolveVersionMismatch}
         actionLabels={actionLabels}
         formatLastPlayedValue={formatLastPlayed}
+        extraContent={renderFocusExtraContent?.(game)}
       />
     );
-  }, [actionLabels, canLaunch, focusCarouselIndexByGamePath, getImageSrc, onOpenDetail, onPlayClick, onPlayWithVersionPromptClick, onResolveVersionMismatch, setFocusCarouselIndexByGamePath, setScreenshotModalPath]);
+  }, [actionLabels, canLaunch, focusCarouselIndexByGamePath, getImageSrc, onOpenDetail, onPlayClick, onPlayWithVersionPromptClick, onResolveVersionMismatch, renderFocusExtraContent, setFocusCarouselIndexByGamePath, setScreenshotModalPath]);
 
   const renderGame = useCallback((game: GameSummary) => {
     return (
@@ -106,9 +112,10 @@ export function useGalleryRenderers({
         onOpenDetail={onOpenDetail}
         onResolveVersionMismatch={onResolveVersionMismatch}
         onContextMenu={onGameCardContextMenu}
+        extraBadges={renderGameExtraBadges?.(game)}
       />
     );
-  }, [actionLabels, canLaunch, getImageSrc, isNarrowViewport, onGameCardContextMenu, onOpenDetail, onPlayClick, onResolveVersionMismatch, onToggleSelection, selectedGamePath, viewMode]);
+  }, [actionLabels, canLaunch, getImageSrc, isNarrowViewport, onGameCardContextMenu, onOpenDetail, onPlayClick, onResolveVersionMismatch, onToggleSelection, renderGameExtraBadges, selectedGamePath, viewMode]);
 
   const renderInlinePosterCardFocus = useCallback(() => {
     if (!enableInlineFocus) {

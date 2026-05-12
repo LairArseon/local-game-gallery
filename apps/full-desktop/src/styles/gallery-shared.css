@@ -187,6 +187,36 @@
   gap: 8px;
 }
 
+.game-card__module-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0.2rem 0 0.45rem;
+}
+
+.game-card__module-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.game-card__module-badge {
+  display: inline-flex;
+}
+
+.f95-update-indicator {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(255, 133, 92, 0.5);
+  background: rgba(255, 133, 92, 0.14);
+  color: #ffd3c2;
+  border-radius: 999px;
+  padding: 0.16rem 0.52rem;
+  font-size: 0.72rem;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
 .game-card__body p {
   margin: calc(8px * var(--metadata-gap-scale, 1)) 0;
 }

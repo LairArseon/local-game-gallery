@@ -1,4 +1,5 @@
 import type { MouseEvent } from 'react';
+import type { ReactNode } from 'react';
 
 export type GalleryViewModeLike = 'poster' | 'card' | 'compact' | 'expanded';
 export type MediaImageVariant = 'original' | 'smallThumbnail' | 'mediumPreview';
@@ -36,6 +37,7 @@ export type GameDisplayLike = {
     description: string;
     notes: string[];
     tags: string[];
+    customTags: Array<{ key: string; value: string }>;
   };
   versions: GameVersionDisplayLike[];
 };
@@ -64,6 +66,7 @@ export type SharedGameCardProps<TGame extends GameDisplayLike = GameDisplayLike>
   onOpenDetail: (game: TGame, event: MouseEvent<HTMLButtonElement>) => void;
   onResolveVersionMismatch: (game: TGame, event: MouseEvent<HTMLButtonElement>) => void;
   onContextMenu: (game: TGame, event: MouseEvent<HTMLElement>) => void;
+  extraBadges?: ReactNode;
 };
 
 export type SharedFocusCardProps<TGame extends GameDisplayLike = GameDisplayLike> = {
@@ -81,4 +84,5 @@ export type SharedFocusCardProps<TGame extends GameDisplayLike = GameDisplayLike
   onResolveVersionMismatch: (game: TGame, event: MouseEvent<HTMLButtonElement>) => void;
   actionLabels: FocusCardActionLabels;
   formatLastPlayedValue?: (value: string | null) => string;
+  extraContent?: ReactNode;
 };

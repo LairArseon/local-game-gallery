@@ -18,6 +18,9 @@ This document defines the installer component model and its current build matrix
   - Browser UI artifact (dist-web-client) and Docker web image.
 - desktop-client
   - Standalone desktop executable that connects to service.
+- f95-module
+  - Optional built-in module enablement seeded into app config during bundle installation.
+  - Applies to installed service/web and standalone client profiles when selected.
 - full-desktop-suite
   - Legacy/full local desktop suite installer.
   - Mutually exclusive with service + web-client + desktop-client component set.

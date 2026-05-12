@@ -43,6 +43,8 @@ import type {
   ImportDroppedGameMediaPayload,
   ImportGameMediaPayload,
   LogEventPayload,
+  OpenExternalUrlPayload,
+  OpenExternalUrlResult,
   OpenFolderPayload,
   OpenFolderResult,
   PlayGamePayload,
@@ -76,6 +78,107 @@ let galleryHttpService: GalleryHttpService | null = null;
 let isQuitRequested = false;
 const mainProcessStartedAt = new Date().toISOString();
 const stagedGameArchiveUploads = new Map<string, { filePath: string; originalFileName: string }>();
+
+function isAllowedExternalUrl(value: string) {
+  try {
+    const parsed = new URL(String(value ?? '').trim());
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+function trySpawnDetached(command: string, args: string[]) {
+  return new Promise<boolean>((resolve) => {
+    try {
+      const child = spawn(command, args, {
+        detached: true,
+        stdio: 'ignore',
+      });
+
+      child.once('error', () => resolve(false));
+      child.once('spawn', () => {
+        child.unref();
+        resolve(true);
+      });
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+async function tryOpenExternalUrlInPrivateWindow(url: string) {
+  const attempts: Array<[string, string[]]> = process.platform === 'win32'
+    ? [
+      ['cmd.exe', ['/c', 'start', '', 'msedge', '--inprivate', url]],
+      ['cmd.exe', ['/c', 'start', '', 'chrome', '--incognito', url]],
+      ['cmd.exe', ['/c', 'start', '', 'brave', '--incognito', url]],
+      ['cmd.exe', ['/c', 'start', '', 'firefox', '--private-window', url]],
+    ]
+    : process.platform === 'darwin'
+      ? [
+        ['open', ['-na', 'Microsoft Edge', '--args', '--inprivate', url]],
+        ['open', ['-na', 'Google Chrome', '--args', '--incognito', url]],
+        ['open', ['-na', 'Brave Browser', '--args', '--incognito', url]],
+        ['open', ['-na', 'Firefox', '--args', '--private-window', url]],
+      ]
+      : [
+        ['microsoft-edge', ['--inprivate', url]],
+        ['google-chrome', ['--incognito', url]],
+        ['chromium-browser', ['--incognito', url]],
+        ['brave-browser', ['--incognito', url]],
+        ['firefox', ['--private-window', url]],
+      ];
+
+  for (const [command, args] of attempts) {
+    if (await trySpawnDetached(command, args)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function openExternalUrl(payload: OpenExternalUrlPayload): Promise<OpenExternalUrlResult> {
+  const url = String(payload.url ?? '').trim();
+  const preferPrivate = Boolean(payload.preferPrivate);
+
+  if (!isAllowedExternalUrl(url)) {
+    return {
+      opened: false,
+      message: 'Only http and https URLs can be opened from notifications.',
+      usedPrivateMode: false,
+    };
+  }
+
+  if (preferPrivate) {
+    const openedPrivate = await tryOpenExternalUrlInPrivateWindow(url);
+    if (openedPrivate) {
+      await appendLogEvent({
+        level: 'info',
+        source: 'main-open-external-url',
+        message: `Opened external URL in private window: ${url}`,
+      });
+      return {
+        opened: true,
+        message: 'Opened URL in a private window.',
+        usedPrivateMode: true,
+      };
+    }
+  }
+
+  await shell.openExternal(url);
+  await appendLogEvent({
+    level: 'info',
+    source: 'main-open-external-url',
+    message: `Opened external URL${preferPrivate ? ' (private mode unavailable, used normal browser)' : ''}: ${url}`,
+  });
+  return {
+    opened: true,
+    message: preferPrivate ? 'Private window was unavailable, so the URL was opened normally.' : 'Opened URL in browser.',
+    usedPrivateMode: false,
+  };
+}
 
 function getServiceHealthSnapshot(): ServiceHealthStatus {
   if (galleryHttpService) {
@@ -1184,6 +1287,10 @@ ipcMain.handle('gallery:open-folder', async (_event, payload: OpenFolderPayload)
     opened: true,
     message: `Opened folder: ${payload.folderPath}`,
   };
+});
+
+ipcMain.handle('gallery:open-external-url', async (_event, payload: OpenExternalUrlPayload): Promise<OpenExternalUrlResult> => {
+  return openExternalUrl(payload);
 });
 
 ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Promise<PlayGameResult> => {

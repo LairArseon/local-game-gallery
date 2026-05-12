@@ -46,6 +46,10 @@ import { useDetailScrollReset } from './hooks/useDetailScrollReset';
 import { useGalleryClient } from './client/context';
 import { BuiltInModuleSetupSections } from '../../shared/app-shell/components/BuiltInModuleSetupSections';
 import { BuiltInModuleDetailPanels } from '../../shared/app-shell/components/BuiltInModuleDetailPanels';
+import { BuiltInModuleGameBadges } from '../../shared/app-shell/components/BuiltInModuleGameBadges';
+import { BuiltInModuleFocusPanels } from '../../shared/app-shell/components/BuiltInModuleFocusPanels';
+import { BuiltInModuleMetadataSections } from '../../shared/app-shell/components/BuiltInModuleMetadataSections';
+import { useBuiltInModuleRefreshSync } from '../../shared/app-shell/hooks/useBuiltInModuleRefreshSync';
 import { getBuiltInModuleRegistry } from '../../shared/app-shell/core/builtInModules';
 import { resolveConfiguredModules } from '../../shared/app-shell/core/moduleRegistry';
 import { formatByteSize } from '../../shared/app-shell/utils/app-helpers';
@@ -789,6 +793,25 @@ function App() {
     setStatus,
   });
 
+  const resolvedBuiltInModules = useMemo(
+    () => resolveConfiguredModules(builtInModuleRegistry.getAll(), config?.modules ?? {}),
+    [config?.modules],
+  );
+
+  const renderModuleFocusContent = useCallback((game: ScanResult['games'][number]) => (
+    <BuiltInModuleFocusPanels
+      game={game}
+      modules={resolvedBuiltInModules}
+    />
+  ), [resolvedBuiltInModules]);
+
+  const renderModuleGameBadges = useCallback((game: ScanResult['games'][number]) => (
+    <BuiltInModuleGameBadges
+      game={game}
+      modules={resolvedBuiltInModules}
+    />
+  ), [resolvedBuiltInModules]);
+
   const {
     renderFocusCard,
     renderGame,
@@ -815,12 +838,119 @@ function App() {
     focusCarouselIndexByGamePath,
     setFocusCarouselIndexByGamePath,
     setScreenshotModalPath,
+    renderFocusExtraContent: renderModuleFocusContent,
+    renderGameExtraBadges: renderModuleGameBadges,
   });
 
   const { effectiveMediaScale, contentScaleStyle } = useContentScale({
     config,
     viewMode,
     gridColumns,
+  });
+
+  const onModuleConfigStateChange = useCallback((moduleId: string, nextModuleState: GalleryConfig['modules'][string]) => {
+    setConfig((current) => current ? {
+      ...current,
+      modules: {
+        ...current.modules,
+        [moduleId]: nextModuleState,
+      },
+    } : current);
+  }, [setConfig]);
+
+  const saveModuleDetailTags = useCallback(async (
+    game: ScanResult['games'][number],
+    updater: Array<{ key: string; value: string }> | ((current: Array<{ key: string; value: string }>) => Array<{ key: string; value: string }>)
+  ) => {
+    const nextCustomTags = typeof updater === 'function'
+      ? updater(game.metadata.customTags.map((tag) => ({ ...tag })))
+      : updater;
+
+    try {
+      await galleryClient.saveGameMetadata({
+        gamePath: game.path,
+        title: game.name,
+        metadata: {
+          ...game.metadata,
+          customTags: nextCustomTags,
+        },
+      });
+
+      setStatus(`Updated F95 state for ${game.name}.`);
+
+      if (refreshGame) {
+        const refreshed = await refreshGame(game.path);
+        if (refreshed) {
+          return;
+        }
+      }
+
+      await refreshScan();
+    } catch (error) {
+      const message = toErrorMessage(error, `Failed to update F95 state for ${game.name}.`);
+      setStatus(message);
+      void logAppEvent(message, 'error', 'module-detail-save-tags');
+    }
+  }, [galleryClient, logAppEvent, refreshGame, refreshScan, setStatus, toErrorMessage]);
+
+  const renderModuleDetailContent = useCallback((game: ScanResult['games'][number]) => (
+    <BuiltInModuleDetailPanels
+      game={game}
+      modules={resolvedBuiltInModules}
+      onGameMetadataTagsChange={saveModuleDetailTags}
+    />
+  ), [resolvedBuiltInModules, saveModuleDetailTags]);
+
+  const metadataModalGame = useMemo(
+    () => scanResult.games.find((game) => game.path === metadataModalGamePath) ?? null,
+    [metadataModalGamePath, scanResult.games],
+  );
+
+  const moduleMetadataContent = useMemo(() => {
+    if (!metadataModalGame || !metadataDraft) {
+      return null;
+    }
+
+    return (
+      <BuiltInModuleMetadataSections
+        game={metadataModalGame}
+        metadataDraft={metadataDraft}
+        modules={resolvedBuiltInModules}
+        onMetadataDraftChange={(updater) => {
+          setMetadataDraft((current) => {
+            if (!current) {
+              return current;
+            }
+
+            const metadataOnlyDraft = { customTags: current.customTags };
+            const nextMetadataDraft = typeof updater === 'function'
+              ? updater(metadataOnlyDraft)
+              : updater;
+
+            return {
+              ...current,
+              customTags: nextMetadataDraft.customTags,
+            };
+          });
+        }}
+      />
+    );
+  }, [metadataDraft, metadataModalGame, resolvedBuiltInModules, setMetadataDraft]);
+
+  const {
+    moduleNotificationFeedItems,
+    dismissModuleNotification,
+  } = useBuiltInModuleRefreshSync({
+    scanMarker: scanResult.scannedAt,
+    games: scanResult.games,
+    modules: resolvedBuiltInModules,
+    config,
+    setConfig,
+    setStatus,
+    galleryClient,
+    refreshGame,
+    logAppEvent,
+    toErrorMessage,
   });
 
   const notificationFeedItems = useMemo<NotificationFeedItem[]>(
@@ -837,36 +967,49 @@ function App() {
         dismissible: false,
         actions: [],
       })),
+      ...moduleNotificationFeedItems,
       ...versionNotificationFeedItems,
     ],
-    [announcedMissingVaultedPaths, t, versionNotificationFeedItems],
+    [announcedMissingVaultedPaths, moduleNotificationFeedItems, t, versionNotificationFeedItems],
   );
 
   const onNotificationFeedAction = useCallback((item: NotificationFeedItem, action: NotificationFeedAction) => {
+    if (item.sourceKind === 'module') {
+      if (action.kind === 'open-game' && item.gamePath) {
+        openGameDetailFromPath(item.gamePath);
+        return;
+      }
+
+      if (action.kind === 'open-url') {
+        const url = String(action.payload?.url ?? item.metadata?.threadUrl ?? '').trim();
+        const moduleId = String(item.metadata?.moduleId ?? item.sourceId ?? '').trim();
+        const preferPrivate = moduleId
+          ? Boolean(config?.modules?.[moduleId]?.state?.openLinksInIncognito ?? action.payload?.preferPrivate ?? false)
+          : Boolean(action.payload?.preferPrivate ?? false);
+
+        if (url) {
+          void galleryClient.openExternalUrl({ url, preferPrivate }).then((result) => {
+            if (!result.opened) {
+              setStatus(result.message);
+              void logAppEvent(result.message, 'warn', 'notification-open-url');
+            }
+          }).catch((error) => {
+            const message = toErrorMessage(error, 'Failed to open notification URL.');
+            setStatus(message);
+            void logAppEvent(message, 'error', 'notification-open-url');
+          });
+        }
+        return;
+      }
+
+      if (action.kind === 'dismiss') {
+        dismissModuleNotification(item);
+      }
+      return;
+    }
+
     void handleNotificationFeedAction(item, action);
-  }, [handleNotificationFeedAction]);
-
-  const resolvedBuiltInModules = useMemo(
-    () => resolveConfiguredModules(builtInModuleRegistry.getAll(), config?.modules ?? {}),
-    [config?.modules],
-  );
-
-  const onModuleConfigStateChange = useCallback((moduleId: string, nextModuleState: GalleryConfig['modules'][string]) => {
-    setConfig((current) => current ? {
-      ...current,
-      modules: {
-        ...current.modules,
-        [moduleId]: nextModuleState,
-      },
-    } : current);
-  }, [setConfig]);
-
-  const renderModuleDetailContent = useCallback((game: ScanResult['games'][number]) => (
-    <BuiltInModuleDetailPanels
-      game={game}
-      modules={resolvedBuiltInModules}
-    />
-  ), [resolvedBuiltInModules]);
+  }, [config?.modules, dismissModuleNotification, galleryClient, handleNotificationFeedAction, logAppEvent, openGameDetailFromPath, setStatus, toErrorMessage]);
 
   // Grid sizing reacts to container width and user column preferences.
   useResponsiveGrid({
@@ -885,7 +1028,6 @@ function App() {
   );
 
   if (!config) {
-    // Hard gate: render loading surface until initial config bootstrap finishes.
     return <main className="shell"><section className="panel panel--loading">{status}</section></main>;
   }
 
@@ -1127,6 +1269,7 @@ function App() {
         setActiveTagAutocomplete={setActiveTagAutocomplete}
         handleTagAutocompleteKeyDown={handleTagAutocompleteKeyDown}
         applyTagSuggestion={applyTagSuggestion}
+        moduleMetadataContent={moduleMetadataContent}
         mediaModalGame={mediaModalGame}
         mediaModalGamePath={mediaModalGamePath}
         isMediaSaving={isMediaSaving}

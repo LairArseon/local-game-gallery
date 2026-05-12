@@ -26,6 +26,8 @@
     "hideVault": "Close vault",
     "showVersionNotifications": "Show version notifications",
     "hideVersionNotifications": "Hide version notifications",
+    "showNotificationHub": "Show notification hub",
+    "hideNotificationHub": "Hide notification hub",
     "chooseLibraryFolder": "Choose library folder",
     "saving": "Saving..."
   },
@@ -46,6 +48,13 @@
   "topbar": {
     "searchAria": "Search games",
     "searchPlaceholder": "Search games or versions"
+  },
+  "notificationHub": {
+    "title": "Notification Hub",
+    "count": "{{count}} items",
+    "focusHint": "Open a game directly from the hub, or use notification-specific actions.",
+    "openGameAria": "Open game {{game}}",
+    "empty": "No notifications right now."
   },
   "setup": {
     "title": "Setup",

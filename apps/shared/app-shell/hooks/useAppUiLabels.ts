@@ -27,8 +27,8 @@ export function useAppUiLabels(t: Translate) {
     hideSetup: t('actions.hideSetup'),
     showVault: t('actions.showVault'),
     hideVault: t('actions.hideVault'),
-    showVersionNotifications: t('actions.showVersionNotifications'),
-    hideVersionNotifications: t('actions.hideVersionNotifications'),
+    showVersionNotifications: t('actions.showNotificationHub'),
+    hideVersionNotifications: t('actions.hideNotificationHub'),
     chooseLibraryFolder: t('actions.chooseLibraryFolder'),
     saving: t('actions.saving'),
   } as const), [t]);

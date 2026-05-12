@@ -9,6 +9,7 @@
  * New to this project: this modal edits metadata drafts and tags; follow save/autocomplete callbacks to useMetadataManager and tag helpers.
  */
 import type { KeyboardEvent } from 'react';
+import type { ReactNode } from 'react';
 import type { GameMetadata } from '../types';
 import { MetadataModal as SharedMetadataModal } from '../../../shared/app-shell/components/MetadataModal';
 
@@ -32,6 +33,7 @@ type MetadataModalProps = {
   onSetActiveTagAutocomplete: (value: TagAutocompleteState | ((current: TagAutocompleteState) => TagAutocompleteState)) => void;
   onHandleTagAutocompleteKeyDown: (event: KeyboardEvent<HTMLInputElement>, scope: 'pool' | 'filter' | 'metadata', index: number) => void;
   onApplyTagSuggestion: (scope: 'pool' | 'filter' | 'metadata', index: number, suggestion: string) => void;
+  extraMetadataSections?: ReactNode;
 };
 
 export function MetadataModal({
@@ -48,6 +50,7 @@ export function MetadataModal({
   onSetActiveTagAutocomplete,
   onHandleTagAutocompleteKeyDown,
   onApplyTagSuggestion,
+  extraMetadataSections,
 }: MetadataModalProps) {
   return (
     <SharedMetadataModal<GameMetadata>
@@ -64,6 +67,7 @@ export function MetadataModal({
       onSetActiveTagAutocomplete={onSetActiveTagAutocomplete}
       onHandleTagAutocompleteKeyDown={onHandleTagAutocompleteKeyDown}
       onApplyTagSuggestion={onApplyTagSuggestion}
+      extraMetadataSections={extraMetadataSections}
     />
   );
 }

@@ -5,7 +5,7 @@
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { GalleryConfig } from '../src/types';
+import type { GalleryConfig, GalleryModuleStateValue } from '../src/types';
 import { resolveGalleryDataPath } from './runtime-paths';
 
 const minUiScale = 0.75;
@@ -88,7 +88,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function normalizeModuleStateValue(value: unknown): unknown {
+function normalizeModuleStateValue(value: unknown): GalleryModuleStateValue {
   if (
     value === null
     || typeof value === 'string'
@@ -121,26 +121,29 @@ function normalizeModulesState(value: unknown): GalleryConfig['modules'] {
     return {};
   }
 
-  return Object.fromEntries(
-    Object.entries(value)
-      .map(([moduleId, moduleState]) => {
-        const normalizedModuleId = String(moduleId).trim();
-        if (!normalizedModuleId || !isPlainObject(moduleState)) {
-          return null;
-        }
+  const normalizedEntries: Array<[string, GalleryConfig['modules'][string]]> = [];
 
-        const rawState = isPlainObject(moduleState.state) ? moduleState.state : {};
-        return [normalizedModuleId, {
-          enabled: Boolean(moduleState.enabled),
-          state: Object.fromEntries(
-            Object.entries(rawState)
-              .map(([stateKey, stateValue]) => [String(stateKey).trim(), normalizeModuleStateValue(stateValue)] as const)
-              .filter(([stateKey]) => stateKey),
-          ),
-        }] as const;
-      })
-      .filter((entry): entry is [string, GalleryConfig['modules'][string]] => entry !== null),
-  );
+  for (const [moduleId, moduleState] of Object.entries(value)) {
+    const normalizedModuleId = String(moduleId).trim();
+    if (!normalizedModuleId || !isPlainObject(moduleState)) {
+      continue;
+    }
+
+    const rawState = isPlainObject(moduleState.state) ? moduleState.state : {};
+    const normalizedState = Object.fromEntries(
+      Object.entries(rawState)
+        .map(([stateKey, stateValue]) => [String(stateKey).trim(), normalizeModuleStateValue(stateValue)] as const)
+        .filter(([stateKey]) => stateKey),
+    ) as Record<string, GalleryModuleStateValue>;
+
+    normalizedEntries.push([normalizedModuleId, {
+      installed: typeof moduleState.installed === 'boolean' ? moduleState.installed : true,
+      enabled: Boolean(moduleState.enabled),
+      state: normalizedState,
+    }]);
+  }
+
+  return Object.fromEntries(normalizedEntries);
 }
 
 const defaultConfig: GalleryConfig = {

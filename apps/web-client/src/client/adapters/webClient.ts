@@ -14,6 +14,8 @@ import type {
   ImportDroppedGameMediaPayload,
   ImportGameMediaPayload,
   LogEventPayload,
+  OpenExternalUrlPayload,
+  OpenExternalUrlResult,
   OpenFolderPayload,
   OpenFolderResult,
   PlayGamePayload,
@@ -1013,6 +1015,16 @@ export const webClient: GalleryClient = {
     } catch {
       return unsupportedOpenFolderResult();
     }
+  },
+  async openExternalUrl(payload: OpenExternalUrlPayload): Promise<OpenExternalUrlResult> {
+    const openedWindow = window.open(String(payload.url ?? '').trim(), '_blank', 'noopener,noreferrer');
+    return {
+      opened: Boolean(openedWindow),
+      message: payload.preferPrivate
+        ? 'Browser clients cannot force private windows. Opened the URL in a new tab/window instead when allowed.'
+        : 'Opened URL in browser.',
+      usedPrivateMode: false,
+    };
   },
   async logEvent(payload: LogEventPayload) {
     if (Date.now() < suppressLogRequestsUntil) {

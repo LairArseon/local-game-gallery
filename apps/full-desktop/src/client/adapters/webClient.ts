@@ -21,6 +21,8 @@ import type {
   ImportStagedGameArchivePayload,
   ImportStagedGameArchiveResult,
   LogEventPayload,
+  OpenExternalUrlPayload,
+  OpenExternalUrlResult,
   OpenFolderPayload,
   OpenFolderResult,
   PickArchiveUploadFileResult,
@@ -681,6 +683,16 @@ export const webClient: GalleryClient = {
   },
   async openFolder(_payload: OpenFolderPayload) {
     return unsupportedOpenFolderResult();
+  },
+  async openExternalUrl(payload: OpenExternalUrlPayload): Promise<OpenExternalUrlResult> {
+    const openedWindow = window.open(String(payload.url ?? '').trim(), '_blank', 'noopener,noreferrer');
+    return {
+      opened: Boolean(openedWindow),
+      message: payload.preferPrivate
+        ? 'Browser-backed sessions cannot force private windows. Opened the URL in a new tab/window instead when allowed.'
+        : 'Opened URL in browser.',
+      usedPrivateMode: false,
+    };
   },
   async logEvent(payload: LogEventPayload) {
     if (Date.now() < suppressLogRequestsUntil) {

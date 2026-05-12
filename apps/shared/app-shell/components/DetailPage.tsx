@@ -232,14 +232,6 @@ export function DetailPage<TGame extends DetailPageGameLike>({
                 <p>{game.metadata.tags.join(', ')}</p>
               </div>
             ) : null}
-            {game.metadata.customTags.length ? (
-              <div className="detail-tags">
-                <strong>{t('detail.additionalTags')}</strong>
-                {game.metadata.customTags.map((tag) => (
-                  <p key={tag.key}>{tag.key}: {tag.value}</p>
-                ))}
-              </div>
-            ) : null}
           </div>
           <aside className="detail-versions">
             <div className="detail-versions__header">

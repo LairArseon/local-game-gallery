@@ -8,6 +8,23 @@ type NotificationFeedPanelProps = {
   onAction: (item: NotificationFeedItem, action: NotificationFeedAction) => void;
 };
 
+function getSourceBadgeLabel(item: NotificationFeedItem) {
+  if (item.sourceKind === 'module') {
+    const moduleId = String(item.metadata?.moduleId ?? item.sourceId ?? '').trim();
+    return moduleId ? moduleId.toUpperCase() : 'MODULE';
+  }
+
+  if (item.sourceKind === 'vault-alert') {
+    return 'VAULT';
+  }
+
+  if (item.sourceKind === 'version-mismatch') {
+    return 'VERSION';
+  }
+
+  return item.sourceKind.toUpperCase();
+}
+
 function renderActionIcon(kind: NotificationFeedAction['kind']) {
   if (kind === 'resolve') {
     return <ArrowUp10 size={14} aria-hidden="true" />;
@@ -34,27 +51,32 @@ export function NotificationFeedPanel({
   return (
     <section className="topbar-notifications" aria-live="polite">
       <div className="topbar-notifications__heading">
-        <h3>{t('versionMismatch.title')}</h3>
-        <p>{t('versionMismatch.count', { count: items.length })}</p>
+        <h3>{t('notificationHub.title')}</h3>
+        <p>{t('notificationHub.count', { count: items.length })}</p>
       </div>
-      <p className="topbar-notifications__hint">{t('versionMismatch.focusHint')}</p>
+      <p className="topbar-notifications__hint">{t('notificationHub.focusHint')}</p>
       {items.length ? (
         <ul className="topbar-notifications__list">
           {items.map((item) => (
-            <li key={item.id} className="topbar-notifications__item">
+            <li key={item.id} className={`topbar-notifications__item topbar-notifications__item--${item.sourceKind}`}>
               <div className="topbar-notifications__item-main">
-                {item.gamePath ? (
-                  <button
-                    type="button"
-                    className="topbar-notifications__game-link"
-                    aria-label={t('versionMismatch.openGameAria', { game: item.title })}
-                    onClick={() => onOpenGame(item.gamePath as string)}
-                  >
+                <div className="topbar-notifications__item-title-row">
+                  <span className={`topbar-notifications__source-badge topbar-notifications__source-badge--${item.sourceKind}`}>
+                    {getSourceBadgeLabel(item)}
+                  </span>
+                  {item.gamePath ? (
+                    <button
+                      type="button"
+                      className="topbar-notifications__game-link"
+                      aria-label={t('notificationHub.openGameAria', { game: item.title })}
+                      onClick={() => onOpenGame(item.gamePath as string)}
+                    >
+                      <span className="topbar-notifications__game-name">{item.title}</span>
+                    </button>
+                  ) : (
                     <span className="topbar-notifications__game-name">{item.title}</span>
-                  </button>
-                ) : (
-                  <span className="topbar-notifications__game-name">{item.title}</span>
-                )}
+                  )}
+                </div>
                 <p className="topbar-notifications__version-delta">{item.message}</p>
               </div>
               {item.actions.length ? (
@@ -78,7 +100,7 @@ export function NotificationFeedPanel({
           ))}
         </ul>
       ) : (
-        <p className="topbar-notifications__empty">{t('versionMismatch.empty')}</p>
+        <p className="topbar-notifications__empty">{t('notificationHub.empty')}</p>
       )}
     </section>
   );

@@ -1,4 +1,5 @@
 import type { KeyboardEvent } from 'react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CustomSelect } from './CustomSelect';
 
@@ -31,6 +32,7 @@ type MetadataModalProps<TMetadata extends MetadataLike> = {
   onSetActiveTagAutocomplete: (value: TagAutocompleteState | ((current: TagAutocompleteState) => TagAutocompleteState)) => void;
   onHandleTagAutocompleteKeyDown: (event: KeyboardEvent<HTMLInputElement>, scope: 'pool' | 'filter' | 'metadata', index: number) => void;
   onApplyTagSuggestion: (scope: 'pool' | 'filter' | 'metadata', index: number, suggestion: string) => void;
+  extraMetadataSections?: ReactNode;
 };
 
 export function MetadataModal<TMetadata extends MetadataLike>({
@@ -47,6 +49,7 @@ export function MetadataModal<TMetadata extends MetadataLike>({
   onSetActiveTagAutocomplete,
   onHandleTagAutocompleteKeyDown,
   onApplyTagSuggestion,
+  extraMetadataSections,
 }: MetadataModalProps<TMetadata>) {
   const { t } = useTranslation();
 
@@ -95,6 +98,7 @@ export function MetadataModal<TMetadata extends MetadataLike>({
                 </div>
               ))}
             </div>
+            {extraMetadataSections}
           </div>
 
           <div className="modal-panel__column modal-panel__column--tags">

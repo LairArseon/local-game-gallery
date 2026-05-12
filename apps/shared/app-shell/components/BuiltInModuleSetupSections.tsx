@@ -15,10 +15,12 @@ export function BuiltInModuleSetupSections({
   const { t } = useTranslation();
 
   const setupEntries = useMemo(
-    () => modules.flatMap(({ definition, configState }) =>
-      definition.contributes
-        .filter((contribution) => contribution.slot === 'setup.section')
-        .map((contribution) => ({ contribution, definition, configState }))),
+    () => modules
+      .filter((moduleEntry) => moduleEntry.configState.installed)
+      .flatMap(({ definition, configState }) =>
+        definition.contributes
+          .filter((contribution) => contribution.slot === 'setup.section')
+          .map((contribution) => ({ contribution, definition, configState }))),
     [modules],
   );
 

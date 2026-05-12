@@ -15,6 +15,20 @@ Primary outcomes:
 - Shared UI surfaces gain extension points for setup, notifications, focused game view, and detail view.
 - Initial scope targets the service-backed architecture first, because it covers web client, standalone desktop client, and Docker-backed web flow with a single backend model.
 
+Implementation status as of 2026-05-12:
+- Stage 2.7 core delivery is now implemented end-to-end for the first built-in module pass.
+- The F95 module ships from [apps/f95-module](../../apps/f95-module), persists app-level state under `config.modules.f95`, and stores per-game state in namespaced `module_f95_*` custom tags.
+- The notification center is now a generic Notification Hub fed by version mismatches, vault alerts, and module-authored items.
+- F95 notifications are now persistent-condition entries derived from game metadata, with dismissal markers stored per game so later updates can reappear cleanly.
+- The setup panel, metadata editor, focused game view, and detail panel all have working module-owned contribution seams exercised by F95.
+- The bundle installer now exposes `F95 Module` as an optional install-time section and seeds `modules.f95.enabled = true` into the relevant runtime config when selected.
+- F95 setup timestamps are formatted for human-readable local display rather than raw datetime strings.
+
+Validation snapshot as of 2026-05-12:
+- `npm run up:baremetal` succeeds after the Stage 2.7 app-side changes.
+- `npm run dist:bundle-installer:win` succeeds after the F95 installer-section NSIS fixes.
+- The remaining known runtime warning during baremetal startup is the pre-existing Electron `fs.Stats constructor is deprecated` warning.
+
 ## 2. Confirmed Decisions Before Implementation
 
 These decisions are locked for Stage 2.7 initial rollout unless explicitly changed later.
@@ -478,6 +492,13 @@ Deliverable:
 Deliverable:
 - Generic notification center with preserved current functionality.
 
+Checkpoint note as of 2026-05-12:
+- The topbar notification surface is now functionally a generic Notification Hub rather than a version-mismatch-only panel.
+- Both desktop and web shells merge vault alerts, version mismatch notifications, and module-authored notifications into one shared feed model.
+- The shared notification action contract now supports source-specific behavior in real usage: version mismatches still resolve or dismiss, while F95 update notifications open the linked thread URL and can be dismissed independently.
+- F95 thread opening is now module-configurable through module state via `openLinksInIncognito`; desktop mode attempts a private/incognito browser window first and falls back to a normal external open if needed.
+- Remaining Stage 2.7 notification work is now polish-oriented: richer grouping/history, broader module adoption beyond F95, and any follow-up UX refinements for action discoverability.
+
 ## Phase 4: Setup and game-view contribution seams
 
 1. Add module section support to setup panel.
@@ -494,7 +515,10 @@ Checkpoint note as of 2026-05-12:
 - This stop also captures a logging follow-up: modules should use source strings in the `module:<moduleId>` form so the log viewer can filter by module and sort entries by timestamp.
 - The host render contract now passes module config state and game context into contribution renderers, which lets module-owned UI manage real setup inputs and detail summaries without moving F95 logic into the shell.
 - The F95 module now owns its first real setup and detail renderers: setup can edit feed/checkpoint state inside the module config namespace, and detail can summarize namespaced `module_f95_*` tags instead of falling back to a generic raw-tag dump.
-- The next continuation point has narrowed to the remaining open seams: add the focused-game seam, begin real F95 backend sync work, and continue the remaining notification genericization.
+- The metadata editor now has a module-owned section seam backed by custom-tag draft editing, so F95 per-game identifiers can be edited inside the metadata modal instead of living in generic raw-tag fields.
+- The focused/open game view now renders module-owned focus panels, and the F95 module uses that seam to surface linked thread and last-known update fields directly in the focus card.
+- Initial F95 RSS parser helpers now exist against the real games feed structure, covering item title parsing, thread id extraction, creator/pubDate fields, guid/link handling, and preview image extraction from the description HTML.
+- The next continuation point has shifted from UI shell work to backend behavior: use the new parser helpers in a real sync path, populate/update the F95 tags from feed results, emit module-authored notifications/logs, and finish the remaining notification genericization.
 
 ## Phase 5: Config extension support
 
@@ -537,6 +561,12 @@ Deliverable:
 
 Deliverable:
 - Optional installer-level module selection support.
+
+Checkpoint note as of 2026-05-12:
+- The bundle installer now includes an optional `F95 Module` section.
+- Selecting that section does not change packaged payload contents; it seeds the target runtime config so `modules.f95.enabled` starts enabled for the selected install profile.
+- Service-backed installs seed `$APPDATA\Local Game Gallery Service Tray\config.json`, and desktop installs seed `$APPDATA\Local Game Gallery Client\config.json`.
+- The NSIS generation path was validated by a clean `npm run dist:bundle-installer:win` run after fixing PowerShell quoting, literal `$` escaping, and newline escaping in the generated seed script.
 
 ## 14. Definition of Done for Initial F95 Module Milestone
 

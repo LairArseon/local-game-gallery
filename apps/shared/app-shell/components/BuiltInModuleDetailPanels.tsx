@@ -1,22 +1,24 @@
 import { useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
 import type { ResolvedBuiltInModule } from '../core/moduleRegistry';
-import type { ModuleHostGameLike } from '../types/moduleHostTypes';
+import type { ModuleHostGameLike, ModuleHostGameTag } from '../types/moduleHostTypes';
 
 type BuiltInModuleDetailPanelsProps<TGame extends ModuleHostGameLike> = {
   game: TGame;
   modules: ResolvedBuiltInModule[];
+  onGameMetadataTagsChange?: (
+    game: TGame,
+    updater: ModuleHostGameTag[] | ((current: ModuleHostGameTag[]) => ModuleHostGameTag[])
+  ) => Promise<void>;
 };
 
-export function BuiltInModuleDetailPanels<TGame extends DetailGameLike>({
+export function BuiltInModuleDetailPanels<TGame extends ModuleHostGameLike>({
   game,
   modules,
+  onGameMetadataTagsChange,
 }: BuiltInModuleDetailPanelsProps<TGame>) {
-  const { t } = useTranslation();
-
   const detailEntries = useMemo(
     () => modules
-      .filter((moduleEntry) => moduleEntry.configState.enabled)
+      .filter((moduleEntry) => moduleEntry.configState.installed && moduleEntry.configState.enabled)
       .flatMap(({ definition, configState }) =>
         definition.contributes
           .filter((contribution) => contribution.slot === 'game.detail.panel')
@@ -30,9 +32,29 @@ export function BuiltInModuleDetailPanels<TGame extends DetailGameLike>({
 
   return (
     <>
-      {detailEntries.map(({ contribution, definition }) => {
+      {detailEntries.map(({ contribution, definition, configState }) => {
         const moduleTagPrefix = `module_${definition.id}_`;
         const moduleTags = game.metadata.customTags.filter((tag) => tag.key.startsWith(moduleTagPrefix));
+        const content = contribution.render ? contribution.render({
+          moduleId: definition.id,
+          moduleDisplayName: definition.displayName,
+          configState,
+          game,
+          moduleTags,
+          onGameMetadataTagsChange: onGameMetadataTagsChange
+            ? (updater) => onGameMetadataTagsChange(game, updater)
+            : undefined,
+        }) : moduleTags.length ? (
+          <div className="detail-tags">
+            {moduleTags.map((tag) => (
+              <p key={tag.key}>{tag.key}: {tag.value}</p>
+            ))}
+          </div>
+        ) : null;
+
+        if (!content) {
+          return null;
+        }
 
         return (
           <section key={contribution.id} className="detail-section panel">
@@ -42,19 +64,7 @@ export function BuiltInModuleDetailPanels<TGame extends DetailGameLike>({
                 <p>{contribution.description ?? definition.description}</p>
               </div>
             </div>
-            {contribution.render ? contribution.render({
-              moduleId: definition.id,
-              moduleDisplayName: definition.displayName,
-              configState,
-              game,
-              moduleTags,
-            }) : moduleTags.length ? (
-              <div className="detail-tags">
-                {moduleTags.map((tag) => (
-                  <p key={tag.key}>{tag.key}: {tag.value}</p>
-                ))}
-              </div>
-            ) : <p>{t('detail.noModuleData')}</p>}
+            {content}
           </section>
         );
       })}

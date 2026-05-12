@@ -45,6 +45,17 @@
       ]
     },
     {
+      "id": "f95-module",
+      "displayName": "F95 Module",
+      "kind": "built-in-module",
+      "selectionMode": "optional",
+      "artifacts": [
+        "apps/f95-module"
+      ],
+      "dependsOn": [],
+      "conflictsWith": []
+    },
+    {
       "id": "full-desktop-suite",
       "displayName": "Full Desktop Suite",
       "kind": "desktop-suite",
@@ -74,7 +85,8 @@
     "bundleInstaller": [
       "service",
       "web-client",
-      "desktop-client"
+      "desktop-client",
+      "f95-module"
     ]
   }
 }

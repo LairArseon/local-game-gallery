@@ -19,6 +19,7 @@ export function FocusCard<TGame extends GameDisplayLike>({
   onResolveVersionMismatch,
   actionLabels,
   formatLastPlayedValue = formatLastPlayed,
+  extraContent,
 }: SharedFocusCardProps<TGame>) {
   const { t } = useTranslation();
 
@@ -113,6 +114,7 @@ export function FocusCard<TGame extends GameDisplayLike>({
           <p key={note}>{t('gameView.note')}: {note}</p>
         ))}
         {game.metadata.tags.length ? <p>{t('detail.tags')}: {game.metadata.tags.join(', ')}</p> : null}
+        {extraContent ? <div className="focus-card__extra">{extraContent}</div> : null}
         {showActions ? (
           <div className="game-card__actions game-card__actions--floating">
             {canLaunch ? (

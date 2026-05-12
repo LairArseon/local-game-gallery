@@ -27,6 +27,8 @@
     "hideVault": "Cerrar vault",
     "showVersionNotifications": "Mostrar notificaciones de versión",
     "hideVersionNotifications": "Ocultar notificaciones de versión",
+    "showNotificationHub": "Mostrar centro de notificaciones",
+    "hideNotificationHub": "Ocultar centro de notificaciones",
     "chooseLibraryFolder": "Elegir carpeta de biblioteca",
     "saving": "Guardando..."
   },
@@ -77,6 +79,13 @@
   "topbar": {
     "searchAria": "Buscar juegos",
     "searchPlaceholder": "Buscar juegos o versiones"
+  },
+  "notificationHub": {
+    "title": "Notification Hub",
+    "count": "{{count}} elementos",
+    "focusHint": "Abre un juego directamente desde el centro o usa las acciones específicas de cada notificación.",
+    "openGameAria": "Abrir juego {{game}}",
+    "empty": "No hay notificaciones por ahora."
   },
   "setup": {
     "title": "Configuración",

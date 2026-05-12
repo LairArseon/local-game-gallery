@@ -61,11 +61,12 @@
     },
     {
       "id": "bundle-installer-win",
-      "description": "Selectable installer for service, web client, and desktop client.",
+      "description": "Selectable installer for service, web client, desktop client, and optional built-in modules.",
       "components": [
         "service",
         "web-client",
-        "desktop-client"
+        "desktop-client",
+        "f95-module"
       ],
       "commands": [
         "npm run dist:bundle-installer:win"

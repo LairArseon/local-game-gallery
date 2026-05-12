@@ -402,6 +402,52 @@ button {
   align-items: center;
 }
 
+.topbar-notifications__item--module {
+  border-color: rgba(255, 150, 105, 0.28);
+  background: linear-gradient(160deg, rgba(39, 21, 16, 0.78), rgba(15, 10, 14, 0.68));
+}
+
+.topbar-notifications__item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.topbar-notifications__source-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.2rem;
+  border-radius: 999px;
+  padding: 0.08rem 0.45rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(246, 246, 242, 0.84);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.topbar-notifications__source-badge--module {
+  border-color: rgba(255, 150, 105, 0.38);
+  background: rgba(255, 150, 105, 0.14);
+  color: #ffd5c5;
+}
+
+.topbar-notifications__source-badge--version-mismatch {
+  border-color: rgba(246, 199, 115, 0.4);
+  background: rgba(246, 199, 115, 0.14);
+  color: #fce0a7;
+}
+
+.topbar-notifications__source-badge--vault-alert {
+  border-color: rgba(121, 194, 255, 0.36);
+  background: rgba(121, 194, 255, 0.12);
+  color: #d0ebff;
+}
+
 .topbar-notifications__game-link {
   width: 100%;
   border: 0;
@@ -410,12 +456,15 @@ button {
   color: inherit;
   font-weight: 500;
   display: inline-flex;
+  align-items: center;
   justify-self: start;
+  min-width: 0;
 }
 
 .topbar-notifications__game-name {
   color: #f6c773;
   font-weight: 650;
+  min-width: 0;
 }
 
 .topbar-notifications__version-delta {
@@ -468,6 +517,10 @@ button {
 
 .topbar-notifications__icon-action--dismiss {
   background: rgba(255, 128, 128, 0.84);
+}
+
+.topbar-notifications__icon-action--open-url {
+  background: rgba(255, 150, 105, 0.88);
 }
 
 .topbar__search-group {
@@ -1537,6 +1590,30 @@ button {
 .f95-module-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.metadata-module-sections {
+  display: grid;
+  gap: 12px;
+}
+
+.metadata-module-section {
+  margin-top: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.f95-metadata-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.f95-metadata-editor__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
 }
 
 .field--mirror-parity {

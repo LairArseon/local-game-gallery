@@ -52,6 +52,7 @@ export type GalleryModuleStateValue =
   | { [key: string]: GalleryModuleStateValue };
 
 export type GalleryModuleState = {
+  installed: boolean;
   enabled: boolean;
   state: Record<string, GalleryModuleStateValue>;
 };
@@ -242,6 +243,17 @@ export type OpenFolderPayload = {
 export type OpenFolderResult = {
   opened: boolean;
   message: string;
+};
+
+export type OpenExternalUrlPayload = {
+  url: string;
+  preferPrivate?: boolean;
+};
+
+export type OpenExternalUrlResult = {
+  opened: boolean;
+  message: string;
+  usedPrivateMode: boolean;
 };
 
 export type LogEventPayload = {
@@ -443,6 +455,7 @@ export type GalleryApi = {
   showVaultContextMenu: (payload: VaultContextMenuPayload) => Promise<void>;
   onVaultContextMenuAction: (callback: (payload: VaultContextMenuAction) => void) => () => void;
   openFolder: (payload: OpenFolderPayload) => Promise<OpenFolderResult>;
+  openExternalUrl: (payload: OpenExternalUrlPayload) => Promise<OpenExternalUrlResult>;
   logEvent: (payload: LogEventPayload) => Promise<void>;
   getLogContents: () => Promise<string>;
   openLogFolder: () => Promise<OpenFolderResult>;

@@ -57,6 +57,7 @@ type ModalHostProps = {
     index: number,
   ) => void;
   applyTagSuggestion: (scope: 'pool' | 'filter' | 'metadata', index: number, suggestion: string) => void;
+  moduleMetadataContent?: ReactNode;
   mediaModalGame: GameSummary | null;
   mediaModalGamePath: string | null;
   isMediaSaving: boolean;
@@ -139,6 +140,7 @@ export function ModalHost({
   setActiveTagAutocomplete,
   handleTagAutocompleteKeyDown,
   applyTagSuggestion,
+  moduleMetadataContent,
   mediaModalGame,
   mediaModalGamePath,
   isMediaSaving,
@@ -220,6 +222,7 @@ export function ModalHost({
       onSetActiveTagAutocomplete={setActiveTagAutocomplete}
       onHandleTagAutocompleteKeyDown={handleTagAutocompleteKeyDown}
       onApplyTagSuggestion={applyTagSuggestion}
+      extraMetadataSections={moduleMetadataContent}
     />
   ) : null;
 

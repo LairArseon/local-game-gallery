@@ -160,6 +160,33 @@
   color: rgba(247, 246, 242, 0.78);
 }
 
+.focus-card__extra {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.focus-card__module-panels {
+  display: grid;
+  gap: 10px;
+}
+
+.focus-card__module-panel {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.f95-focus-panel {
+  display: grid;
+  gap: 4px;
+}
+
+.f95-focus-panel p {
+  margin: 0;
+}
+
 .focus-carousel-controls {
   position: absolute;
   right: 10px;
@@ -332,6 +359,27 @@
 .f95-module-detail {
   display: grid;
   gap: 12px;
+}
+
+.f95-module-detail--pending {
+  border: 1px solid rgba(255, 150, 105, 0.28);
+  border-radius: 16px;
+  padding: 12px;
+  background: linear-gradient(160deg, rgba(39, 21, 16, 0.78), rgba(15, 10, 14, 0.68));
+}
+
+.f95-module-alert--pending {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-color: rgba(255, 150, 105, 0.38);
+  background: rgba(255, 150, 105, 0.14);
+}
+
+.f95-module-alert__body {
+  display: grid;
+  gap: 4px;
 }
 
 .f95-module-tag-list {
