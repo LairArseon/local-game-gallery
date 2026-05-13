@@ -1,11 +1,11 @@
 /**
- * Scroll detail layout to top when entering narrow detail mode.
+ * Scroll detail layout to top when entering a detail view.
  */
 import { useEffect } from 'react';
 
 export function useDetailScrollReset(isNarrowViewport: boolean, detailGamePath: string | null) {
   useEffect(() => {
-    if (!isNarrowViewport || !detailGamePath) {
+    if (!detailGamePath) {
       return;
     }
 

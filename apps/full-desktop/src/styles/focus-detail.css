@@ -180,11 +180,75 @@
 
 .f95-focus-panel {
   display: grid;
-  gap: 4px;
+  gap: 10px;
 }
 
-.f95-focus-panel p {
+.f95-focus-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.f95-focus-panel__status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.45rem;
+  border-radius: 999px;
+  padding: 0.14rem 0.58rem;
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+}
+
+.f95-focus-panel__status--current {
+  border: 1px solid rgba(141, 213, 173, 0.24);
+  background: rgba(70, 139, 96, 0.16);
+  color: rgba(203, 243, 219, 0.92);
+}
+
+.f95-focus-panel__status--pending {
+  border: 1px solid rgba(255, 170, 129, 0.28);
+  background: rgba(255, 119, 68, 0.16);
+  color: rgba(255, 229, 215, 0.95);
+}
+
+.f95-focus-panel__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 10px;
   margin: 0;
+}
+
+.f95-focus-panel__field {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.f95-focus-panel__field--wide {
+  grid-column: 1 / -1;
+}
+
+.f95-focus-panel__field dt,
+.f95-focus-panel__field dd {
+  margin: 0;
+}
+
+.f95-focus-panel__field dt {
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(229, 232, 238, 0.56);
+}
+
+.f95-focus-panel__field dd {
+  color: rgba(247, 246, 242, 0.84);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .focus-carousel-controls {
@@ -358,13 +422,13 @@
 
 .f95-module-detail {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .f95-module-detail--pending {
   border: 1px solid rgba(255, 150, 105, 0.28);
   border-radius: 16px;
-  padding: 12px;
+  padding: 14px;
   background: linear-gradient(160deg, rgba(39, 21, 16, 0.78), rgba(15, 10, 14, 0.68));
 }
 
@@ -372,6 +436,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   border-color: rgba(255, 150, 105, 0.38);
   background: rgba(255, 150, 105, 0.14);

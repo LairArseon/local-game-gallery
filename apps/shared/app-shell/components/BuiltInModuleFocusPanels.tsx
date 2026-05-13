@@ -5,20 +5,30 @@ import type { ResolvedBuiltInModule } from '../core/moduleRegistry';
 type BuiltInModuleFocusPanelsProps<TGame extends ModuleHostGameLike> = {
   game: TGame;
   modules: ResolvedBuiltInModule[];
+  hostSurface?: 'focus' | 'detail';
 };
+
+function supportsHostSurface(hostSurfaces: Array<'focus' | 'detail'> | undefined, hostSurface: 'focus' | 'detail') {
+  if (!hostSurfaces?.length) {
+    return true;
+  }
+
+  return hostSurfaces.includes(hostSurface);
+}
 
 export function BuiltInModuleFocusPanels<TGame extends ModuleHostGameLike>({
   game,
   modules,
+  hostSurface = 'focus',
 }: BuiltInModuleFocusPanelsProps<TGame>) {
   const focusEntries = useMemo(
     () => modules
       .filter((moduleEntry) => moduleEntry.configState.enabled)
       .flatMap(({ definition, configState }) =>
         definition.contributes
-          .filter((contribution) => contribution.slot === 'game.focus.panel')
+          .filter((contribution) => contribution.slot === 'game.focus.panel' && supportsHostSurface(contribution.hostSurfaces, hostSurface))
           .map((contribution) => ({ contribution, definition, configState }))),
-    [modules],
+    [hostSurface, modules],
   );
 
   if (!focusEntries.length) {
@@ -34,6 +44,7 @@ export function BuiltInModuleFocusPanels<TGame extends ModuleHostGameLike>({
           moduleId: definition.id,
           moduleDisplayName: definition.displayName,
           configState,
+          hostSurface,
           game,
           moduleTags,
         }) : null;

@@ -7,6 +7,11 @@ export const F95_THREAD_URL_TAG = 'module_f95_thread_url';
 export const F95_CREATOR_TAG = 'module_f95_creator';
 export const F95_LAST_UPDATE_TITLE_TAG = 'module_f95_last_update_title';
 export const F95_LAST_FEED_ITEM_ID_TAG = 'module_f95_last_feed_item_id';
+export const F95_OVERVIEW_TAG = 'module_f95_overview';
+export const F95_VERSION_TAG = 'module_f95_version';
+export const F95_STARS_RATING_TAG = 'module_f95_stars_rating';
+export const F95_VOTE_COUNT_TAG = 'module_f95_vote_count';
+export const F95_THREAD_TAGS_TAG = 'module_f95_thread_tags';
 
 export function getF95TagValue(tags: ModuleHostGameTag[], key: string) {
   return tags.find((tag) => tag.key === key)?.value ?? '';
@@ -29,6 +34,31 @@ export function setF95TagValue(tags: ModuleHostGameTag[], key: string, value: st
   }
 
   return [...nextTags, { key, value: normalizedValue }];
+}
+
+export function normalizeF95TagList(values: string[]) {
+  const uniqueValues = new Map<string, string>();
+  for (const value of values) {
+    const normalizedValue = String(value ?? '').trim();
+    if (!normalizedValue) {
+      continue;
+    }
+
+    const key = normalizedValue.toLowerCase();
+    if (!uniqueValues.has(key)) {
+      uniqueValues.set(key, normalizedValue);
+    }
+  }
+
+  return [...uniqueValues.values()];
+}
+
+export function serializeF95TagList(values: string[]) {
+  return normalizeF95TagList(values).join('\n');
+}
+
+export function parseF95TagList(value: string) {
+  return normalizeF95TagList(String(value ?? '').split(/\r?\n/));
 }
 
 export function updateF95MetadataDraft(

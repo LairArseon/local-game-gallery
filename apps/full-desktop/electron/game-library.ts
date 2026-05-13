@@ -68,6 +68,20 @@ function sanitizeKey(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, '_');
 }
 
+function encodeNfoValue(value: string) {
+  return String(value ?? '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/\\/g, '\\\\')
+    .replace(/\n/g, '\\n');
+}
+
+function decodeNfoValue(value: string) {
+  return String(value ?? '')
+    .replace(/\\n/g, '\n')
+    .replace(/\\\\/g, '\\');
+}
+
 function compareVersions(left: string, right: string) {
   const normalize = (value: string) =>
     value
@@ -104,6 +118,7 @@ export async function readGameMetadata(gamePath: string, gameName: string, versi
   try {
     const raw = await readFile(nfoPath, 'utf8');
     const metadata = createDefaultMetadata(fallbackLatestVersion);
+    let lastParsedKey = '';
 
     for (const line of raw.split(/\r?\n/)) {
       const trimmed = line.trim();
@@ -113,43 +128,75 @@ export async function readGameMetadata(gamePath: string, gameName: string, versi
 
       const match = trimmed.match(/^\[([^\]]+)\]\s*(.*)$/);
       if (!match) {
+        if (!lastParsedKey) {
+          continue;
+        }
+
+        if (lastParsedKey === 'description' || lastParsedKey === 'summary') {
+          metadata.description = metadata.description
+            ? `${metadata.description}\n${line}`
+            : line;
+          continue;
+        }
+
+        if (lastParsedKey === 'note' || lastParsedKey === 'notes') {
+          const lastNoteIndex = metadata.notes.length - 1;
+          if (lastNoteIndex >= 0) {
+            metadata.notes[lastNoteIndex] = metadata.notes[lastNoteIndex]
+              ? `${metadata.notes[lastNoteIndex]}\n${line}`
+              : line;
+          }
+          continue;
+        }
+
+        if (lastParsedKey.startsWith('custom:')) {
+          const lastTagIndex = metadata.customTags.length - 1;
+          if (lastTagIndex >= 0) {
+            metadata.customTags[lastTagIndex].value = metadata.customTags[lastTagIndex].value
+              ? `${metadata.customTags[lastTagIndex].value}\n${line}`
+              : line;
+          }
+        }
+
         continue;
       }
 
       const [, rawKey, value] = match;
       const key = rawKey.trim().toLowerCase();
+      const decodedValue = decodeNfoValue(value);
+      lastParsedKey = key;
 
       if (key === 'title') {
         continue;
       }
 
       if (key === 'latest_version') {
-        metadata.latestVersion = value;
+        metadata.latestVersion = decodedValue;
         continue;
       }
 
       if (key === 'score') {
-        metadata.score = value;
+        metadata.score = decodedValue;
         continue;
       }
 
       if (key === 'status') {
-        metadata.status = value.trim();
+        metadata.status = decodedValue.trim();
         continue;
       }
 
       if (key === 'description' || key === 'summary') {
-        metadata.description = value;
+        metadata.description = decodedValue;
         continue;
       }
 
       if (key === 'note' || key === 'notes') {
-        metadata.notes.push(value);
+        metadata.notes.push(decodedValue);
         continue;
       }
 
       if (key === 'tag') {
-        const tag = value.trim();
+        const tag = decodedValue.trim();
         if (tag) {
           metadata.tags.push(tag);
         }
@@ -157,12 +204,12 @@ export async function readGameMetadata(gamePath: string, gameName: string, versi
       }
 
       if (key === 'launch_executable' || key === 'launch_path') {
-        metadata.launchExecutable = value.trim();
+        metadata.launchExecutable = decodedValue.trim();
         continue;
       }
 
       if (key === 'tags') {
-        for (const tag of value.split(',').map((entry) => entry.trim()).filter(Boolean)) {
+        for (const tag of decodedValue.split(',').map((entry) => entry.trim()).filter(Boolean)) {
           metadata.tags.push(tag);
         }
         continue;
@@ -171,7 +218,7 @@ export async function readGameMetadata(gamePath: string, gameName: string, versi
       if (key.startsWith('custom:')) {
         metadata.customTags.push({
           key: rawKey.slice('custom:'.length).trim(),
-          value,
+          value: decodedValue,
         });
       }
     }
@@ -195,23 +242,23 @@ export async function saveGameMetadata(payload: SaveGameMetadataPayload) {
   const nfoPath = path.join(payload.gamePath, defaultGameNfoName);
   const lines = [
     '; Local Game Gallery metadata',
-    `[title] ${payload.title}`,
-    `[latest_version] ${payload.metadata.latestVersion}`,
-    `[score] ${payload.metadata.score}`,
-    `[status] ${payload.metadata.status}`,
-    `[description] ${payload.metadata.description}`,
+    `[title] ${encodeNfoValue(payload.title)}`,
+    `[latest_version] ${encodeNfoValue(payload.metadata.latestVersion)}`,
+    `[score] ${encodeNfoValue(payload.metadata.score)}`,
+    `[status] ${encodeNfoValue(payload.metadata.status)}`,
+    `[description] ${encodeNfoValue(payload.metadata.description)}`,
   ];
 
   for (const note of payload.metadata.notes.map((entry) => entry.trim()).filter(Boolean)) {
-    lines.push(`[note] ${note}`);
+    lines.push(`[note] ${encodeNfoValue(note)}`);
   }
 
   for (const tag of payload.metadata.tags.map((entry) => entry.trim()).filter(Boolean)) {
-    lines.push(`[tag] ${tag}`);
+    lines.push(`[tag] ${encodeNfoValue(tag)}`);
   }
 
   if (payload.metadata.launchExecutable.trim()) {
-    lines.push(`[launch_executable] ${payload.metadata.launchExecutable.trim()}`);
+    lines.push(`[launch_executable] ${encodeNfoValue(payload.metadata.launchExecutable.trim())}`);
   }
 
   for (const tag of payload.metadata.customTags) {
@@ -220,7 +267,7 @@ export async function saveGameMetadata(payload: SaveGameMetadataPayload) {
       continue;
     }
 
-    lines.push(`[custom:${key}] ${tag.value}`);
+    lines.push(`[custom:${key}] ${encodeNfoValue(tag.value)}`);
   }
 
   lines.push('');

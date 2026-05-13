@@ -5,6 +5,8 @@ import type { ModuleHostGameLike, ModuleHostGameTag } from '../types/moduleHostT
 type BuiltInModuleDetailPanelsProps<TGame extends ModuleHostGameLike> = {
   game: TGame;
   modules: ResolvedBuiltInModule[];
+  logAppEvent?: (message: string, level?: 'info' | 'warn' | 'error', source?: string) => Promise<void>;
+  toErrorMessage?: (error: unknown, fallback: string) => string;
   onGameMetadataTagsChange?: (
     game: TGame,
     updater: ModuleHostGameTag[] | ((current: ModuleHostGameTag[]) => ModuleHostGameTag[])
@@ -14,6 +16,8 @@ type BuiltInModuleDetailPanelsProps<TGame extends ModuleHostGameLike> = {
 export function BuiltInModuleDetailPanels<TGame extends ModuleHostGameLike>({
   game,
   modules,
+  logAppEvent,
+  toErrorMessage,
   onGameMetadataTagsChange,
 }: BuiltInModuleDetailPanelsProps<TGame>) {
   const detailEntries = useMemo(
@@ -35,22 +39,26 @@ export function BuiltInModuleDetailPanels<TGame extends ModuleHostGameLike>({
       {detailEntries.map(({ contribution, definition, configState }) => {
         const moduleTagPrefix = `module_${definition.id}_`;
         const moduleTags = game.metadata.customTags.filter((tag) => tag.key.startsWith(moduleTagPrefix));
-        const content = contribution.render ? contribution.render({
+        const renderContext = {
           moduleId: definition.id,
           moduleDisplayName: definition.displayName,
           configState,
+          logAppEvent,
+          toErrorMessage,
           game,
           moduleTags,
           onGameMetadataTagsChange: onGameMetadataTagsChange
-            ? (updater) => onGameMetadataTagsChange(game, updater)
+            ? (updater: ModuleHostGameTag[] | ((current: ModuleHostGameTag[]) => ModuleHostGameTag[])) => onGameMetadataTagsChange(game, updater)
             : undefined,
-        }) : moduleTags.length ? (
+        };
+        const content = contribution.render ? contribution.render(renderContext) : moduleTags.length ? (
           <div className="detail-tags">
             {moduleTags.map((tag) => (
               <p key={tag.key}>{tag.key}: {tag.value}</p>
             ))}
           </div>
         ) : null;
+        const headerActions = contribution.renderHeaderActions ? contribution.renderHeaderActions(renderContext) : null;
 
         if (!content) {
           return null;
@@ -63,6 +71,7 @@ export function BuiltInModuleDetailPanels<TGame extends ModuleHostGameLike>({
                 <h3>{contribution.title ?? definition.displayName}</h3>
                 <p>{contribution.description ?? definition.description}</p>
               </div>
+              {headerActions}
             </div>
             {content}
           </section>

@@ -43,9 +43,11 @@ const buildTargets = [
     label: 'web client',
     command: 'build:web-client',
     sourceEntries: [
+      'apps/f95-module',
       'apps/web-client/src',
       'apps/shared/app-shell',
       'apps/web-client/vite.config.ts',
+      'scripts/vite-module-packaging.mjs',
     ],
     outputEntries: [
       'dist-web-client/index.html',
@@ -55,12 +57,14 @@ const buildTargets = [
     label: 'standalone client',
     command: 'build:standalone-client',
     sourceEntries: [
+      'apps/f95-module',
       'apps/standalone-client/src',
       'apps/standalone-client/electron',
       'apps/shared/app-shell',
       'apps/standalone-client/vite.config.ts',
       // Standalone renderer imports web-client source directly.
       'apps/web-client/src',
+      'scripts/vite-module-packaging.mjs',
     ],
     outputEntries: [
       'dist-standalone-client/index.html',

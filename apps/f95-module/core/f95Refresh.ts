@@ -9,7 +9,6 @@ import {
   F95_THREAD_ID_TAG,
   F95_THREAD_URL_TAG,
   F95_UP_TO_DATE_TAG,
-  getF95BooleanTagValue,
   getF95TagValue,
   setF95TagValue,
 } from './f95Tags';
@@ -87,11 +86,12 @@ export async function runF95RefreshSync(context: BuiltInModuleRefreshContext): P
       }
 
       const storedThreadUrl = getF95TagValue(game.metadata.customTags, F95_THREAD_URL_TAG);
+      const storedCreator = getF95TagValue(game.metadata.customTags, F95_CREATOR_TAG);
       const currentFeedItemId = getF95TagValue(game.metadata.customTags, F95_LAST_FEED_ITEM_ID_TAG);
-      const resolvedThreadUrl = storedThreadUrl || matchingItem.threadUrl;
       const currentLastUpdated = getF95TagValue(game.metadata.customTags, F95_LAST_UPDATED_TAG);
       const nextPublishedAt = matchingItem.publishedAt;
-      const nextFeedItemId = matchingItem.guid || matchingItem.threadId || '';
+      const nextFeedItemId = matchingItem.guid || matchingItem.threadId || currentFeedItemId || '';
+      const nextCreator = storedCreator || matchingItem.creator;
       const currentLastUpdatedMs = toComparableTime(currentLastUpdated);
       const nextPublishedAtMs = toComparableTime(nextPublishedAt);
       let nextTags = game.metadata.customTags;
@@ -99,25 +99,24 @@ export async function runF95RefreshSync(context: BuiltInModuleRefreshContext): P
 
       if (!currentLastUpdated) {
         nextTags = withUpdatedTags(nextTags, [
-          [F95_THREAD_URL_TAG, resolvedThreadUrl],
+          [F95_THREAD_URL_TAG, storedThreadUrl || matchingItem.threadUrl],
           [F95_LAST_UPDATED_TAG, nextPublishedAt],
           [F95_UP_TO_DATE_TAG, 'true'],
           [F95_LAST_UPDATE_TITLE_TAG, matchingItem.rawTitle],
           [F95_LAST_FEED_ITEM_ID_TAG, nextFeedItemId],
-          [F95_CREATOR_TAG, matchingItem.creator],
+          [F95_CREATOR_TAG, nextCreator],
         ]);
         shouldPersist = true;
       } else if (nextPublishedAtMs !== null && (currentLastUpdatedMs === null || nextPublishedAtMs > currentLastUpdatedMs)) {
         nextTags = withUpdatedTags(nextTags, [
-          [F95_THREAD_URL_TAG, resolvedThreadUrl],
+          [F95_THREAD_URL_TAG, storedThreadUrl || matchingItem.threadUrl],
           [F95_LAST_UPDATED_TAG, nextPublishedAt],
           [F95_UP_TO_DATE_TAG, 'false'],
           [F95_LAST_UPDATE_TITLE_TAG, matchingItem.rawTitle],
           [F95_LAST_FEED_ITEM_ID_TAG, nextFeedItemId],
-          [F95_CREATOR_TAG, matchingItem.creator],
+          [F95_CREATOR_TAG, nextCreator],
         ]);
         shouldPersist = true;
-
       }
 
       if (!shouldPersist) {

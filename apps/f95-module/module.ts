@@ -15,7 +15,7 @@ import {
   getF95TagValue,
 } from './core/f95Tags';
 import { F95SetupSection } from './ui/F95SetupSection';
-import { F95DetailPanel } from './ui/F95DetailPanel';
+import { F95DetailPanel, F95DetailPanelHeaderActions } from './ui/F95DetailPanel';
 import { F95MetadataEditorSection } from './ui/F95MetadataEditorSection';
 import { F95FocusPanel } from './ui/F95FocusPanel';
 import { F95GameUpdateBadge } from './ui/F95GameUpdateBadge';
@@ -116,8 +116,8 @@ export const f95ModuleDefinition: BuiltInModuleDefinition = {
     {
       id: 'f95.game.card.badge',
       slot: 'game.card.badge',
-      title: 'F95 Update Badge',
-      description: 'Temporary badge for games with unseen F95 updates.',
+      title: 'F95 Presence Badge',
+      description: 'Badge for games linked to an F95 thread.',
       order: 100,
       render: (context) => createElement(F95GameUpdateBadge, { context }),
     },
@@ -127,6 +127,7 @@ export const f95ModuleDefinition: BuiltInModuleDefinition = {
       title: 'F95 Focus Panel',
       description: 'Focused game metadata sourced from F95 state.',
       order: 100,
+      hostSurfaces: ['focus'],
       render: (context) => createElement(F95FocusPanel, { context }),
     },
     {
@@ -135,6 +136,7 @@ export const f95ModuleDefinition: BuiltInModuleDefinition = {
       title: 'F95 Detail Panel',
       description: 'Detailed F95 update history and metadata for the selected game.',
       order: 100,
+      renderHeaderActions: (context) => createElement(F95DetailPanelHeaderActions, { context }),
       render: (context) => createElement(F95DetailPanel, { context }),
     },
   ],

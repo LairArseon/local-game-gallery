@@ -48,7 +48,10 @@ export type BuiltInModuleRenderContext = {
   moduleId: string;
   moduleDisplayName: string;
   configState: ModuleHostConfigState;
+  hostSurface?: 'focus' | 'detail';
   onConfigStateChange?: (nextConfigState: ModuleHostConfigState) => void;
+  logAppEvent?: (message: string, level?: 'info' | 'warn' | 'error', source?: string) => Promise<void>;
+  toErrorMessage?: (error: unknown, fallback: string) => string;
   game?: ModuleHostGameLike;
   moduleTags?: ModuleHostGameTag[];
   onGameMetadataTagsChange?: (
@@ -74,6 +77,8 @@ export type BuiltInModuleContributionDescriptor = {
   title?: string;
   description?: string;
   order?: number;
+  hostSurfaces?: Array<'focus' | 'detail'>;
+  renderHeaderActions?: (context: BuiltInModuleRenderContext) => ReactNode;
   render?: (context: BuiltInModuleRenderContext) => ReactNode;
   getItems?: (context: BuiltInModuleNotificationContext) => NotificationFeedItem[];
 };

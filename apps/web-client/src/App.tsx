@@ -893,8 +893,9 @@ function App() {
     <BuiltInModuleFocusPanels
       game={game}
       modules={resolvedBuiltInModules}
+      hostSurface={detailGamePath === game.path ? 'detail' : 'focus'}
     />
-  ), [resolvedBuiltInModules]);
+  ), [detailGamePath, resolvedBuiltInModules]);
 
   const renderModuleGameBadges = useCallback((game: ScanResult['games'][number]) => (
     <BuiltInModuleGameBadges
@@ -1040,6 +1041,8 @@ function App() {
     <BuiltInModuleDetailPanels
       game={game}
       modules={resolvedBuiltInModules}
+      logAppEvent={logAppEvent}
+      toErrorMessage={toErrorMessage}
       onGameMetadataTagsChange={saveModuleDetailTags}
     />
   ), [resolvedBuiltInModules, saveModuleDetailTags]);
