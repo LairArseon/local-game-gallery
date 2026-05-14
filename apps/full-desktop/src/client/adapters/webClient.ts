@@ -37,6 +37,7 @@ import type {
   SaveGameMetadataPayload,
   SaveVersionDownloadPayload,
   SaveVersionDownloadResult,
+  ScanProgressEvent,
   ScanRequestOptions,
   ScanGameSizesPayload,
   ScanGameSizesResult,
@@ -98,7 +99,15 @@ let suppressLogRequestsUntil = 0;
 const gameContextMenuListeners = new Set<(payload: GameContextMenuAction) => void>();
 const versionContextMenuListeners = new Set<(payload: VersionContextMenuAction) => void>();
 const vaultContextMenuListeners = new Set<(payload: VaultContextMenuAction) => void>();
+const scanProgressListeners = new Set<(payload: ScanProgressEvent) => void>();
+const activeScanProgressPolls = new Map<string, { stopped: boolean }>();
+const scanProgressPollIntervalMs = 220;
 let disposeActiveBrowserContextMenu: (() => void) | null = null;
+
+type ScanProgressSnapshot = ScanProgressEvent & {
+  completed: boolean;
+  updatedAt: number;
+};
 
 function arrayBufferToBase64(buffer: ArrayBuffer) {
   const bytes = new Uint8Array(buffer);
@@ -284,6 +293,60 @@ function notifyVaultContextMenu(payload: VaultContextMenuAction) {
   for (const listener of vaultContextMenuListeners) {
     listener(payload);
   }
+}
+
+function notifyScanProgress(payload: ScanProgressEvent) {
+  for (const listener of scanProgressListeners) {
+    listener(payload);
+  }
+}
+
+function stopScanProgressPolling(operationId: string) {
+  const activePoll = activeScanProgressPolls.get(operationId);
+  if (!activePoll) {
+    return;
+  }
+
+  activePoll.stopped = true;
+  activeScanProgressPolls.delete(operationId);
+}
+
+function startScanProgressPolling(operationId: string) {
+  const normalizedOperationId = String(operationId ?? '').trim();
+  if (!normalizedOperationId || activeScanProgressPolls.has(normalizedOperationId)) {
+    return;
+  }
+
+  const activePoll = { stopped: false };
+  activeScanProgressPolls.set(normalizedOperationId, activePoll);
+
+  const poll = async () => {
+    try {
+      while (!activePoll.stopped) {
+        try {
+          const response = await requestApi<{ progress: ScanProgressSnapshot | null }>(
+            `/api/scan/progress?operationId=${encodeURIComponent(normalizedOperationId)}`,
+          );
+          if (response.progress) {
+            notifyScanProgress(response.progress);
+            if (response.progress.completed) {
+              break;
+            }
+          }
+        } catch {
+          // Best-effort polling: keep trying while operation is active.
+        }
+
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, scanProgressPollIntervalMs);
+        });
+      }
+    } finally {
+      activeScanProgressPolls.delete(normalizedOperationId);
+    }
+  };
+
+  void poll();
 }
 
 function closeBrowserContextMenu() {
@@ -502,6 +565,12 @@ export const webClient: GalleryClient = {
       // Live operation progress events are only available through Electron IPC.
     };
   },
+  onScanProgress(callback: (payload: ScanProgressEvent) => void) {
+    scanProgressListeners.add(callback);
+    return () => {
+      scanProgressListeners.delete(callback);
+    };
+  },
   async saveConfig(config) {
     return requestApi<GalleryConfig>('/api/config', {
       method: 'PUT',
@@ -542,10 +611,21 @@ export const webClient: GalleryClient = {
     };
   },
   async scanGames(options?: ScanRequestOptions) {
-    return requestApi<ScanResult>('/api/scan', {
-      method: 'POST',
-      body: JSON.stringify(options ?? {}),
-    });
+    const operationId = String(options?.operationId ?? '').trim();
+    if (operationId) {
+      startScanProgressPolling(operationId);
+    }
+
+    try {
+      return await requestApi<ScanResult>('/api/scan', {
+        method: 'POST',
+        body: JSON.stringify(options ?? {}),
+      });
+    } finally {
+      if (operationId) {
+        stopScanProgressPolling(operationId);
+      }
+    }
   },
   async scanGame(gamePath: string) {
     const response = await requestApi<{ game: GameSummary | null }>('/api/scan-game', {

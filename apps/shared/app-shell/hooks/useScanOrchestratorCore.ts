@@ -20,7 +20,12 @@ type ScanResultLike<TGame extends { path: string; name: string; sizeBytes?: numb
 };
 
 type UseScanRefreshCoreArgs<TGame extends { path: string; name: string }, TScanResult extends ScanResultLike<TGame>> = {
-  scanGames: (options?: { syncMirror?: boolean; mirrorParity?: boolean; allowDestructiveMirrorChanges?: boolean }) => Promise<TScanResult>;
+  scanGames: (options?: {
+    syncMirror?: boolean;
+    mirrorParity?: boolean;
+    allowDestructiveMirrorChanges?: boolean;
+    operationId?: string;
+  }) => Promise<TScanResult>;
   emptyScan: TScanResult;
   t: (key: string, options?: Record<string, unknown>) => string;
   setScanResult: Dispatch<SetStateAction<TScanResult>>;
@@ -29,7 +34,31 @@ type UseScanRefreshCoreArgs<TGame extends { path: string; name: string }, TScanR
   toErrorMessage: (error: unknown, fallback: string) => string;
   setIsScanning?: Dispatch<SetStateAction<boolean>>;
   setScanProgress?: Dispatch<SetStateAction<number>>;
+  setScanActivityLabel?: Dispatch<SetStateAction<string | null>>;
+  onScanOperationStart?: (operationId: string) => void;
+  onScanOperationEnd?: (operationId: string) => void;
 };
+
+function createScanOperationId() {
+  if (typeof globalThis !== 'undefined' && typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `scan-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function toScanActivityLabel(mode: RefreshScanMode, t: (key: string, options?: Record<string, unknown>) => string) {
+  switch (mode) {
+    case 'scan-only':
+      return t('actions.refreshingGallery');
+    case 'scan-and-sync':
+      return t('actions.refreshingGalleryAndSyncingMirror');
+    case 'parity-sync':
+      return t('actions.refreshingGalleryAndCheckingParity');
+    default:
+      return null;
+  }
+}
 
 export function useScanRefreshCore<
   TGame extends { path: string; name: string; sizeBytes?: number | null },
@@ -44,6 +73,9 @@ export function useScanRefreshCore<
   toErrorMessage,
   setIsScanning,
   setScanProgress,
+  setScanActivityLabel,
+  onScanOperationStart,
+  onScanOperationEnd,
 }: UseScanRefreshCoreArgs<TGame, TScanResult>) {
   const scanInFlightRef = useRef<Promise<TScanResult | null> | null>(null);
   const refreshScanRef = useRef<((mode?: RefreshScanMode, options?: RefreshScanOptions) => Promise<TScanResult | null>) | null>(null);
@@ -57,14 +89,17 @@ export function useScanRefreshCore<
     const shouldSyncMirror = mode === 'scan-and-sync' || mode === 'parity-sync';
     const shouldMirrorParity = mode === 'parity-sync';
     const shouldAllowDestructiveMirrorChanges = shouldMirrorParity && options.allowDestructiveMirrorChanges === true;
+    const operationId = !isFallbackRecoveryProbe ? createScanOperationId() : '';
     if (!isFallbackRecoveryProbe) {
       setScanProgress?.(0.06);
+      onScanOperationStart?.(operationId);
     }
 
     const startedAtMs = Date.now();
     const scanPromise = (async () => {
       if (!isFallbackRecoveryProbe) {
         setIsScanning?.(true);
+        setScanActivityLabel?.(toScanActivityLabel(mode, t));
         void logAppEvent(
           `Scan started (mode=${mode}, sync=${shouldSyncMirror ? 'enabled' : 'disabled'}, parity=${shouldAllowDestructiveMirrorChanges ? 'full' : 'safe-media-preserve'}).`,
           'info',
@@ -77,6 +112,7 @@ export function useScanRefreshCore<
           syncMirror: shouldSyncMirror,
           mirrorParity: shouldMirrorParity,
           allowDestructiveMirrorChanges: shouldAllowDestructiveMirrorChanges,
+          operationId: operationId || undefined,
         });
 
         if (isFallbackRecoveryProbe) {
@@ -137,13 +173,15 @@ export function useScanRefreshCore<
         scanInFlightRef.current = null;
         if (!isFallbackRecoveryProbe) {
           setIsScanning?.(false);
+          setScanActivityLabel?.(null);
+          onScanOperationEnd?.(operationId);
         }
       }
     })();
 
     scanInFlightRef.current = scanPromise;
     return scanPromise;
-  }, [scanGames, emptyScan, t, setScanResult, setStatus, logAppEvent, toErrorMessage, setIsScanning, setScanProgress]);
+  }, [scanGames, emptyScan, t, setScanResult, setStatus, logAppEvent, toErrorMessage, setIsScanning, setScanProgress, setScanActivityLabel, onScanOperationStart, onScanOperationEnd]);
 
   refreshScanRef.current = refreshScan;
 

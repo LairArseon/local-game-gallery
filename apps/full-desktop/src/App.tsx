@@ -112,6 +112,7 @@ function App() {
   const cardsContainerRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [isSizeScanning, setIsSizeScanning] = useState(false);
+  const [manualRefreshActivityLabel, setManualRefreshActivityLabel] = useState<string | null>(null);
   const [sizeScanCompletedCount, setSizeScanCompletedCount] = useState(0);
   const [sizeScanTotalCount, setSizeScanTotalCount] = useState(0);
   const sizeScanInFlightRef = useRef<Promise<void> | null>(null);
@@ -140,6 +141,7 @@ function App() {
     scanProgress,
     refreshScan,
     refreshGame,
+    scanActivityLabel,
   } = useScanOrchestrator({
     galleryClient,
     isUsingMirrorFallback: scanResult.usingMirrorFallback,
@@ -287,19 +289,33 @@ function App() {
       return;
     }
 
-    void runGameSizeScan(result.games.map((game) => game.path));
-  }, [refreshScan, runGameSizeScan]);
+    setManualRefreshActivityLabel(t('actions.refreshingGameSizes'));
+    try {
+      await runGameSizeScan(result.games.map((game) => game.path));
+    } finally {
+      setManualRefreshActivityLabel(null);
+    }
+  }, [refreshScan, runGameSizeScan, t]);
 
   const handleRefreshRequest = useCallback(async () => {
     const activeDetailGamePath = String(detailGamePath ?? '').trim();
     if (activeDetailGamePath) {
-      await refreshGame(activeDetailGamePath);
-      await runGameSizeScan([activeDetailGamePath]);
+      setManualRefreshActivityLabel(t('actions.refreshingCurrentGame'));
+      try {
+        await refreshGame(activeDetailGamePath);
+        setManualRefreshActivityLabel(t('actions.refreshingGameSizes'));
+        await runGameSizeScan([activeDetailGamePath]);
+      } finally {
+        setManualRefreshActivityLabel(null);
+      }
       return;
     }
 
     await refreshScan();
-  }, [detailGamePath, refreshGame, refreshScan, runGameSizeScan]);
+  }, [detailGamePath, refreshGame, refreshScan, runGameSizeScan, t]);
+
+  const topbarScanStatusLabel = manualRefreshActivityLabel ?? scanActivityLabel ?? null;
+  const isRefreshBusy = isScanning || Boolean(manualRefreshActivityLabel);
 
   useEffect(() => {
     if (hasAutoTriggeredSizeScanRef.current) {
@@ -1041,8 +1057,8 @@ function App() {
 
   const detailBackgroundSrc = filePathToSrc(detailBackgroundPath, 'mediumPreview');
   const hasPendingSizeValues = isSizeScanning
-    || (scanResult.games.length > 0 && scanResult.games.every((game) => game.sizeBytes === null));
-  const totalLibrarySizeBytes = scanResult.games.reduce((total, game) => total + (game.sizeBytes ?? 0), 0);
+    || (visibleFilteredGames.length > 0 && visibleFilteredGames.every((game) => game.sizeBytes === null));
+  const totalLibrarySizeBytes = visibleFilteredGames.reduce((total, game) => total + (game.sizeBytes ?? 0), 0);
   const sizeScanPercent = sizeScanTotalCount > 0
     ? Math.round((sizeScanCompletedCount / sizeScanTotalCount) * 100)
     : 0;
@@ -1068,7 +1084,8 @@ function App() {
       <header className="topbar panel">
         <div className="topbar__title">
           <p className="eyebrow">{t('app.title')}</p>
-          <p>{t('app.gamesFoundWithSize', { count: scanResult.games.length, size: totalLibrarySizeLabel })}</p>
+          {topbarScanStatusLabel ? <p className="topbar__title-status">{topbarScanStatusLabel}</p> : null}
+          <p className="topbar__title-count">{t('app.gamesFoundWithSize', { count: visibleFilteredGames.length, size: totalLibrarySizeLabel })}</p>
         </div>
         <TopbarControls
           searchQuery={searchQuery}
@@ -1081,7 +1098,7 @@ function App() {
           hasVaultPin={Boolean(config.vaultPin?.trim())}
           supportsNativeContextMenu={supportsNativeContextMenu}
           isVersionNotificationsOpen={isVersionNotificationsOpen}
-          isScanning={isScanning}
+          isScanning={isRefreshBusy}
           versionMismatchCount={notificationFeedItems.length}
           onToggleTagPoolPanel={() => setIsTagPoolPanelOpen((current) => !current)}
           onToggleFilterPanel={() => setIsFilterPanelOpen((current) => !current)}

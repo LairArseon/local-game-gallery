@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto';
 import { loadConfig, saveConfig } from './config';
 import { appendLogEvent, clearLogContents, openLogFolder, readLogContents } from './logger';
 import { getLatestVersionName, importDroppedGameMedia, readGameMetadata, removeScreenshot, reorderScreenshots, saveGameMetadata } from './game-library';
-import { scanGame, scanGameSizes, scanGames } from './scanner';
+import { scanGame, scanGameSizes, scanGames, type ScanProgressUpdate } from './scanner';
 import { startGalleryHttpService, type GalleryHttpService } from './service';
 import { registerArchiveUploadHandlers } from './ipc/registerArchiveUploadHandlers';
 import {
@@ -54,6 +54,7 @@ import type {
   PlayGamePayload,
   PickArchiveUploadFileResult,
   PlayGameResult,
+  ScanProgressEvent,
   RemoveScreenshotPayload,
   ReorderScreenshotsPayload,
   ScanRequestOptions,
@@ -778,8 +779,15 @@ ipcMain.handle('gallery:apply-runtime-app-icon', async (_event, payload: ApplyRu
 
 ipcMain.handle('gallery:scan-games', async (_event, requestOptions?: ScanRequestOptions) => {
   const config = await loadConfig();
+  const operationId = String(requestOptions?.operationId ?? '').trim() || randomUUID();
   try {
-    return await scanGames(config, requestOptions);
+    return await scanGames(config, { ...requestOptions, operationId }, (update: ScanProgressUpdate) => {
+      const eventPayload: ScanProgressEvent = {
+        operationId,
+        ...update,
+      };
+      _event.sender.send('gallery:scan-progress', eventPayload);
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Scan failed.';
     await appendLogEvent({

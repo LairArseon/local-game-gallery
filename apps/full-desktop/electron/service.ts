@@ -6,6 +6,7 @@
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { copyFile, cp, mkdtemp, mkdir, readFile, readdir, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -24,6 +25,7 @@ import {
   type PlayGameResult,
   type RemoveScreenshotPayload,
   type ReorderScreenshotsPayload,
+  type ScanProgressEvent,
   type ScanRequestOptions,
   type ScanGameSizesPayload,
   type ScanGameSizesResult,
@@ -41,7 +43,7 @@ import {
 import { loadConfig, saveConfig } from './config';
 import { getLatestVersionName, readGameMetadata, reorderScreenshots, removeScreenshot, saveGameMetadata } from './game-library';
 import { appendLogEvent, clearLogContents, openLogFolder, readLogContents } from './logger';
-import { scanGame, scanGameSizes, scanGames } from './scanner';
+import { scanGame, scanGameSizes, scanGames, type ScanProgressUpdate } from './scanner';
 import { handleArchiveUploadRoutes } from './http/handleArchiveUploadRoutes';
 import {
   buildAttachmentContentDisposition,
@@ -173,6 +175,15 @@ const imageMimeToExtension = new Map<string, string>([
   ['image/avif', '.avif'],
 ]);
 const stagedArchiveUploads = new Map<string, { filePath: string; originalFileName: string }>();
+const scanProgressRetentionMs = 10 * 60 * 1000;
+const scanProgressByOperationId = new Map<
+  string,
+  {
+    event: ScanProgressEvent;
+    completed: boolean;
+    updatedAt: number;
+  }
+>();
 const versionStorageProgressRetentionMs = 10 * 60 * 1000;
 const versionStorageProgressByOperationId = new Map<
   string,
@@ -226,6 +237,28 @@ function setVersionStorageProgress(event: VersionStorageProgressEvent, completed
   const cleanupTimer = setTimeout(() => {
     versionStorageProgressByOperationId.delete(event.operationId);
   }, versionStorageProgressRetentionMs);
+  cleanupTimer.unref?.();
+}
+
+function setScanProgress(event: ScanProgressEvent, completed = false) {
+  scanProgressByOperationId.set(event.operationId, {
+    event: {
+      ...event,
+      percent: Math.max(0, Math.min(1, Number(event.percent ?? 0))),
+      processedGames: Math.max(0, Number(event.processedGames ?? 0)),
+      totalGames: Math.max(0, Number(event.totalGames ?? 0)),
+    },
+    completed,
+    updatedAt: Date.now(),
+  });
+
+  if (!completed) {
+    return;
+  }
+
+  const cleanupTimer = setTimeout(() => {
+    scanProgressByOperationId.delete(event.operationId);
+  }, scanProgressRetentionMs);
   cleanupTimer.unref?.();
 }
 
@@ -1468,7 +1501,29 @@ export async function startGalleryHttpService({
           }
 
           const config = await loadRuntimeConfig();
-          const scanResult: ScanResult = await scanGames(config, scanRequest);
+          const operationId = String(scanRequest.operationId ?? '').trim() || randomUUID();
+          setScanProgress({
+            operationId,
+            phase: 'preparing',
+            percent: 0,
+            processedGames: 0,
+            totalGames: 0,
+            currentGameName: null,
+          });
+          const scanResult: ScanResult = await scanGames(config, { ...scanRequest, operationId }, (update: ScanProgressUpdate) => {
+            setScanProgress({
+              operationId,
+              ...update,
+            }, update.phase === 'finalizing' && update.percent >= 1);
+          });
+          setScanProgress({
+            operationId,
+            phase: 'finalizing',
+            percent: 1,
+            processedGames: scanResult.games.length,
+            totalGames: scanResult.games.length,
+            currentGameName: null,
+          }, true);
           sendOk(response, scanResult);
         } catch (error) {
           const message = toErrorMessage(error, 'Scan failed.');
@@ -1479,6 +1534,26 @@ export async function startGalleryHttpService({
           }).catch(() => undefined);
           sendError(response, 400, 'scan_failed', message);
         }
+        return;
+      }
+
+      if (method === 'GET' && route === '/api/scan/progress') {
+        const operationId = String(requestUrl.searchParams.get('operationId') ?? '').trim();
+        if (!operationId) {
+          sendError(response, 400, 'missing_operation_id', 'Operation id is required.');
+          return;
+        }
+
+        const snapshot = scanProgressByOperationId.get(operationId);
+        sendOk(response, {
+          progress: snapshot
+            ? {
+                ...snapshot.event,
+                completed: snapshot.completed,
+                updatedAt: snapshot.updatedAt,
+              }
+            : null,
+        });
         return;
       }
 

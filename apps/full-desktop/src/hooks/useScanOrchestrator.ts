@@ -10,12 +10,13 @@
  */
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import type { GalleryClient } from '../client/contracts';
-import type { ScanResult } from '../types';
+import type { ScanProgressEvent, ScanResult } from '../types';
 import {
   useRefreshGameCore,
   useScanRefreshCore,
   type RefreshScanMode,
 } from '../../../shared/app-shell/hooks/useScanOrchestratorCore';
+import { formatScanProgressLabel } from '../../../shared/app-shell/hooks/scanProgressLabels';
 
 const fallbackRecoveryProbeIntervalMs = 12000;
 
@@ -44,6 +45,24 @@ export function useScanOrchestrator({
 }: UseScanOrchestratorArgs) {
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
+  const [baseScanActivityLabel, setBaseScanActivityLabel] = useState<string | null>(null);
+  const [scanProgressEvent, setScanProgressEvent] = useState<ScanProgressEvent | null>(null);
+  const activeScanOperationIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const disposeProgressListener = galleryClient.onScanProgress?.((event) => {
+      if (!activeScanOperationIdRef.current || event.operationId !== activeScanOperationIdRef.current) {
+        return;
+      }
+
+      setScanProgressEvent(event);
+      setScanProgress((current) => Math.max(current, Number(event.percent ?? 0)));
+    });
+
+    return () => {
+      disposeProgressListener?.();
+    };
+  }, [galleryClient]);
 
   const { refreshScan, refreshScanRef } = useScanRefreshCore({
     scanGames: galleryClient.scanGames,
@@ -55,6 +74,17 @@ export function useScanOrchestrator({
     toErrorMessage,
     setIsScanning,
     setScanProgress,
+    setScanActivityLabel: setBaseScanActivityLabel,
+    onScanOperationStart: (operationId) => {
+      activeScanOperationIdRef.current = operationId;
+      setScanProgressEvent(null);
+    },
+    onScanOperationEnd: (operationId) => {
+      if (activeScanOperationIdRef.current === operationId) {
+        activeScanOperationIdRef.current = null;
+      }
+      setScanProgressEvent(null);
+    },
   });
 
   const refreshGame = useRefreshGameCore({
@@ -64,27 +94,6 @@ export function useScanOrchestrator({
     toErrorMessage,
     logAppEvent,
   });
-
-  useEffect(() => {
-    if (!isScanning) {
-      return;
-    }
-
-    const progressInterval = window.setInterval(() => {
-      setScanProgress((current) => {
-        if (current >= 0.94) {
-          return current;
-        }
-
-        const easedNext = current + ((1 - current) * 0.08);
-        return Math.min(easedNext, 0.94);
-      });
-    }, 180);
-
-    return () => {
-      window.clearInterval(progressInterval);
-    };
-  }, [isScanning]);
 
   useEffect(() => {
     if (isScanning || scanProgress <= 0) {
@@ -131,6 +140,9 @@ export function useScanOrchestrator({
     scanProgress,
     refreshScan,
     refreshGame,
+    scanActivityLabel: scanProgressEvent
+      ? formatScanProgressLabel(scanProgressEvent, t)
+      : baseScanActivityLabel,
   };
 }
 

@@ -1,17 +1,24 @@
-import type { Dispatch, SetStateAction } from 'react';
-import type { GameSummary, ScanResult } from '../types';
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import type { GameSummary, ScanProgressEvent, ScanResult } from '../types';
 import {
   useRefreshGameCore,
   useScanRefreshCore,
   type RefreshScanMode,
 } from '../../../shared/app-shell/hooks/useScanOrchestratorCore';
+import { formatScanProgressLabel } from '../../../shared/app-shell/hooks/scanProgressLabels';
 
 export type { RefreshScanMode };
 
 type UseScanOrchestratorArgs = {
   galleryClient: {
-    scanGames: (options?: { syncMirror?: boolean; mirrorParity?: boolean }) => Promise<ScanResult>;
+    scanGames: (options?: {
+      syncMirror?: boolean;
+      mirrorParity?: boolean;
+      allowDestructiveMirrorChanges?: boolean;
+      operationId?: string;
+    }) => Promise<ScanResult>;
     scanGame: (gamePath: string) => Promise<GameSummary | null>;
+    onScanProgress?: (callback: (payload: ScanProgressEvent) => void) => () => void;
   };
   emptyScan: ScanResult;
   t: (key: string, options?: Record<string, unknown>) => string;
@@ -34,6 +41,25 @@ export function useScanOrchestrator({
   logAppEvent,
   toErrorMessage,
 }: UseScanOrchestratorArgs) {
+  const [baseScanActivityLabel, setBaseScanActivityLabel] = useState<string | null>(null);
+  const [scanProgressEvent, setScanProgressEvent] = useState<ScanProgressEvent | null>(null);
+  const activeScanOperationIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const disposeProgressListener = galleryClient.onScanProgress?.((event) => {
+      if (!activeScanOperationIdRef.current || event.operationId !== activeScanOperationIdRef.current) {
+        return;
+      }
+
+      setScanProgressEvent(event);
+      setScanProgress((current) => Math.max(current, Number(event.percent ?? 0)));
+    });
+
+    return () => {
+      disposeProgressListener?.();
+    };
+  }, [galleryClient, setScanProgress]);
+
   const { refreshScan, refreshScanRef } = useScanRefreshCore({
     scanGames: galleryClient.scanGames,
     emptyScan,
@@ -42,6 +68,17 @@ export function useScanOrchestrator({
     setStatus,
     setIsScanning,
     setScanProgress,
+    setScanActivityLabel: setBaseScanActivityLabel,
+    onScanOperationStart: (operationId) => {
+      activeScanOperationIdRef.current = operationId;
+      setScanProgressEvent(null);
+    },
+    onScanOperationEnd: (operationId) => {
+      if (activeScanOperationIdRef.current === operationId) {
+        activeScanOperationIdRef.current = null;
+      }
+      setScanProgressEvent(null);
+    },
     logAppEvent,
     toErrorMessage,
   });
@@ -58,6 +95,9 @@ export function useScanOrchestrator({
     refreshScan,
     refreshGame,
     refreshScanRef,
+    scanActivityLabel: scanProgressEvent
+      ? formatScanProgressLabel(scanProgressEvent, t)
+      : baseScanActivityLabel,
   };
 }
 

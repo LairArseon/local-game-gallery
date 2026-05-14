@@ -190,6 +190,25 @@ export type ScanRequestOptions = {
   syncMirror?: boolean;
   mirrorParity?: boolean;
   allowDestructiveMirrorChanges?: boolean;
+  operationId?: string;
+};
+
+export type ScanProgressPhase =
+  | 'preparing'
+  | 'syncing-mirror'
+  | 'scanning-metadata'
+  | 'scanning-media'
+  | 'scanning-extras'
+  | 'pruning-mirror'
+  | 'finalizing';
+
+export type ScanProgressEvent = {
+  operationId: string;
+  phase: ScanProgressPhase;
+  percent: number;
+  processedGames: number;
+  totalGames: number;
+  currentGameName: string | null;
 };
 
 export type ScanGameSizesPayload = {
@@ -470,6 +489,7 @@ export type GalleryApi = {
   stageDroppedAppIcon: (payload: StageDroppedAppIconPayload) => Promise<string>;
   applyRuntimeAppIcon: (payload: ApplyRuntimeAppIconPayload) => Promise<ApplyRuntimeAppIconResult>;
   scanGames: (options?: ScanRequestOptions) => Promise<ScanResult>;
+  onScanProgress?: (callback: (payload: ScanProgressEvent) => void) => () => void;
   scanGame: (gamePath: string) => Promise<GameSummary | null>;
   scanGameSizes: (payload: ScanGameSizesPayload) => Promise<ScanGameSizesResult>;
   showGameContextMenu: (payload: GameContextMenuPayload) => Promise<void>;

@@ -9,7 +9,11 @@ type UseGameArchiveUploadArgs = {
   setStatus: (value: string) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
   logAppEvent: (message: string, level?: 'info' | 'warn' | 'error', source?: string) => Promise<void>;
-  onImported: (gamePath: string | null) => Promise<void>;
+  onImported: (payload: {
+    gamePath: string | null;
+    versionName: string;
+    importMode: 'new-game' | 'add-version';
+  }) => Promise<void>;
 };
 
 function arrayBufferToBase64(buffer: ArrayBuffer) {
@@ -428,7 +432,11 @@ export function useGameArchiveUpload({
 
       setStatus(result.message);
       await logAppEvent(`Archive imported: ${result.message}`, 'info', 'game-upload');
-      await onImported(result.gamePath);
+      await onImported({
+        gamePath: result.gamePath,
+        versionName: versionName.trim(),
+        importMode: existingGamePath ? 'add-version' : 'new-game',
+      });
 
       clearDraft();
       setIsOpen(false);

@@ -47,6 +47,7 @@ import { useResponsiveGrid } from './hooks/useResponsiveGrid';
 import { useAppLifecycleHandlers } from './hooks/useAppLifecycleHandlers';
 import { useGameActions } from './hooks/useGameActions';
 import { useVersionMismatchManager } from './hooks/useVersionMismatchManager';
+import { resolveLatestVersionLaunchExecutable } from '../../shared/app-shell/hooks/useVersionMismatchManager';
 import { useVaultManager } from './hooks/useVaultManager';
 import { useScanOrchestrator, type RefreshScanMode } from './hooks/useScanOrchestrator';
 import { useFallbackRecoveryProbe } from './hooks/useFallbackRecoveryProbe';
@@ -117,6 +118,7 @@ function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [isSizeScanning, setIsSizeScanning] = useState(false);
+  const [manualRefreshActivityLabel, setManualRefreshActivityLabel] = useState<string | null>(null);
   const [sizeScanCompletedCount, setSizeScanCompletedCount] = useState(0);
   const [sizeScanTotalCount, setSizeScanTotalCount] = useState(0);
   const [scanProgress, setScanProgress] = useState(0);
@@ -209,27 +211,6 @@ function App() {
   useDetailScrollReset(isNarrowViewport, detailGamePath);
 
   useEffect(() => {
-    if (!isScanning) {
-      return;
-    }
-
-    const progressInterval = window.setInterval(() => {
-      setScanProgress((current) => {
-        if (current >= 0.94) {
-          return current;
-        }
-
-        const easedNext = current + ((1 - current) * 0.08);
-        return Math.min(easedNext, 0.94);
-      });
-    }, 180);
-
-    return () => {
-      window.clearInterval(progressInterval);
-    };
-  }, [isScanning]);
-
-  useEffect(() => {
     if (isScanning || scanProgress <= 0) {
       return;
     }
@@ -309,6 +290,7 @@ function App() {
     refreshScan,
     refreshGame,
     refreshScanRef,
+    scanActivityLabel,
   } = useScanOrchestrator({
     galleryClient,
     emptyScan,
@@ -456,19 +438,33 @@ function App() {
       return;
     }
 
-    void runGameSizeScan(result.games.map((game) => game.path));
-  }, [refreshScan, runGameSizeScan]);
+    setManualRefreshActivityLabel(t('actions.refreshingGameSizes'));
+    try {
+      await runGameSizeScan(result.games.map((game) => game.path));
+    } finally {
+      setManualRefreshActivityLabel(null);
+    }
+  }, [refreshScan, runGameSizeScan, t]);
 
   const handleRefreshRequest = useCallback(async () => {
     const activeDetailGamePath = String(detailGamePath ?? '').trim();
     if (activeDetailGamePath) {
-      await refreshGame(activeDetailGamePath);
-      await runGameSizeScan([activeDetailGamePath]);
+      setManualRefreshActivityLabel(t('actions.refreshingCurrentGame'));
+      try {
+        await refreshGame(activeDetailGamePath);
+        setManualRefreshActivityLabel(t('actions.refreshingGameSizes'));
+        await runGameSizeScan([activeDetailGamePath]);
+      } finally {
+        setManualRefreshActivityLabel(null);
+      }
       return;
     }
 
     await refreshScan();
-  }, [detailGamePath, refreshGame, refreshScan, runGameSizeScan]);
+  }, [detailGamePath, refreshGame, refreshScan, runGameSizeScan, t]);
+
+  const topbarScanStatusLabel = manualRefreshActivityLabel ?? scanActivityLabel ?? null;
+  const isRefreshBusy = isScanning || Boolean(manualRefreshActivityLabel);
 
   useEffect(() => {
     if (hasAutoTriggeredSizeScanRef.current) {
@@ -999,13 +995,45 @@ function App() {
     setStatus,
     t,
     logAppEvent,
-    onImported: async (gamePath) => {
+    onImported: async ({ gamePath, versionName, importMode }) => {
       if (gamePath) {
         setDetailGamePath(gamePath);
         setSelectedGamePath(gamePath);
       }
 
-      await refreshScan();
+      if (!gamePath) {
+        await refreshScan();
+        return;
+      }
+
+      if (importMode === 'new-game') {
+        await refreshScan();
+        return;
+      }
+
+      const refreshedGame = await refreshGame(gamePath);
+      if (!refreshedGame) {
+        await refreshScan();
+        return;
+      }
+
+      const resolution = await resolveLatestVersionLaunchExecutable({
+        galleryClient,
+        targetGame: refreshedGame,
+        detectedVersion: versionName,
+        confirmExecutableChoice,
+      });
+
+      await galleryClient.saveGameMetadata({
+        gamePath: refreshedGame.path,
+        title: refreshedGame.name,
+        metadata: {
+          ...refreshedGame.metadata,
+          latestVersion: versionName,
+          launchExecutable: resolution.launchExecutable,
+        },
+      });
+      await refreshGame(gamePath);
     },
   });
 
@@ -1208,8 +1236,8 @@ function App() {
 
   const detailBackgroundImageSrc = detailBackgroundSrc ? filePathToSrc(detailBackgroundSrc, 'mediumPreview') : null;
   const hasPendingSizeValues = isSizeScanning
-    || (scanResult.games.length > 0 && scanResult.games.every((game) => game.sizeBytes === null));
-  const totalLibrarySizeBytes = scanResult.games.reduce((total, game) => total + (game.sizeBytes ?? 0), 0);
+    || (visibleFilteredGames.length > 0 && visibleFilteredGames.every((game) => game.sizeBytes === null));
+  const totalLibrarySizeBytes = visibleFilteredGames.reduce((total, game) => total + (game.sizeBytes ?? 0), 0);
   const sizeScanPercent = sizeScanTotalCount > 0
     ? Math.round((sizeScanCompletedCount / sizeScanTotalCount) * 100)
     : 0;
@@ -1270,7 +1298,8 @@ function App() {
       <header ref={topbarRef} className={topbarClassName}>
         <div className="topbar__title">
           <p className="eyebrow">{t('app.title')}</p>
-          <p>{t('app.gamesFoundWithSize', { count: scanResult.games.length, size: totalLibrarySizeLabel })}</p>
+          {topbarScanStatusLabel ? <p className="topbar__title-status">{topbarScanStatusLabel}</p> : null}
+          <p className="topbar__title-count">{t('app.gamesFoundWithSize', { count: visibleFilteredGames.length, size: totalLibrarySizeLabel })}</p>
         </div>
         <TopbarControls
           searchQuery={searchQuery}
@@ -1283,7 +1312,7 @@ function App() {
           hasVaultPin={Boolean(config.vaultPin?.trim())}
           supportsNativeContextMenu={supportsNativeContextMenu}
           isVersionNotificationsOpen={isVersionNotificationsOpen}
-          isScanning={isScanning}
+          isScanning={isRefreshBusy}
           versionMismatchCount={notificationFeedItems.length}
           onToggleTagPoolPanel={toggleTagPoolPanel}
           onToggleFilterPanel={toggleFilterPanel}

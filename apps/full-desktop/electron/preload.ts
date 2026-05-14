@@ -23,6 +23,7 @@ import type {
   PlayGamePayload,
   PickArchiveUploadFileResult,
   ReorderScreenshotsPayload,
+  ScanProgressEvent,
   ScanGameSizesPayload,
   ScanGameSizesResult,
   SaveGameMetadataPayload,
@@ -64,6 +65,16 @@ const api: GalleryApi = {
   applyRuntimeAppIcon: (payload: ApplyRuntimeAppIconPayload): Promise<ApplyRuntimeAppIconResult> =>
     ipcRenderer.invoke('gallery:apply-runtime-app-icon', payload),
   scanGames: (options?: ScanRequestOptions) => ipcRenderer.invoke('gallery:scan-games', options),
+  onScanProgress: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: ScanProgressEvent) => {
+      callback(payload);
+    };
+
+    ipcRenderer.on('gallery:scan-progress', listener);
+    return () => {
+      ipcRenderer.removeListener('gallery:scan-progress', listener);
+    };
+  },
   scanGame: (gamePath: string) => ipcRenderer.invoke('gallery:scan-game', { gamePath }),
   scanGameSizes: (payload: ScanGameSizesPayload): Promise<ScanGameSizesResult> => ipcRenderer.invoke('gallery:scan-game-sizes', payload),
   showGameContextMenu: (payload: GameContextMenuPayload) => ipcRenderer.invoke('gallery:show-game-context-menu', payload),

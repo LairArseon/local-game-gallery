@@ -123,9 +123,6 @@ export function useGameActionsCore<TGame extends GameSummaryLike>({
         explicitExecutablePath,
       });
       setStatus(result.message);
-      if (result.launched) {
-        await refreshScan();
-      }
     } catch (error) {
       const message = toErrorMessage(error, 'Failed to launch game.');
       setStatus(message);

@@ -1,6 +1,12 @@
 import { access, copyFile, mkdir, readFile, readdir, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { GalleryConfig, GameSummary, ScanRequestOptions, ScanResult } from '../src/types';
+import type {
+  GalleryConfig,
+  GameSummary,
+  ScanProgressEvent,
+  ScanRequestOptions,
+  ScanResult,
+} from '../src/types';
 import { createDefaultMetadata, getLatestVersionName, readGameMetadata, scanGameMedia } from './game-library';
 import { appendLogEvent } from './logger';
 
@@ -28,6 +34,10 @@ type MirrorPicturesSyncOptions = {
 type MirrorNfoSyncOptions = {
   pruneMissingNfoFiles: boolean;
 };
+
+export type ScanProgressUpdate = Omit<ScanProgressEvent, 'operationId'>;
+
+type ScanProgressCallback = (update: ScanProgressUpdate) => void;
 
 async function pathExists(targetPath: string) {
   try {
@@ -69,6 +79,20 @@ async function logScanEvent(message: string, level: 'info' | 'warn' | 'error' = 
     level,
     source: 'scan-sync',
   }).catch(() => undefined);
+}
+
+function emitScanProgress(onProgress: ScanProgressCallback | undefined, update: ScanProgressUpdate) {
+  if (!onProgress) {
+    return;
+  }
+
+  onProgress({
+    ...update,
+    percent: Math.max(0, Math.min(1, Number(update.percent ?? 0))),
+    processedGames: Math.max(0, Number(update.processedGames ?? 0)),
+    totalGames: Math.max(0, Number(update.totalGames ?? 0)),
+    currentGameName: update.currentGameName ? String(update.currentGameName) : null,
+  });
 }
 
 function isPathInside(parentPath: string, targetPath: string) {
@@ -451,7 +475,11 @@ async function pruneStaleMirrorGames(
   }
 }
 
-export async function scanGames(config: GalleryConfig, requestOptions: ScanRequestOptions = {}): Promise<ScanResult> {
+export async function scanGames(
+  config: GalleryConfig,
+  requestOptions: ScanRequestOptions = {},
+  onProgress?: ScanProgressCallback,
+): Promise<ScanResult> {
   const configuredGamesRoot = String(config.gamesRoot ?? '').trim();
   if (!configuredGamesRoot) {
     throw new Error('Choose a games root folder before scanning.');
@@ -523,23 +551,36 @@ export async function scanGames(config: GalleryConfig, requestOptions: ScanReque
 
   const versionPattern = new RegExp(config.versionFolderPattern);
   const entries = await readdir(scanRootPath, { withFileTypes: true });
-  const games: GameSummary[] = [];
-  const vaultedGamePaths = new Set(config.vaultedGamePaths ?? []);
-  const sourceGameNames = new Set<string>();
-
-  for (const entry of entries) {
+  const gameEntries = entries.filter((entry) => {
     if (!entry.isDirectory()) {
-      continue;
+      return false;
     }
 
     if (config.hideDotEntries && entry.name.startsWith('.')) {
-      continue;
+      return false;
     }
 
     if (matchesExcludePatterns(entry.name, config.excludePatterns)) {
-      continue;
+      return false;
     }
 
+    return true;
+  });
+  const totalGames = gameEntries.length;
+  const games: GameSummary[] = [];
+  const vaultedGamePaths = new Set(config.vaultedGamePaths ?? []);
+  const sourceGameNames = new Set<string>();
+  let processedGames = 0;
+
+  emitScanProgress(onProgress, {
+    phase: 'preparing',
+    percent: totalGames > 0 ? 0 : 1,
+    processedGames: 0,
+    totalGames,
+    currentGameName: null,
+  });
+
+  for (const entry of gameEntries) {
     const gamePath = path.join(scanRootPath, entry.name);
     const sourceEquivalentGamePath = usingMirrorFallback
       ? path.join(sourceRootPath, entry.name)
@@ -575,6 +616,13 @@ export async function scanGames(config: GalleryConfig, requestOptions: ScanReque
     createdVersionNfoTotal += createdVersionNfoCount;
 
     if (mirrorSyncRootPath) {
+      emitScanProgress(onProgress, {
+        phase: 'syncing-mirror',
+        percent: totalGames > 0 ? processedGames / totalGames : 1,
+        processedGames,
+        totalGames,
+        currentGameName: entry.name,
+      });
       sourceGameNames.add(entry.name);
 
       try {
@@ -601,6 +649,15 @@ export async function scanGames(config: GalleryConfig, requestOptions: ScanReque
     const picturesStats = await stat(picturesPath).catch(() => null);
     const imageCount = picturesStats?.isDirectory() ? await countImages(picturesPath) : 0;
     const usesPlaceholderArt = imageCount === 0;
+
+    emitScanProgress(onProgress, {
+      phase: 'scanning-metadata',
+      percent: totalGames > 0 ? processedGames / totalGames : 1,
+      processedGames,
+      totalGames,
+      currentGameName: entry.name,
+    });
+
     const metadata = await readGameMetadata(gamePath, entry.name, versions);
     const detectedLatestVersion = getLatestVersionName(versions);
     if (!metadata.latestVersion) {
@@ -615,6 +672,15 @@ export async function scanGames(config: GalleryConfig, requestOptions: ScanReque
       ?? (usingMirrorFallback ? config.dismissedVersionMismatches?.[sourceEquivalentGamePath] : undefined);
     const isVersionMismatchDismissed = hasVersionMismatch
       && dismissedDetectedVersion === detectedLatestVersion;
+
+    emitScanProgress(onProgress, {
+      phase: 'scanning-media',
+      percent: totalGames > 0 ? processedGames / totalGames : 1,
+      processedGames,
+      totalGames,
+      currentGameName: entry.name,
+    });
+
     const media = picturesStats?.isDirectory()
       ? await scanGameMedia(picturesPath)
       : { poster: null, card: null, background: null, screenshots: [] };
@@ -643,9 +709,25 @@ export async function scanGames(config: GalleryConfig, requestOptions: ScanReque
       versionCount: versions.length,
       versions,
     });
+
+    processedGames += 1;
+    emitScanProgress(onProgress, {
+      phase: 'scanning-extras',
+      percent: totalGames > 0 ? processedGames / totalGames : 1,
+      processedGames,
+      totalGames,
+      currentGameName: entry.name,
+    });
   }
 
   if (mirrorSyncRootPath && mirrorParitySync) {
+    emitScanProgress(onProgress, {
+      phase: 'pruning-mirror',
+      percent: totalGames > 0 ? processedGames / totalGames : 1,
+      processedGames,
+      totalGames,
+      currentGameName: null,
+    });
     try {
       await pruneStaleMirrorGames(mirrorSyncRootPath, sourceGameNames, config, mirrorSyncStats);
     } catch (error) {
@@ -675,6 +757,14 @@ export async function scanGames(config: GalleryConfig, requestOptions: ScanReque
   for (const warning of warnings) {
     await logScanEvent(warning, 'warn');
   }
+
+  emitScanProgress(onProgress, {
+    phase: 'finalizing',
+    percent: 1,
+    processedGames: totalGames,
+    totalGames,
+    currentGameName: null,
+  });
 
   return {
     rootPath: scanRootPath,
