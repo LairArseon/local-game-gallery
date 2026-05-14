@@ -1,1 +1,1 @@
-/// <reference path="../../../shared/app-shell/vite-env.d.ts" />
+/// <reference path="../../shared/app-shell/vite-env.d.ts" />

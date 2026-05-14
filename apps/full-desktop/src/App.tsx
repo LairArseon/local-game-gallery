@@ -120,6 +120,10 @@ function App() {
   const hasAutoTriggeredSizeScanRef = useRef(false);
   const logAppEvent = createLogAppEvent(galleryClient);
   const builtInModuleRegistry = useBuiltInModuleRegistry(logAppEvent);
+  const reloadPersistedConfigAfterSync = useCallback(async () => {
+    const nextConfig = await galleryClient.getConfig();
+    setConfig(nextConfig);
+  }, [galleryClient]);
 
   const {
     isMirrorSyncConfirmOpen,
@@ -144,6 +148,7 @@ function App() {
     scanActivityLabel,
   } = useScanOrchestrator({
     galleryClient,
+    config,
     isUsingMirrorFallback: scanResult.usingMirrorFallback,
     gamesRoot: config?.gamesRoot ?? '',
     setScanResult,
@@ -152,6 +157,7 @@ function App() {
     toErrorMessage,
     t,
     emptyScan,
+    reloadConfigAfterSync: reloadPersistedConfigAfterSync,
   });
 
   const runGameSizeScan = useCallback(async (gamePaths: string[]) => {

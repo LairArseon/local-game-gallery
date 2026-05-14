@@ -57,6 +57,9 @@ export type GalleryModuleState = {
   state: Record<string, GalleryModuleStateValue>;
 };
 
+export const METADATA_MIRROR_SYNC_POLICIES = ['on-refresh', 'scheduled', 'never'] as const;
+export type MetadataMirrorSyncPolicy = (typeof METADATA_MIRROR_SYNC_POLICIES)[number];
+
 export type GalleryConfig = {
   language: AppLanguage;
   dismissedVersionMismatches: Record<string, string>;
@@ -65,6 +68,9 @@ export type GalleryConfig = {
   modules: Record<string, GalleryModuleState>;
   gamesRoot: string;
   metadataMirrorRoot: string;
+  metadataMirrorSyncPolicy: MetadataMirrorSyncPolicy;
+  metadataMirrorSyncInterval: string;
+  lastMetadataMirrorSyncAt: string;
   excludePatterns: string[];
   hideDotEntries: boolean;
   versionFolderPattern: string;

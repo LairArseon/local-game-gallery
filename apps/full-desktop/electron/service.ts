@@ -1516,6 +1516,12 @@ export async function startGalleryHttpService({
               ...update,
             }, update.phase === 'finalizing' && update.percent >= 1);
           });
+          if (scanRequest.syncMirror !== false && config.metadataMirrorRoot.trim() && !scanResult.usingMirrorFallback) {
+            await saveConfig({
+              ...config,
+              lastMetadataMirrorSyncAt: new Date().toISOString(),
+            });
+          }
           setScanProgress({
             operationId,
             phase: 'finalizing',

@@ -781,13 +781,20 @@ ipcMain.handle('gallery:scan-games', async (_event, requestOptions?: ScanRequest
   const config = await loadConfig();
   const operationId = String(requestOptions?.operationId ?? '').trim() || randomUUID();
   try {
-    return await scanGames(config, { ...requestOptions, operationId }, (update: ScanProgressUpdate) => {
+    const result = await scanGames(config, { ...requestOptions, operationId }, (update: ScanProgressUpdate) => {
       const eventPayload: ScanProgressEvent = {
         operationId,
         ...update,
       };
       _event.sender.send('gallery:scan-progress', eventPayload);
     });
+    if (requestOptions?.syncMirror !== false && config.metadataMirrorRoot.trim() && !result.usingMirrorFallback) {
+      await saveConfig({
+        ...config,
+        lastMetadataMirrorSyncAt: new Date().toISOString(),
+      });
+    }
+    return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Scan failed.';
     await appendLogEvent({

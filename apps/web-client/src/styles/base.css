@@ -1400,6 +1400,16 @@ button {
   margin-bottom: 0;
 }
 
+.field--mirror-sync-policy {
+  margin-top: 6px;
+}
+
+.field--readonly-meta input {
+  background: rgba(7, 10, 16, 0.52);
+  color: rgba(247, 246, 242, 0.72);
+  cursor: default;
+}
+
 .field__hint {
   color: rgba(247, 246, 242, 0.66);
   font-size: 0.8rem;

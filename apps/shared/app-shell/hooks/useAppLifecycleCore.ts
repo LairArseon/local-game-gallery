@@ -149,7 +149,7 @@ export function useAppLifecycleCore<
 
       const shouldSyncNow = await confirmInitialMirrorSync();
       if (shouldSyncNow) {
-        await refreshScan();
+        await refreshScan('scan-and-sync');
       }
     } catch (error) {
       const logMessage = toErrorMessage(error, 'Failed to open metadata mirror folder picker.');

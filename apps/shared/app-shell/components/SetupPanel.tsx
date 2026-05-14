@@ -5,6 +5,8 @@ import type { DragEvent, FocusEvent, MouseEvent, ReactNode, SubmitEventHandler }
 import { useState } from 'react';
 import { AlertTriangle, FolderOpen, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { CustomSelect } from './CustomSelect';
+import { parseMetadataMirrorSyncInterval } from '../utils/metadataMirrorSync';
 
 type AppIconSummary = {
   isValid: boolean;
@@ -18,6 +20,9 @@ type SetupConfigLike = {
   language: string;
   gamesRoot: string;
   metadataMirrorRoot: string;
+  metadataMirrorSyncPolicy: 'on-refresh' | 'scheduled' | 'never';
+  metadataMirrorSyncInterval: string;
+  lastMetadataMirrorSyncAt: string;
   excludePatterns: string[];
   hideDotEntries: boolean;
   versionFolderPattern: string;
@@ -69,6 +74,26 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+function formatMetadataMirrorLastSync(value: string, fallback: string) {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) {
+    return fallback;
+  }
+
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    return fallback;
+  }
+
+  return parsed.toLocaleString(undefined, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 export function SetupPanel<TConfig extends SetupConfigLike>({
   appVersion,
   config,
@@ -113,18 +138,36 @@ export function SetupPanel<TConfig extends SetupConfigLike>({
     t('setup.metadataMirrorParitySyncAction'),
     t('setup.metadataMirrorParitySyncHint'),
   ].join(' ');
+  const metadataMirrorSyncIntervalTooltip = t('setup.metadataMirrorSyncIntervalHint');
   const appIconPickerUnavailableHint = t('setup.appIconDesktopOnlyHint');
   const [hoverTooltip, setHoverTooltip] = useState<{
     text: string;
     left: number;
     top: number;
   } | null>(null);
+  const isScheduledMetadataMirrorSync = config.metadataMirrorSyncPolicy === 'scheduled';
+  const metadataMirrorSyncIntervalResult = parseMetadataMirrorSyncInterval(config.metadataMirrorSyncInterval);
+  const metadataMirrorSyncIntervalError = isScheduledMetadataMirrorSync && !metadataMirrorSyncIntervalResult
+    ? t('setup.metadataMirrorSyncIntervalInvalid')
+    : '';
+  const metadataMirrorLastSyncLabel = formatMetadataMirrorLastSync(
+    config.lastMetadataMirrorSyncAt,
+    t('setup.metadataMirrorLastSyncNever'),
+  );
 
   const openHoverTooltip = (text: string, event: MouseEvent<HTMLElement> | FocusEvent<HTMLElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
+    const estimatedTooltipWidth = Math.min(360, window.innerWidth * 0.6);
+    const viewportPadding = 12;
+    const rightSideLeft = bounds.right + 10;
+    const rightClampedLeft = window.innerWidth - estimatedTooltipWidth - viewportPadding;
+    const hasRoomOnRight = rightSideLeft <= rightClampedLeft;
+    const leftSideLeft = bounds.left - estimatedTooltipWidth - 10;
     setHoverTooltip({
       text,
-      left: bounds.right + 10,
+      left: hasRoomOnRight
+        ? clamp(rightSideLeft, viewportPadding, Math.max(viewportPadding, rightClampedLeft))
+        : clamp(leftSideLeft, viewportPadding, Math.max(viewportPadding, rightClampedLeft)),
       top: bounds.top + bounds.height / 2,
     });
   };
@@ -133,10 +176,19 @@ export function SetupPanel<TConfig extends SetupConfigLike>({
     setHoverTooltip(null);
   };
 
+  const handleSaveConfig: SubmitEventHandler<HTMLFormElement> = (event) => {
+    if (metadataMirrorSyncIntervalError) {
+      event.preventDefault();
+      return;
+    }
+
+    onSaveConfig(event);
+  };
+
   return (
     <>
       <aside className={`panel settings ${isSidebarOpen ? 'settings--open' : 'settings--closed'}`}>
-        <form className="settings__form" onSubmit={onSaveConfig}>
+        <form className="settings__form" onSubmit={handleSaveConfig}>
           <div className="panel-heading">
             <div className="setup-heading__title-row">
               <h2>{t('setup.title')}</h2>
@@ -278,6 +330,61 @@ export function SetupPanel<TConfig extends SetupConfigLike>({
               {!isGamesRootEditable ? null : !supportsFolderPicker ? (
                 <small className="field__hint">{folderPickerUnavailableReason}</small>
               ) : null}
+            </label>
+
+            <section className="field field--mirror-sync-policy">
+              <div className="field__label-row">
+                <span>{t('setup.metadataMirrorSyncPolicy')}</span>
+              </div>
+              <CustomSelect
+                ariaLabel={t('setup.metadataMirrorSyncPolicy')}
+                value={config.metadataMirrorSyncPolicy}
+                options={[
+                  { value: 'on-refresh', label: t('setup.metadataMirrorSyncPolicyOnRefresh') },
+                  { value: 'scheduled', label: t('setup.metadataMirrorSyncPolicyScheduled') },
+                  { value: 'never', label: t('setup.metadataMirrorSyncPolicyNever') },
+                ]}
+                onChange={(nextValue) => onConfigChange({
+                  ...config,
+                  metadataMirrorSyncPolicy: nextValue as TConfig['metadataMirrorSyncPolicy'],
+                })}
+              />
+            </section>
+
+            {isScheduledMetadataMirrorSync ? (
+              <label className="field">
+                <div className="field__label-row">
+                  <span
+                    className="field__label-help"
+                    tabIndex={0}
+                    aria-label={metadataMirrorSyncIntervalTooltip}
+                    onMouseEnter={(event) => openHoverTooltip(metadataMirrorSyncIntervalTooltip, event)}
+                    onMouseLeave={closeHoverTooltip}
+                    onFocus={(event) => openHoverTooltip(metadataMirrorSyncIntervalTooltip, event)}
+                    onBlur={closeHoverTooltip}
+                  >
+                    {t('setup.metadataMirrorSyncInterval')}
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  value={config.metadataMirrorSyncInterval}
+                  onChange={(event) => onConfigChange({
+                    ...config,
+                    metadataMirrorSyncInterval: event.target.value,
+                  })}
+                  placeholder={t('setup.metadataMirrorSyncIntervalPlaceholder')}
+                  aria-invalid={metadataMirrorSyncIntervalError ? 'true' : 'false'}
+                />
+                <small className={`field__hint ${metadataMirrorSyncIntervalError ? 'field__hint--error' : ''}`}>
+                  {metadataMirrorSyncIntervalError || t('setup.metadataMirrorSyncIntervalHintInline')}
+                </small>
+              </label>
+            ) : null}
+
+            <label className="field field--readonly-meta">
+              <span>{t('setup.metadataMirrorLastSync')}</span>
+              <input type="text" value={metadataMirrorLastSyncLabel} readOnly aria-readonly="true" />
             </label>
           </section>
 

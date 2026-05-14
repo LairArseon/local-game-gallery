@@ -5,7 +5,7 @@
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { GalleryConfig, GalleryModuleStateValue } from '../src/types';
+import type { GalleryConfig, GalleryModuleStateValue, MetadataMirrorSyncPolicy } from '../src/types';
 import { resolveGalleryDataPath } from './runtime-paths';
 
 const minUiScale = 0.75;
@@ -16,6 +16,58 @@ const minMetadataGapScale = 0.5;
 const maxMetadataGapScale = 4;
 const vaultPinObfuscationPrefix = 'obf:v1:';
 const vaultPinObfuscationKey = Buffer.from('local-game-gallery-vault-pin', 'utf8');
+const metadataMirrorSyncIntervalPattern = /^(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/;
+
+function normalizeMetadataMirrorSyncPolicy(value: string | undefined): MetadataMirrorSyncPolicy {
+  switch (String(value ?? '').trim()) {
+    case 'scheduled':
+      return 'scheduled';
+    case 'never':
+      return 'never';
+    default:
+      return 'on-refresh';
+  }
+}
+
+function normalizeMetadataMirrorSyncInterval(value: string | undefined) {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) {
+    return '';
+  }
+
+  const match = metadataMirrorSyncIntervalPattern.exec(normalized);
+  if (!match) {
+    return '';
+  }
+
+  const days = Number.parseInt(match[1] ?? '0', 10);
+  const hours = Number.parseInt(match[2] ?? '0', 10);
+  const minutes = Number.parseInt(match[3] ?? '0', 10);
+  const seconds = Number.parseInt(match[4] ?? '0', 10);
+
+  if (![days, hours, minutes, seconds].every(Number.isFinite)) {
+    return '';
+  }
+
+  const totalMilliseconds = (
+    (days * 24 * 60 * 60)
+    + (hours * 60 * 60)
+    + (minutes * 60)
+    + seconds
+  ) * 1000;
+
+  return totalMilliseconds > 0 ? normalized : '';
+}
+
+function normalizeLastMetadataMirrorSyncAt(value: string | undefined) {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) {
+    return '';
+  }
+
+  const parsed = Date.parse(normalized);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : '';
+}
 
 function obfuscateVaultPin(pin: string) {
   if (!pin) {
@@ -154,6 +206,9 @@ const defaultConfig: GalleryConfig = {
   modules: {},
   gamesRoot: '',
   metadataMirrorRoot: '',
+  metadataMirrorSyncPolicy: 'on-refresh',
+  metadataMirrorSyncInterval: '12h',
+  lastMetadataMirrorSyncAt: '',
   excludePatterns: ['.git', 'Thumbs.db'],
   hideDotEntries: true,
   versionFolderPattern: '^v\\d+\\.\\d+\\.\\d+\\.\\d+$',
@@ -190,6 +245,9 @@ export async function loadConfig() {
     return {
       ...merged,
       modules: normalizeModulesState(parsed.modules ?? merged.modules),
+      metadataMirrorSyncPolicy: normalizeMetadataMirrorSyncPolicy(parsed.metadataMirrorSyncPolicy ?? merged.metadataMirrorSyncPolicy),
+      metadataMirrorSyncInterval: normalizeMetadataMirrorSyncInterval(parsed.metadataMirrorSyncInterval ?? merged.metadataMirrorSyncInterval),
+      lastMetadataMirrorSyncAt: normalizeLastMetadataMirrorSyncAt(parsed.lastMetadataMirrorSyncAt ?? merged.lastMetadataMirrorSyncAt),
       vaultPin: deobfuscateVaultPin(String(parsed.vaultPin ?? merged.vaultPin ?? '').trim()),
     };
   } catch {
@@ -213,6 +271,9 @@ export async function saveConfig(config: GalleryConfig) {
     vaultedGamePaths: [...new Set((config.vaultedGamePaths ?? []).map((gamePath) => String(gamePath).trim()).filter(Boolean))],
     vaultPin: String(config.vaultPin ?? '').trim(),
     metadataMirrorRoot: String(config.metadataMirrorRoot ?? '').trim(),
+    metadataMirrorSyncPolicy: normalizeMetadataMirrorSyncPolicy(config.metadataMirrorSyncPolicy),
+    metadataMirrorSyncInterval: normalizeMetadataMirrorSyncInterval(config.metadataMirrorSyncInterval),
+    lastMetadataMirrorSyncAt: normalizeLastMetadataMirrorSyncAt(config.lastMetadataMirrorSyncAt),
     excludePatterns: [...new Set(config.excludePatterns.map((pattern) => pattern.trim()).filter(Boolean))],
     statusChoices: [...new Set((config.statusChoices ?? []).map((value) => value.trim()).filter(Boolean))],
     tagPool: [...new Set((config.tagPool ?? []).map((value) => value.trim()).filter(Boolean))],

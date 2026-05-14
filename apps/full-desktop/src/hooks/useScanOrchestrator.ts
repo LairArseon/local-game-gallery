@@ -10,18 +10,20 @@
  */
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import type { GalleryClient } from '../client/contracts';
-import type { ScanProgressEvent, ScanResult } from '../types';
+import type { GalleryConfig, ScanProgressEvent, ScanResult } from '../types';
 import {
   useRefreshGameCore,
   useScanRefreshCore,
   type RefreshScanMode,
 } from '../../../shared/app-shell/hooks/useScanOrchestratorCore';
 import { formatScanProgressLabel } from '../../../shared/app-shell/hooks/scanProgressLabels';
+import { shouldSyncMetadataMirrorOnExplicitRefresh } from '../../../shared/app-shell/utils/metadataMirrorSync';
 
 const fallbackRecoveryProbeIntervalMs = 12000;
 
 type UseScanOrchestratorArgs = {
   galleryClient: GalleryClient;
+  config: GalleryConfig | null;
   isUsingMirrorFallback: boolean;
   gamesRoot: string;
   setScanResult: Dispatch<SetStateAction<ScanResult>>;
@@ -30,10 +32,12 @@ type UseScanOrchestratorArgs = {
   toErrorMessage: (error: unknown, fallback: string) => string;
   t: (key: string, options?: Record<string, unknown>) => string;
   emptyScan: ScanResult;
+  reloadConfigAfterSync?: () => Promise<void>;
 };
 
 export function useScanOrchestrator({
   galleryClient,
+  config,
   isUsingMirrorFallback,
   gamesRoot,
   setScanResult,
@@ -42,6 +46,7 @@ export function useScanOrchestrator({
   toErrorMessage,
   t,
   emptyScan,
+  reloadConfigAfterSync,
 }: UseScanOrchestratorArgs) {
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
@@ -64,7 +69,7 @@ export function useScanOrchestrator({
     };
   }, [galleryClient]);
 
-  const { refreshScan, refreshScanRef } = useScanRefreshCore({
+  const { refreshScan: refreshScanBase, refreshScanRef } = useScanRefreshCore({
     scanGames: galleryClient.scanGames,
     emptyScan,
     t,
@@ -86,6 +91,28 @@ export function useScanOrchestrator({
       setScanProgressEvent(null);
     },
   });
+
+  const refreshScan = useCallback(async (mode?: RefreshScanMode, options?: { allowDestructiveMirrorChanges?: boolean }) => {
+    const resolvedMode = mode ?? (
+      config?.metadataMirrorRoot.trim()
+        ? (shouldSyncMetadataMirrorOnExplicitRefresh({
+            policy: config.metadataMirrorSyncPolicy,
+            interval: config.metadataMirrorSyncInterval,
+            lastSyncedAt: config.lastMetadataMirrorSyncAt,
+          }) ? 'scan-and-sync' : 'scan-only')
+        : 'scan-only'
+    );
+    const result = await refreshScanBase(resolvedMode, options);
+    if (
+      result
+      && !result.usingMirrorFallback
+      && (resolvedMode === 'scan-and-sync' || resolvedMode === 'parity-sync')
+    ) {
+      await reloadConfigAfterSync?.();
+    }
+
+    return result;
+  }, [config, refreshScanBase, reloadConfigAfterSync]);
 
   const refreshGame = useRefreshGameCore({
     scanGame: galleryClient.scanGame,

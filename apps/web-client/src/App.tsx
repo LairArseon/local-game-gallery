@@ -149,6 +149,10 @@ function App() {
   const previousDetailGamePathRef = useRef<string | null>(null);
   const logAppEvent = createLogAppEvent(galleryClient);
   const builtInModuleRegistry = useBuiltInModuleRegistry(logAppEvent);
+  const reloadPersistedConfigAfterSync = useCallback(async () => {
+    const nextConfig = await galleryClient.getConfig();
+    setConfig(nextConfig);
+  }, [galleryClient]);
 
   const {
     isMirrorSyncConfirmOpen,
@@ -293,6 +297,7 @@ function App() {
     scanActivityLabel,
   } = useScanOrchestrator({
     galleryClient,
+    config,
     emptyScan,
     t,
     setScanResult,
@@ -301,6 +306,7 @@ function App() {
     setScanProgress,
     logAppEvent,
     toErrorMessage,
+    reloadConfigAfterSync: reloadPersistedConfigAfterSync,
   });
 
   const runGameSizeScan = useCallback(async (gamePaths: string[]) => {
