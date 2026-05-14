@@ -16,6 +16,7 @@ type UseVersionMismatchManagerArgs = {
   setDetailGamePath: Dispatch<SetStateAction<string | null>>;
   setSelectedGamePath: Dispatch<SetStateAction<string | null>>;
   cardsContainerRef: RefObject<HTMLDivElement | null>;
+  confirmExecutableChoice?: Parameters<typeof useSharedVersionMismatchManager<GalleryConfig, ScanResult['games'][number], ScanResult['games'][number]['metadata']>>[0]['confirmExecutableChoice'];
 };
 
 export function useVersionMismatchManager(args: UseVersionMismatchManagerArgs) {

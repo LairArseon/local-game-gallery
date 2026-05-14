@@ -283,6 +283,30 @@ export type PlayGamePayload = {
   versions: PlayableVersion[];
   launchMode?: 'default' | 'choose-version-temporary';
   skipDecompressPrompt?: boolean;
+  explicitExecutablePath?: string;
+};
+
+export type LaunchGameCandidate = {
+  versionName: string;
+  versionPath: string;
+  executableName: string;
+  executablePath: string;
+  relativeExecutablePath: string;
+  storedExecutablePath: string;
+  storageState: 'compressed' | 'decompressed';
+  requiresDecompression: boolean;
+};
+
+export type ListLaunchCandidatesPayload = {
+  gamePath: string;
+  gameName: string;
+  versions: PlayableVersion[];
+  versionPaths?: string[];
+};
+
+export type ListLaunchCandidatesResult = {
+  candidates: LaunchGameCandidate[];
+  message: string;
 };
 
 export type PlayGameResult = {
@@ -394,7 +418,7 @@ export type ImportStagedGameArchivePayload = {
   gameName: string;
   versionName: string;
   existingGamePath?: string;
-  metadata?: GameMetadata;
+  metadata?: Partial<GameMetadata>;
 };
 
 export type ImportStagedGameArchiveResult = {
@@ -464,6 +488,7 @@ export type GalleryApi = {
   saveGameMetadata: (payload: SaveGameMetadataPayload) => Promise<void>;
   importGameMediaFromDialog: (payload: ImportGameMediaPayload) => Promise<void>;
   importDroppedGameMedia: (payload: ImportDroppedGameMediaPayload) => Promise<void>;
+  listLaunchCandidates: (payload: ListLaunchCandidatesPayload) => Promise<ListLaunchCandidatesResult>;
   playGame: (payload: PlayGamePayload) => Promise<PlayGameResult>;
   reorderScreenshots: (payload: ReorderScreenshotsPayload) => Promise<void>;
   removeScreenshot: (payload: RemoveScreenshotPayload) => Promise<void>;

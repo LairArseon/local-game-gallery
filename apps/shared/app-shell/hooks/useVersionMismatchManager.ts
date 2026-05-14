@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import type { TFunction } from 'i18next';
+import type { LaunchGameCandidate, VersionSummaryLike } from '../types/gameActionsTypes';
 import type { NotificationFeedAction, NotificationFeedItem } from '../types';
 
 type GalleryClientLike<TConfig, TMetadata> = {
@@ -9,6 +10,15 @@ type GalleryClientLike<TConfig, TMetadata> = {
     title: string;
     metadata: TMetadata;
   }) => Promise<unknown>;
+  listLaunchCandidates: (payload: {
+    gamePath: string;
+    gameName: string;
+    versions: VersionSummaryLike[];
+    versionPaths?: string[];
+  }) => Promise<{
+    candidates: LaunchGameCandidate[];
+    message: string;
+  }>;
 };
 
 type VersionMismatchGameLike<TMetadata> = {
@@ -18,6 +28,12 @@ type VersionMismatchGameLike<TMetadata> = {
   isVersionMismatchDismissed: boolean;
   detectedLatestVersion: string;
   metadata: TMetadata;
+  versions: VersionSummaryLike[];
+};
+
+type MetadataWithLaunchExecutable = {
+  latestVersion?: string;
+  launchExecutable?: string;
 };
 
 type ScanResultLike<TGame> = {
@@ -45,7 +61,40 @@ type UseVersionMismatchManagerArgs<
   setDetailGamePath: Dispatch<SetStateAction<string | null>>;
   setSelectedGamePath: Dispatch<SetStateAction<string | null>>;
   cardsContainerRef: RefObject<HTMLDivElement | null>;
+  confirmExecutableChoice?: (context: {
+    gameName: string;
+    reason: 'choose-version-temporary' | 'resolve-version-mismatch';
+    candidates: LaunchGameCandidate[];
+  }) => Promise<LaunchGameCandidate | null>;
 };
+
+function normalizePathForMatch(value: string | null | undefined) {
+  return String(value ?? '').replace(/\\/g, '/').trim().toLowerCase();
+}
+
+function findEquivalentLaunchCandidate(storedExecutablePath: string | null | undefined, candidates: LaunchGameCandidate[]) {
+  const normalizedStoredPath = normalizePathForMatch(storedExecutablePath);
+  if (!normalizedStoredPath) {
+    return null;
+  }
+
+  const exactStoredMatch = candidates.find((candidate) => normalizePathForMatch(candidate.storedExecutablePath) === normalizedStoredPath);
+  if (exactStoredMatch) {
+    return exactStoredMatch;
+  }
+
+  const exactRelativeMatch = candidates.find((candidate) => normalizePathForMatch(candidate.relativeExecutablePath) === normalizedStoredPath);
+  if (exactRelativeMatch) {
+    return exactRelativeMatch;
+  }
+
+  const suffixMatches = candidates.filter((candidate) => {
+    const normalizedRelativePath = normalizePathForMatch(candidate.relativeExecutablePath);
+    return normalizedStoredPath === normalizedRelativePath || normalizedStoredPath.endsWith(`/${normalizedRelativePath}`);
+  });
+
+  return suffixMatches.length === 1 ? suffixMatches[0] : null;
+}
 
 export function useVersionMismatchManager<
   TConfig extends VersionMismatchConfigLike,
@@ -64,6 +113,7 @@ export function useVersionMismatchManager<
   setDetailGamePath,
   setSelectedGamePath,
   cardsContainerRef,
+  confirmExecutableChoice,
 }: UseVersionMismatchManagerArgs<TConfig, TGame, TMetadata>) {
   const [isVersionNotificationsOpen, setIsVersionNotificationsOpen] = useState(false);
 
@@ -176,12 +226,53 @@ export function useVersionMismatchManager<
     }
 
     try {
+      const metadata = targetGame.metadata as MetadataWithLaunchExecutable;
+      const nextVersion = targetGame.versions.find((version) => version.name === detectedVersion);
+      let nextLaunchExecutable = metadata.launchExecutable ?? '';
+
+      if (nextVersion) {
+        const candidateResult = await galleryClient.listLaunchCandidates({
+          gamePath: targetGame.path,
+          gameName: targetGame.name,
+          versions: targetGame.versions.map((version) => ({
+            name: version.name,
+            path: version.path,
+            storageState: version.storageState,
+            storageArchivePath: version.storageArchivePath,
+          })),
+          versionPaths: [nextVersion.path],
+        });
+
+        if (candidateResult.candidates.length === 1) {
+          nextLaunchExecutable = candidateResult.candidates[0]?.storedExecutablePath ?? '';
+        } else if (candidateResult.candidates.length > 1) {
+          const remappedCandidate = findEquivalentLaunchCandidate(metadata.launchExecutable, candidateResult.candidates);
+          const selectedCandidate = remappedCandidate ?? (confirmExecutableChoice
+            ? await confirmExecutableChoice({
+              gameName: targetGame.name,
+              reason: 'resolve-version-mismatch',
+              candidates: candidateResult.candidates,
+            })
+            : null);
+
+          if (!selectedCandidate) {
+            setStatus('Version update canceled.');
+            return;
+          }
+
+          nextLaunchExecutable = selectedCandidate.storedExecutablePath;
+        } else {
+          nextLaunchExecutable = '';
+        }
+      }
+
       await galleryClient.saveGameMetadata({
         gamePath: targetGame.path,
         title: targetGame.name,
         metadata: {
           ...(targetGame.metadata as object),
           latestVersion: detectedVersion,
+          launchExecutable: nextLaunchExecutable,
         } as TMetadata,
       });
 

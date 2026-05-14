@@ -152,12 +152,15 @@ function App() {
     isMirrorSyncConfirmOpen,
     isMirrorParityConfirmOpen,
     decompressLaunchConfirmContext,
+    executableChoiceContext,
     confirmInitialMirrorSync,
     resolveInitialMirrorSyncConfirmation,
     confirmMirrorParitySync,
     resolveMirrorParitySyncConfirmation,
     confirmDecompressBeforeLaunch,
     resolveDecompressBeforeLaunchConfirmation,
+    confirmExecutableChoice,
+    resolveExecutableChoice,
   } = useModalConfirmations();
 
   useAppLanguageSync(config?.language, i18n);
@@ -684,6 +687,7 @@ function App() {
     refreshScan,
     confirmDecompressBeforeLaunch,
     decompressVersionBeforeLaunch: decompressVersionForLaunch,
+    confirmExecutableChoice,
     logAppEvent,
     toErrorMessage,
   });
@@ -795,6 +799,7 @@ function App() {
     setDetailGamePath,
     setSelectedGamePath,
     cardsContainerRef,
+    confirmExecutableChoice,
   });
 
   const {
@@ -939,6 +944,7 @@ function App() {
     vaultAwareTopUsedFilterSuggestions,
     selectedGame,
     detailGame,
+    detailNavigation,
     detailBackgroundSrc,
     hideTopbarForDetail,
   } = useAppDerivedState({
@@ -953,6 +959,23 @@ function App() {
     scanResult,
     detailGamePath,
   });
+
+  const navigateDetailToPath = useCallback((gamePath: string | null) => {
+    if (!gamePath) {
+      return;
+    }
+
+    setDetailGamePath(gamePath);
+    setSelectedGamePath(gamePath);
+  }, [setDetailGamePath, setSelectedGamePath]);
+
+  const handleNavigatePreviousDetail = useCallback(() => {
+    navigateDetailToPath(detailNavigation.previousGamePath);
+  }, [detailNavigation.previousGamePath, navigateDetailToPath]);
+
+  const handleNavigateNextDetail = useCallback(() => {
+    navigateDetailToPath(detailNavigation.nextGamePath);
+  }, [detailNavigation.nextGamePath, navigateDetailToPath]);
 
   const { onDownloadExtra, extraDownloadProgress } = useExtraDownloads({
     hasDesktopBridge,
@@ -1436,6 +1459,10 @@ function App() {
           gridColumns={gridColumns}
           renderInlinePosterCardFocus={renderInlinePosterCardFocus}
           renderGame={renderGame}
+          canNavigatePreviousDetail={detailNavigation.canNavigate}
+          canNavigateNextDetail={detailNavigation.canNavigate}
+          onNavigatePreviousDetail={handleNavigatePreviousDetail}
+          onNavigateNextDetail={handleNavigateNextDetail}
         />
       </section>
 
@@ -1492,6 +1519,11 @@ function App() {
         decompressLaunchVersionName={decompressLaunchConfirmContext?.versionName ?? ''}
         onConfirmDecompressLaunch={() => resolveDecompressBeforeLaunchConfirmation(true)}
         onCancelDecompressLaunch={() => resolveDecompressBeforeLaunchConfirmation(false)}
+        executableChoiceContext={executableChoiceContext}
+        onSelectExecutableChoice={(executablePath) => resolveExecutableChoice(
+          executableChoiceContext?.candidates.find((candidate) => candidate.executablePath === executablePath) ?? null,
+        )}
+        onCancelExecutableChoice={() => resolveExecutableChoice(null)}
         metadataModalGamePath={metadataModalGamePath}
         metadataDraft={metadataDraft}
         statusChoices={config.statusChoices}

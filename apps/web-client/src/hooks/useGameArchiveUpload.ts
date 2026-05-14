@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ChangeEvent, type DragEvent } from 'react';
 import type { GalleryClient } from '../client/contracts';
-import type { GameMetadata, StageGameArchiveUploadResult } from '../types';
+import type { StageGameArchiveUploadResult } from '../types';
 import { normalizeTagPool } from '../utils/app-helpers';
 
 type UseGameArchiveUploadArgs = {
@@ -403,16 +403,20 @@ export function useGameArchiveUpload({
     );
 
     try {
-      const metadata: GameMetadata = {
-        latestVersion: versionName.trim(),
-        score: score.trim(),
-        status: metadataStatus.trim(),
-        description: description.trim(),
-        notes: parseLines(notesText),
-        tags: parseTags(tagsText),
-        launchExecutable: '',
-        customTags: [],
-      };
+      const metadata = existingGamePath
+        ? {
+          latestVersion: versionName.trim(),
+        }
+        : {
+          latestVersion: versionName.trim(),
+          score: score.trim(),
+          status: metadataStatus.trim(),
+          description: description.trim(),
+          notes: parseLines(notesText),
+          tags: parseTags(tagsText),
+          launchExecutable: '',
+          customTags: [],
+        };
 
       const result = await galleryClient.importStagedGameArchive({
         uploadId: stagedUploadId,

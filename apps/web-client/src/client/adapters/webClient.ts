@@ -13,6 +13,8 @@ import type {
   GameContextMenuPayload,
   ImportDroppedGameMediaPayload,
   ImportGameMediaPayload,
+  ListLaunchCandidatesPayload,
+  ListLaunchCandidatesResult,
   LogEventPayload,
   OpenExternalUrlPayload,
   OpenExternalUrlResult,
@@ -1076,6 +1078,19 @@ export const webClient: GalleryClient = {
     }
 
     throw new Error('Path-based drag import is only available in desktop mode. Use the add media button in browser mode.');
+  },
+  async listLaunchCandidates(payload: ListLaunchCandidatesPayload) {
+    try {
+      return await requestApi<ListLaunchCandidatesResult>('/api/launch-candidates', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      return {
+        candidates: [],
+        message: 'Launch candidate inspection is unavailable.',
+      };
+    }
   },
   async playGame(_payload: PlayGamePayload) {
     try {

@@ -93,6 +93,34 @@ export function useAppDerivedState<TGame extends SharedGameSummary, TConfig exte
     return !isVaultOpen && game.isVaulted ? null : game;
   }, [scanResult.games, detailGamePath, isVaultOpen]);
 
+  const detailNavigation = useMemo(() => {
+    if (!detailGamePath || visibleFilteredGames.length <= 1) {
+      return {
+        currentIndex: -1,
+        previousGamePath: null,
+        nextGamePath: null,
+        canNavigate: false,
+      };
+    }
+
+    const currentIndex = visibleFilteredGames.findIndex((game) => game.path === detailGamePath);
+    if (currentIndex < 0) {
+      return {
+        currentIndex,
+        previousGamePath: null,
+        nextGamePath: null,
+        canNavigate: false,
+      };
+    }
+
+    return {
+      currentIndex,
+      previousGamePath: visibleFilteredGames[(currentIndex - 1 + visibleFilteredGames.length) % visibleFilteredGames.length]?.path ?? null,
+      nextGamePath: visibleFilteredGames[(currentIndex + 1) % visibleFilteredGames.length]?.path ?? null,
+      canNavigate: true,
+    };
+  }, [detailGamePath, visibleFilteredGames]);
+
   const detailBackgroundPath = detailGame?.media.background ?? null;
   const hideTopbarForDetail = isNarrowViewport && Boolean(detailGame);
 
@@ -101,6 +129,7 @@ export function useAppDerivedState<TGame extends SharedGameSummary, TConfig exte
     vaultAwareTopUsedFilterSuggestions,
     selectedGame,
     detailGame,
+    detailNavigation,
     detailBackgroundSrc: detailBackgroundPath,
     detailBackgroundPath,
     hideTopbarForDetail,

@@ -2,7 +2,7 @@ import { copyFile, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { GameMetadata, ImportStagedGameArchiveResult } from '../../src/types';
+import type { GameMetadata, ImportStagedGameArchiveResult, VersionSummary } from '../../src/types';
 import {
   copyExtractedArchiveIntoVersion,
   extractZipToFolder,
@@ -138,12 +138,13 @@ type ImportStagedGameArchiveArgs = {
   gameName: string;
   versionName: string;
   existingGamePath?: string;
-  metadata?: GameMetadata;
+  metadata?: Partial<GameMetadata>;
   gamesRoot: string;
   stagedUploads: StagedArchiveUploadsMap;
   source: string;
   appendLogEvent: UploadLogFn;
   saveGameMetadata: (args: { gamePath: string; title: string; metadata: GameMetadata }) => Promise<void>;
+  readGameMetadata: (gamePath: string, gameName: string, versions: VersionSummary[]) => Promise<GameMetadata>;
 };
 
 export async function importStagedGameArchive({
@@ -157,6 +158,7 @@ export async function importStagedGameArchive({
   source,
   appendLogEvent,
   saveGameMetadata,
+  readGameMetadata,
 }: ImportStagedGameArchiveArgs): Promise<ImportStagedGameArchiveResult> {
   const normalizedUploadId = String(uploadId ?? '').trim();
   const normalizedGameName = String(gameName ?? '').trim();
@@ -199,11 +201,29 @@ export async function importStagedGameArchive({
     await extractZipToFolder(staged.filePath, extractRoot);
     await copyExtractedArchiveIntoVersion(extractRoot, targetVersionPath);
 
+    const defaultMetadata = toDefaultImportMetadata(normalizedVersionName);
+    const existingMetadata = normalizedExistingGamePath
+      ? await readGameMetadata(targetGamePath, normalizedGameName, [])
+      : null;
+    const metadataPatch = metadata ?? {};
     const mergedMetadata = {
-      ...toDefaultImportMetadata(normalizedVersionName),
-      ...(metadata ?? {}),
-      latestVersion: String(metadata?.latestVersion ?? normalizedVersionName).trim() || normalizedVersionName,
-    };
+      ...defaultMetadata,
+      ...(existingMetadata ?? {}),
+      ...metadataPatch,
+      latestVersion: String(metadataPatch.latestVersion ?? normalizedVersionName).trim() || normalizedVersionName,
+      notes: Array.isArray(metadataPatch.notes)
+        ? metadataPatch.notes
+        : (existingMetadata?.notes ?? defaultMetadata.notes),
+      tags: Array.isArray(metadataPatch.tags)
+        ? metadataPatch.tags
+        : (existingMetadata?.tags ?? defaultMetadata.tags),
+      customTags: Array.isArray(metadataPatch.customTags)
+        ? metadataPatch.customTags
+        : (existingMetadata?.customTags ?? defaultMetadata.customTags),
+      launchExecutable: typeof metadataPatch.launchExecutable === 'string'
+        ? metadataPatch.launchExecutable
+        : (existingMetadata?.launchExecutable ?? defaultMetadata.launchExecutable),
+    } satisfies GameMetadata;
 
     await saveGameMetadata({
       gamePath: targetGamePath,

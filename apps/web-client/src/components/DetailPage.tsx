@@ -30,6 +30,10 @@ type DetailPageProps = {
   onOpenPictures: (gamePath: string) => void;
   onOpenScreenshot: (imagePath: string) => void;
   moduleDetailContent?: ReactNode;
+  canNavigatePrevious?: boolean;
+  canNavigateNext?: boolean;
+  onNavigatePrevious?: () => void;
+  onNavigateNext?: () => void;
 };
 
 export function DetailPage({
@@ -56,6 +60,10 @@ export function DetailPage({
   onOpenScreenshot,
   onPlayWithVersionPrompt,
   moduleDetailContent,
+  canNavigatePrevious,
+  canNavigateNext,
+  onNavigatePrevious,
+  onNavigateNext,
 }: DetailPageProps) {
   return (
     <SharedDetailPage<GameSummary>
@@ -85,6 +93,10 @@ export function DetailPage({
       enableExtrasSection={true}
       onDownloadExtra={onDownloadExtra}
       moduleDetailContent={moduleDetailContent}
+      canNavigatePrevious={canNavigatePrevious}
+      canNavigateNext={canNavigateNext}
+      onNavigatePrevious={onNavigatePrevious}
+      onNavigateNext={onNavigateNext}
     />
   );
 }

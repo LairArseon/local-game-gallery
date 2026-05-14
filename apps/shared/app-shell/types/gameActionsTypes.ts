@@ -16,6 +16,7 @@ export type GameSummaryLike = {
   detectedLatestVersion: string;
   metadata: {
     latestVersion: string;
+    launchExecutable?: string;
   };
   versions: VersionSummaryLike[];
 };
@@ -26,6 +27,30 @@ export type PlayGamePayload = {
   versions: VersionSummaryLike[];
   launchMode: 'default' | 'choose-version-temporary';
   skipDecompressPrompt: boolean;
+  explicitExecutablePath?: string;
+};
+
+export type LaunchGameCandidate = {
+  versionName: string;
+  versionPath: string;
+  executableName: string;
+  executablePath: string;
+  relativeExecutablePath: string;
+  storedExecutablePath: string;
+  storageState: 'compressed' | 'decompressed';
+  requiresDecompression: boolean;
+};
+
+export type ListLaunchCandidatesPayload = {
+  gamePath: string;
+  gameName: string;
+  versions: VersionSummaryLike[];
+  versionPaths?: string[];
+};
+
+export type ListLaunchCandidatesResult = {
+  candidates: LaunchGameCandidate[];
+  message: string;
 };
 
 export type PlayGameResult = {
@@ -38,6 +63,7 @@ export type OpenFolderResult = {
 };
 
 export type GameActionsClientLike = {
+  listLaunchCandidates: (payload: ListLaunchCandidatesPayload) => Promise<ListLaunchCandidatesResult>;
   playGame: (payload: PlayGamePayload) => Promise<PlayGameResult>;
   openFolder: (payload: { folderPath: string }) => Promise<OpenFolderResult>;
 };
@@ -54,6 +80,12 @@ export type UseGameActionsCoreArgs<TGame extends GameSummaryLike> = {
   decompressVersionBeforeLaunch?: (gamePath: string, gameName: string, versionPath: string, versionName: string) => Promise<void>;
   logAppEvent: (message: string, level?: 'info' | 'warn' | 'error', source?: string) => Promise<void>;
   toErrorMessage: (error: unknown, fallback: string) => string;
+  confirmExecutableChoice?: (context: {
+    gameName: string;
+    reason: 'choose-version-temporary' | 'resolve-version-mismatch';
+    candidates: LaunchGameCandidate[];
+  }) => Promise<LaunchGameCandidate | null>;
+  listLaunchCandidates: GameActionsClientLike['listLaunchCandidates'];
   playGame: GameActionsClientLike['playGame'];
   openFolder: GameActionsClientLike['openFolder'];
 };

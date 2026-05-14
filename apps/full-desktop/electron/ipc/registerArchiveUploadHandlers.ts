@@ -2,11 +2,13 @@ import { ipcMain } from 'electron';
 import type {
   CancelStagedGameArchiveUploadPayload,
   GalleryConfig,
+  GameMetadata,
   ImportStagedGameArchivePayload,
   ImportStagedGameArchiveResult,
   SaveGameMetadataPayload,
   StageGameArchiveUploadPayload,
   StageGameArchiveUploadResult,
+  VersionSummary,
 } from '../../src/types';
 import { importStagedGameArchive, stageArchiveUpload } from '../shared/archive-upload-flow';
 import { removeStagedArchiveUpload } from '../shared/staged-archive-upload';
@@ -23,6 +25,7 @@ type RegisterArchiveUploadHandlersArgs = {
   appendLogEvent: (event: { level: 'info' | 'warn' | 'error'; source: string; message: string }) => Promise<void>;
   loadConfig: () => Promise<GalleryConfig>;
   saveGameMetadata: (payload: SaveGameMetadataPayload) => Promise<void>;
+  readGameMetadata: (gamePath: string, gameName: string, versions: VersionSummary[]) => Promise<GameMetadata>;
 };
 
 export function registerArchiveUploadHandlers({
@@ -30,6 +33,7 @@ export function registerArchiveUploadHandlers({
   appendLogEvent,
   loadConfig,
   saveGameMetadata,
+  readGameMetadata,
 }: RegisterArchiveUploadHandlersArgs) {
   ipcMain.handle('gallery:stage-game-archive-upload', async (_event, payload: StageGameArchiveUploadPayload): Promise<StageGameArchiveUploadResult> => {
     return stageArchiveUpload({
@@ -72,6 +76,7 @@ export function registerArchiveUploadHandlers({
       source: 'main-game-upload',
       appendLogEvent,
       saveGameMetadata,
+      readGameMetadata,
     });
   });
 }

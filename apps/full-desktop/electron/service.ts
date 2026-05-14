@@ -15,6 +15,8 @@ import {
   type GameMetadata,
   type GalleryConfig,
   type ImportStagedGameArchiveResult,
+  type ListLaunchCandidatesPayload,
+  type ListLaunchCandidatesResult,
   type LogEventPayload,
   type OpenFolderPayload,
   type OpenFolderResult,
@@ -54,6 +56,8 @@ import {
   appendGameLaunchActivity,
   findExecutablesInFolder,
   launchExecutable,
+  listLaunchCandidates,
+  resolveLaunchVersionForExecutable,
   toExecutableAbsolutePath,
   toStoredExecutablePath,
 } from './shared/game-launch-utils';
@@ -810,6 +814,53 @@ async function launchGameFromService(payload: PlayGamePayload): Promise<PlayGame
     && metadata.latestVersion
     && detectedLatestVersion !== metadata.latestVersion,
   );
+  const explicitExecutablePath = String(payload.explicitExecutablePath ?? '').trim();
+
+  if (explicitExecutablePath) {
+    const resolvedExplicitExecutablePath = path.resolve(explicitExecutablePath);
+    const explicitVersion = resolveLaunchVersionForExecutable(resolvedExplicitExecutablePath, versions);
+    if (explicitVersion?.storageState === 'compressed') {
+      await appendLogEvent({
+        level: 'info',
+        source: 'http-service-version-storage',
+        message: `Play request requires decompression for explicit executable under "${explicitVersion.path}".`,
+      }).catch(() => undefined);
+      await decompressVersionFromStorage(resolvedGamePath, explicitVersion.path, explicitVersion.name, 'http-service-version-storage', appendLogEvent);
+      explicitVersion.storageState = 'decompressed';
+      explicitVersion.storageArchivePath = null;
+    }
+
+    if (!(await fileExists(resolvedExplicitExecutablePath))) {
+      return {
+        launched: false,
+        executablePath: null,
+        message: 'Selected executable was not found on disk.',
+      };
+    }
+
+    if (launchMode === 'default' && !hasVersionMismatch) {
+      metadata.launchExecutable = toStoredExecutablePath(resolvedGamePath, resolvedExplicitExecutablePath);
+      await saveGameMetadata({
+        gamePath: resolvedGamePath,
+        title: gameName,
+        metadata,
+      });
+    }
+
+    launchExecutable(resolvedExplicitExecutablePath);
+    await appendGameLaunchActivity(resolvedGamePath);
+    await appendLogEvent({
+      level: 'info',
+      source: 'http-service-play-game',
+      message: `Launching explicit executable "${resolvedExplicitExecutablePath}" for game "${gameName}"`,
+    }).catch(() => undefined);
+
+    return {
+      launched: true,
+      executablePath: resolvedExplicitExecutablePath,
+      message: `Launching ${path.basename(resolvedExplicitExecutablePath)}.`,
+    };
+  }
 
   const preferredVersionName = (launchMode === 'default'
     ? (metadata.latestVersion || detectedLatestVersion)
@@ -891,6 +942,33 @@ async function launchGameFromService(payload: PlayGamePayload): Promise<PlayGame
     launched: true,
     executablePath: selectedExecutable,
     message: `Launching ${path.basename(selectedExecutable)}.`,
+  };
+}
+
+async function listLaunchCandidatesFromService(payload: ListLaunchCandidatesPayload): Promise<ListLaunchCandidatesResult> {
+  const rawGamePath = String(payload.gamePath ?? '').trim();
+  if (!rawGamePath) {
+    return {
+      candidates: [],
+      message: 'Game path is required.',
+    };
+  }
+
+  const resolvedGamePath = path.resolve(rawGamePath);
+  const gameName = String(payload.gameName ?? '').trim() || path.basename(resolvedGamePath);
+  const versions = (Array.isArray(payload.versions) ? payload.versions : []).map((version) => ({
+    name: version.name,
+    path: path.resolve(String(version.path ?? '').trim()),
+    storageState: version.storageState ?? 'decompressed',
+    storageArchivePath: version.storageArchivePath ?? null,
+  })).filter((version) => version.path);
+  const candidates = await listLaunchCandidates(resolvedGamePath, versions, payload.versionPaths);
+
+  return {
+    candidates,
+    message: candidates.length
+      ? `Found ${candidates.length} executable${candidates.length === 1 ? '' : 's'}.`
+      : `No executable files found for ${gameName}.`,
   };
 }
 
@@ -1051,6 +1129,7 @@ export async function startGalleryHttpService({
         appendLogEvent,
         loadRuntimeConfig,
         saveGameMetadata,
+        readGameMetadata,
       });
       if (handledArchiveUploadRoute) {
         return;
@@ -1069,6 +1148,23 @@ export async function startGalleryHttpService({
           sendOk(response, result);
         } catch (error) {
           sendError(response, 400, 'play_game_failed', toErrorMessage(error, 'Failed to launch game.'));
+        }
+        return;
+      }
+
+      if (method === 'POST' && route === '/api/launch-candidates') {
+        const capabilities = resolveRequestCapabilities(request);
+        if (!capabilities.supportsLaunch) {
+          sendError(response, 403, 'forbidden_host_action', 'Launch candidate inspection is allowed only for same-machine clients.');
+          return;
+        }
+
+        try {
+          const payload = await readJsonBody<ListLaunchCandidatesPayload>(request);
+          const result = await listLaunchCandidatesFromService(payload);
+          sendOk(response, result);
+        } catch (error) {
+          sendError(response, 400, 'list_launch_candidates_failed', toErrorMessage(error, 'Failed to inspect launch candidates.'));
         }
         return;
       }

@@ -16,6 +16,8 @@ export function useGameActionsCore<TGame extends GameSummaryLike>({
   decompressVersionBeforeLaunch,
   logAppEvent,
   toErrorMessage,
+  confirmExecutableChoice,
+  listLaunchCandidates,
   playGame,
   openFolder,
 }: UseGameActionsCoreArgs<TGame>) {
@@ -46,6 +48,44 @@ export function useGameActionsCore<TGame extends GameSummaryLike>({
     }
 
     try {
+      let explicitExecutablePath: string | undefined;
+      if (launchMode === 'choose-version-temporary') {
+        const candidateResult = await listLaunchCandidates({
+          gamePath: game.path,
+          gameName: game.name,
+          versions: game.versions.map((version) => ({
+            name: version.name,
+            path: version.path,
+            storageState: version.storageState,
+            storageArchivePath: version.storageArchivePath,
+          })),
+        });
+
+        if (!candidateResult.candidates.length) {
+          setStatus(candidateResult.message || 'No executable files were found.');
+          return;
+        }
+
+        if (candidateResult.candidates.length === 1) {
+          explicitExecutablePath = candidateResult.candidates[0]?.executablePath;
+        } else if (confirmExecutableChoice) {
+          const choice = await confirmExecutableChoice({
+            gameName: game.name,
+            reason: 'choose-version-temporary',
+            candidates: candidateResult.candidates,
+          });
+          if (!choice) {
+            setStatus('Play canceled.');
+            return;
+          }
+
+          explicitExecutablePath = choice.executablePath;
+        } else {
+          setStatus(candidateResult.message || 'Multiple executables were found.');
+          return;
+        }
+      }
+
       const preferredVersionName = (launchMode === 'default'
         ? (game.metadata.latestVersion || game.detectedLatestVersion)
         : game.versions[0]?.name) || game.versions[0]?.name || '';
@@ -80,6 +120,7 @@ export function useGameActionsCore<TGame extends GameSummaryLike>({
         })),
         launchMode,
         skipDecompressPrompt,
+        explicitExecutablePath,
       });
       setStatus(result.message);
       if (result.launched) {

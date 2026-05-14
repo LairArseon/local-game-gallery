@@ -14,6 +14,7 @@ type ModalHostProps<TGame extends GameWithScreenshots> = {
   metadataModal: ReactNode;
   mediaModal: ReactNode;
   logViewerModal: ReactNode;
+  executableChoiceModal: ReactNode;
   vaultUnlockModal: ReactNode;
   vaultPinModal: ReactNode;
   isMirrorSyncConfirmOpen: boolean;
@@ -37,6 +38,7 @@ export function ModalHost<TGame extends GameWithScreenshots>({
   metadataModal,
   mediaModal,
   logViewerModal,
+  executableChoiceModal,
   vaultUnlockModal,
   vaultPinModal,
   isMirrorSyncConfirmOpen,
@@ -156,6 +158,7 @@ export function ModalHost<TGame extends GameWithScreenshots>({
       {metadataModal}
       {mediaModal}
       {logViewerModal}
+      {executableChoiceModal}
 
       {isMirrorSyncConfirmOpen ? (
         <div className="modal-backdrop" onClick={onCancelMirrorSync}>

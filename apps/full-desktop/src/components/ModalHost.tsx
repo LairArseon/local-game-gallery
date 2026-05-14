@@ -15,9 +15,11 @@ import { MediaModal } from './MediaModal';
 import { MetadataModal } from './MetadataModal';
 import { VaultPinModal } from './VaultPinModal';
 import { VaultUnlockModal } from './VaultUnlockModal';
+import { ExecutableChoiceModal } from '../../../shared/app-shell/components/ExecutableChoiceModal';
 import type { GameMetadata, GameSummary } from '../types';
 import { ModalHost as SharedModalHost } from '../../../shared/app-shell/components/ModalHost';
 import type { ParsedGalleryLogEntry } from '../../../shared/app-shell/core/moduleLogSources';
+import type { ExecutableChoiceContext } from '../../../shared/app-shell/hooks/useModalConfirmations';
 
 type TagAutocompleteState = {
   scope: 'pool' | 'filter' | 'metadata';
@@ -38,6 +40,9 @@ type ModalHostProps = {
   decompressLaunchVersionName: string;
   onConfirmDecompressLaunch: () => void;
   onCancelDecompressLaunch: () => void;
+  executableChoiceContext: ExecutableChoiceContext | null;
+  onSelectExecutableChoice: (executablePath: string) => void;
+  onCancelExecutableChoice: () => void;
   metadataModalGamePath: string | null;
   metadataDraft: GameMetadata | null;
   statusChoices: string[];
@@ -124,6 +129,9 @@ export function ModalHost({
   decompressLaunchVersionName,
   onConfirmDecompressLaunch,
   onCancelDecompressLaunch,
+  executableChoiceContext,
+  onSelectExecutableChoice,
+  onCancelExecutableChoice,
   metadataModalGamePath,
   metadataDraft,
   statusChoices,
@@ -267,6 +275,14 @@ export function ModalHost({
     />
   ) : null;
 
+  const executableChoiceModal: ReactNode = executableChoiceContext ? (
+    <ExecutableChoiceModal
+      context={executableChoiceContext}
+      onSelect={onSelectExecutableChoice}
+      onClose={onCancelExecutableChoice}
+    />
+  ) : null;
+
   const vaultUnlockModal: ReactNode = isVaultUnlockModalOpen ? (
     <VaultUnlockModal
       pinValue={vaultPinInput}
@@ -296,6 +312,7 @@ export function ModalHost({
       metadataModal={metadataModal}
       mediaModal={mediaModal}
       logViewerModal={logViewerModal}
+      executableChoiceModal={executableChoiceModal}
       vaultUnlockModal={vaultUnlockModal}
       vaultPinModal={vaultPinModal}
       isMirrorSyncConfirmOpen={isMirrorSyncConfirmOpen}

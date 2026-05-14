@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { GalleryConfig, SaveGameMetadataPayload, ServiceCapabilities } from '../../src/types';
+import type { GalleryConfig, GameMetadata, SaveGameMetadataPayload, ServiceCapabilities, VersionSummary } from '../../src/types';
 import { ArchiveUploadFlowError, importStagedGameArchive, stageArchiveUpload } from '../shared/archive-upload-flow';
 import { removeStagedArchiveUpload } from '../shared/staged-archive-upload';
 
@@ -43,6 +43,7 @@ type HandleArchiveUploadRoutesArgs = {
   appendLogEvent: (event: { level: 'info' | 'warn' | 'error'; source: string; message: string }) => Promise<void>;
   loadRuntimeConfig: () => Promise<GalleryConfig>;
   saveGameMetadata: (payload: SaveGameMetadataPayload) => Promise<void>;
+  readGameMetadata: (gamePath: string, gameName: string, versions: VersionSummary[]) => Promise<GameMetadata>;
 };
 
 export async function handleArchiveUploadRoutes({
@@ -59,6 +60,7 @@ export async function handleArchiveUploadRoutes({
   appendLogEvent,
   loadRuntimeConfig,
   saveGameMetadata,
+  readGameMetadata,
 }: HandleArchiveUploadRoutesArgs) {
   if (method === 'POST' && route === '/api/archive-upload/stage') {
     const capabilities = resolveRequestCapabilities(request);
@@ -143,6 +145,7 @@ export async function handleArchiveUploadRoutes({
         source: 'service-game-upload',
         appendLogEvent,
         saveGameMetadata,
+        readGameMetadata,
       });
 
       sendOk(response, result);

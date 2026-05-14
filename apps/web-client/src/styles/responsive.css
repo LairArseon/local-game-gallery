@@ -168,6 +168,11 @@
     padding: 18px;
   }
 
+  .detail-page__edge-nav {
+    width: 34px;
+    height: 76px;
+  }
+
   .focus-card__section-grid,
   .detail-page .focus-card--vertical .focus-card__section-grid {
     grid-template-columns: 1fr;
@@ -196,6 +201,18 @@
 @media (max-width: 760px) {
   .detail-metadata-grid {
     grid-template-columns: 1fr;
+  }
+
+  .detail-page__edge-nav {
+    width: 30px;
+    height: 64px;
+    top: auto;
+    bottom: 18px;
+    transform: none;
+  }
+
+  .detail-page__edge-nav:hover:not(:disabled) {
+    transform: scale(1.02);
   }
 
   .focus-card__header {

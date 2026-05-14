@@ -124,12 +124,15 @@ function App() {
     isMirrorSyncConfirmOpen,
     isMirrorParityConfirmOpen,
     decompressLaunchConfirmContext,
+    executableChoiceContext,
     confirmInitialMirrorSync,
     resolveInitialMirrorSyncConfirmation,
     confirmMirrorParitySync,
     resolveMirrorParitySyncConfirmation,
     confirmDecompressBeforeLaunch,
     resolveDecompressBeforeLaunchConfirmation,
+    confirmExecutableChoice,
+    resolveExecutableChoice,
   } = useModalConfirmations();
 
   const {
@@ -573,6 +576,7 @@ function App() {
     refreshScan,
     confirmDecompressBeforeLaunch,
     decompressVersionBeforeLaunch: decompressVersionForLaunch,
+    confirmExecutableChoice,
     logAppEvent,
     toErrorMessage,
   });
@@ -684,6 +688,7 @@ function App() {
     setDetailGamePath,
     setSelectedGamePath,
     cardsContainerRef,
+    confirmExecutableChoice,
   });
 
   const {
@@ -1258,6 +1263,11 @@ function App() {
         decompressLaunchVersionName={decompressLaunchConfirmContext?.versionName ?? ''}
         onConfirmDecompressLaunch={() => resolveDecompressBeforeLaunchConfirmation(true)}
         onCancelDecompressLaunch={() => resolveDecompressBeforeLaunchConfirmation(false)}
+        executableChoiceContext={executableChoiceContext}
+        onSelectExecutableChoice={(executablePath) => resolveExecutableChoice(
+          executableChoiceContext?.candidates.find((candidate) => candidate.executablePath === executablePath) ?? null,
+        )}
+        onCancelExecutableChoice={() => resolveExecutableChoice(null)}
         metadataModalGamePath={metadataModalGamePath}
         metadataDraft={metadataDraft}
         statusChoices={config.statusChoices}

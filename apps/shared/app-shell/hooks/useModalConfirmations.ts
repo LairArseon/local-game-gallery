@@ -5,20 +5,29 @@
  * decompress-before-launch confirmation dialogs.
  */
 import { useEffect, useRef, useState } from 'react';
+import type { LaunchGameCandidate } from '../types/gameActionsTypes';
 
 export type DecompressLaunchConfirmContext = {
   gameName: string;
   versionName: string;
 };
 
+export type ExecutableChoiceContext = {
+  gameName: string;
+  reason: 'choose-version-temporary' | 'resolve-version-mismatch';
+  candidates: LaunchGameCandidate[];
+};
+
 export function useModalConfirmations() {
   const [isMirrorSyncConfirmOpen, setIsMirrorSyncConfirmOpen] = useState(false);
   const [isMirrorParityConfirmOpen, setIsMirrorParityConfirmOpen] = useState(false);
   const [decompressLaunchConfirmContext, setDecompressLaunchConfirmContext] = useState<DecompressLaunchConfirmContext | null>(null);
+  const [executableChoiceContext, setExecutableChoiceContext] = useState<ExecutableChoiceContext | null>(null);
 
   const mirrorSyncConfirmResolveRef = useRef<((shouldSync: boolean) => void) | null>(null);
   const mirrorParityConfirmResolveRef = useRef<((shouldSync: boolean) => void) | null>(null);
   const decompressLaunchConfirmResolveRef = useRef<((shouldDecompress: boolean) => void) | null>(null);
+  const executableChoiceResolveRef = useRef<((candidate: LaunchGameCandidate | null) => void) | null>(null);
 
   useEffect(() => () => {
     if (mirrorSyncConfirmResolveRef.current) {
@@ -34,6 +43,11 @@ export function useModalConfirmations() {
     if (decompressLaunchConfirmResolveRef.current) {
       decompressLaunchConfirmResolveRef.current(false);
       decompressLaunchConfirmResolveRef.current = null;
+    }
+
+    if (executableChoiceResolveRef.current) {
+      executableChoiceResolveRef.current(null);
+      executableChoiceResolveRef.current = null;
     }
   }, []);
 
@@ -94,15 +108,37 @@ export function useModalConfirmations() {
     resolve?.(shouldDecompress);
   }
 
+  async function confirmExecutableChoice(context: ExecutableChoiceContext) {
+    return new Promise<LaunchGameCandidate | null>((resolve) => {
+      if (executableChoiceResolveRef.current) {
+        executableChoiceResolveRef.current(null);
+      }
+
+      executableChoiceResolveRef.current = resolve;
+      setExecutableChoiceContext(context);
+    });
+  }
+
+  function resolveExecutableChoice(candidate: LaunchGameCandidate | null) {
+    setExecutableChoiceContext(null);
+
+    const resolve = executableChoiceResolveRef.current;
+    executableChoiceResolveRef.current = null;
+    resolve?.(candidate);
+  }
+
   return {
     isMirrorSyncConfirmOpen,
     isMirrorParityConfirmOpen,
     decompressLaunchConfirmContext,
+    executableChoiceContext,
     confirmInitialMirrorSync,
     resolveInitialMirrorSyncConfirmation,
     confirmMirrorParitySync,
     resolveMirrorParitySyncConfirmation,
     confirmDecompressBeforeLaunch,
     resolveDecompressBeforeLaunchConfirmation,
+    confirmExecutableChoice,
+    resolveExecutableChoice,
   };
 }

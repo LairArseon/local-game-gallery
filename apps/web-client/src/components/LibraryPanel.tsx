@@ -57,6 +57,10 @@ type LibraryPanelProps = {
   gridColumns: number;
   renderInlinePosterCardFocus: () => ReactNode;
   renderGame: (game: GameSummary) => ReactNode;
+  canNavigatePreviousDetail?: boolean;
+  canNavigateNextDetail?: boolean;
+  onNavigatePreviousDetail?: () => void;
+  onNavigateNextDetail?: () => void;
 };
 
 export function LibraryPanel({
@@ -95,6 +99,10 @@ export function LibraryPanel({
   gridColumns,
   renderInlinePosterCardFocus,
   renderGame,
+  canNavigatePreviousDetail,
+  canNavigateNextDetail,
+  onNavigatePreviousDetail,
+  onNavigateNextDetail,
 }: LibraryPanelProps) {
   return (
     <SharedLibraryPanel<GameSummary, GalleryViewMode, ScanResult>
@@ -136,6 +144,10 @@ export function LibraryPanel({
           onOpenPictures={onOpenPictures}
           onOpenScreenshot={onOpenScreenshot}
           moduleDetailContent={renderModuleDetailContent?.(game)}
+          canNavigatePrevious={canNavigatePreviousDetail}
+          canNavigateNext={canNavigateNextDetail}
+          onNavigatePrevious={onNavigatePreviousDetail}
+          onNavigateNext={onNavigateNextDetail}
         />
       )}
       renderFocusCard={renderFocusCard}

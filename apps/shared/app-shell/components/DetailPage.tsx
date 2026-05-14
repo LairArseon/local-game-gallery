@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
-import { Archive, ArrowLeft, FolderOpen, ListVideo, Play } from 'lucide-react';
+import { Archive, ArrowLeft, ChevronLeft, ChevronRight, FolderOpen, ListVideo, Play } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import type { MediaImageVariant } from '../types/gameDisplayTypes';
@@ -67,6 +67,10 @@ type DetailPageProps<TGame extends DetailPageGameLike> = {
   enableExtrasSection?: boolean;
   onDownloadExtra?: (gamePath: string, relativePath: string, itemName: string, isDirectory: boolean) => void;
   moduleDetailContent?: ReactNode;
+  canNavigatePrevious?: boolean;
+  canNavigateNext?: boolean;
+  onNavigatePrevious?: () => void;
+  onNavigateNext?: () => void;
 };
 
 export function DetailPage<TGame extends DetailPageGameLike>({
@@ -96,6 +100,10 @@ export function DetailPage<TGame extends DetailPageGameLike>({
   enableExtrasSection = false,
   onDownloadExtra,
   moduleDetailContent,
+  canNavigatePrevious = false,
+  canNavigateNext = false,
+  onNavigatePrevious,
+  onNavigateNext,
 }: DetailPageProps<TGame>) {
   const { t } = useTranslation();
   const contextMenuWidth = 220;
@@ -120,6 +128,37 @@ export function DetailPage<TGame extends DetailPageGameLike>({
     : null;
   const contextVersionIsCompressed = selectedContextVersion?.storageState === 'compressed';
   const extras = game.extras ?? [];
+  const edgeNavigation = typeof document !== 'undefined' && (onNavigatePrevious || onNavigateNext)
+    ? createPortal(
+      <>
+        {onNavigatePrevious ? (
+          <button
+            className="detail-page__edge-nav detail-page__edge-nav--previous"
+            type="button"
+            onClick={onNavigatePrevious}
+            aria-label={t('detail.previousGame')}
+            title={t('detail.previousGame')}
+            disabled={!canNavigatePrevious}
+          >
+            <ChevronLeft size={18} aria-hidden="true" />
+          </button>
+        ) : null}
+        {onNavigateNext ? (
+          <button
+            className="detail-page__edge-nav detail-page__edge-nav--next"
+            type="button"
+            onClick={onNavigateNext}
+            aria-label={t('detail.nextGame')}
+            title={t('detail.nextGame')}
+            disabled={!canNavigateNext}
+          >
+            <ChevronRight size={18} aria-hidden="true" />
+          </button>
+        ) : null}
+      </>,
+      document.body,
+    )
+    : null;
 
   useEffect(() => {
     if (!enableInlineContextMenus || (!extrasContextMenu && !versionContextMenu)) {
@@ -171,7 +210,9 @@ export function DetailPage<TGame extends DetailPageGameLike>({
   }, [enableInlineContextMenus, extrasContextMenu, versionContextMenu]);
 
   return (
-    <section className="detail-page" style={contentScaleStyle}>
+    <>
+      {edgeNavigation}
+      <section className="detail-page" style={contentScaleStyle}>
       <header className="detail-page__header">
         <button
           className="button button--icon-only"
@@ -482,6 +523,7 @@ export function DetailPage<TGame extends DetailPageGameLike>({
         </div>,
         document.body,
       ) : null}
-    </section>
+      </section>
+    </>
   );
 }

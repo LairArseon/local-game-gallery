@@ -29,6 +29,8 @@ import {
   appendGameLaunchActivity,
   findExecutablesInFolder,
   launchExecutable,
+  listLaunchCandidates,
+  resolveLaunchVersionForExecutable,
   toExecutableAbsolutePath,
   toStoredExecutablePath,
 } from './shared/game-launch-utils';
@@ -47,6 +49,8 @@ import type {
   OpenExternalUrlResult,
   OpenFolderPayload,
   OpenFolderResult,
+  ListLaunchCandidatesPayload,
+  ListLaunchCandidatesResult,
   PlayGamePayload,
   PickArchiveUploadFileResult,
   PlayGameResult,
@@ -865,6 +869,7 @@ registerArchiveUploadHandlers({
   appendLogEvent,
   loadConfig,
   saveGameMetadata,
+  readGameMetadata,
 });
 
 ipcMain.handle('gallery:save-extra-download', async (_event, payload: SaveExtraDownloadPayload): Promise<SaveExtraDownloadResult> => {
@@ -1316,7 +1321,49 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
     && metadata.latestVersion
     && detectedLatestVersion !== metadata.latestVersion,
   );
+  const explicitExecutablePath = String(payload.explicitExecutablePath ?? '').trim();
   const window = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+
+  if (explicitExecutablePath) {
+    const resolvedExplicitExecutablePath = path.resolve(explicitExecutablePath);
+    const explicitVersion = resolveLaunchVersionForExecutable(resolvedExplicitExecutablePath, playableVersions);
+
+    if (explicitVersion?.storageState === 'compressed') {
+      await decompressVersionFromStorage(payload.gamePath, explicitVersion.path, explicitVersion.name, 'main-version-storage', appendLogEvent);
+      explicitVersion.storageState = 'decompressed';
+      explicitVersion.storageArchivePath = null;
+    }
+
+    if (!(await fileExists(resolvedExplicitExecutablePath))) {
+      return {
+        launched: false,
+        executablePath: null,
+        message: 'Selected executable was not found on disk.',
+      };
+    }
+
+    if (launchMode === 'default' && !hasVersionMismatch) {
+      metadata.launchExecutable = toStoredExecutablePath(payload.gamePath, resolvedExplicitExecutablePath);
+      await saveGameMetadata({
+        gamePath: payload.gamePath,
+        title: payload.gameName,
+        metadata,
+      });
+    }
+
+    launchExecutable(resolvedExplicitExecutablePath);
+    await appendGameLaunchActivity(payload.gamePath);
+    await appendLogEvent({
+      level: 'info',
+      source: 'main-play-game',
+      message: `Launching explicit executable "${resolvedExplicitExecutablePath}" for game "${payload.gameName}"`,
+    });
+    return {
+      launched: true,
+      executablePath: resolvedExplicitExecutablePath,
+      message: `Launching ${path.basename(resolvedExplicitExecutablePath)}.`,
+    };
+  }
 
   let versionsToSearch = playableVersions;
   if (launchMode === 'choose-version-temporary' && playableVersions.length > 1) {
@@ -1530,6 +1577,33 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
     launched: true,
     executablePath: selectedExecutable,
     message: `Launching ${path.basename(selectedExecutable)}.`,
+  };
+});
+
+ipcMain.handle('gallery:list-launch-candidates', async (_event, payload: ListLaunchCandidatesPayload): Promise<ListLaunchCandidatesResult> => {
+  const rawGamePath = String(payload.gamePath ?? '').trim();
+  if (!rawGamePath) {
+    return {
+      candidates: [],
+      message: 'Game path is required.',
+    };
+  }
+
+  const resolvedGamePath = path.resolve(rawGamePath);
+  const gameName = String(payload.gameName ?? '').trim() || path.basename(resolvedGamePath);
+  const versions = (Array.isArray(payload.versions) ? payload.versions : []).map((version) => ({
+    name: version.name,
+    path: path.resolve(String(version.path ?? '').trim()),
+    storageState: version.storageState ?? 'decompressed',
+    storageArchivePath: version.storageArchivePath ?? null,
+  })).filter((version) => version.path);
+  const candidates = await listLaunchCandidates(resolvedGamePath, versions, payload.versionPaths);
+
+  return {
+    candidates,
+    message: candidates.length
+      ? `Found ${candidates.length} executable${candidates.length === 1 ? '' : 's'}.`
+      : `No executable files found for ${gameName}.`,
   };
 });
 

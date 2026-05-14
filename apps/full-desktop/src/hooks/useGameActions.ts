@@ -22,6 +22,7 @@ type UseGameActionsArgs = {
   refreshScan: () => Promise<unknown>;
   confirmDecompressBeforeLaunch?: (gameName: string, versionName: string) => Promise<boolean>;
   decompressVersionBeforeLaunch?: (gamePath: string, gameName: string, versionPath: string, versionName: string) => Promise<void>;
+  confirmExecutableChoice?: Parameters<typeof useGameActionsCore<GameSummary>>[0]['confirmExecutableChoice'];
   logAppEvent: (message: string, level?: 'info' | 'warn' | 'error', source?: string) => Promise<void>;
   toErrorMessage: (error: unknown, fallback: string) => string;
 };
@@ -36,6 +37,7 @@ export function useGameActions({
   refreshScan,
   confirmDecompressBeforeLaunch,
   decompressVersionBeforeLaunch,
+  confirmExecutableChoice,
   logAppEvent,
   toErrorMessage,
 }: UseGameActionsArgs) {
@@ -51,8 +53,10 @@ export function useGameActions({
     refreshScan,
     confirmDecompressBeforeLaunch,
     decompressVersionBeforeLaunch,
+    confirmExecutableChoice,
     logAppEvent,
     toErrorMessage,
+    listLaunchCandidates: (payload) => galleryClient.listLaunchCandidates(payload),
     playGame: (payload) => galleryClient.playGame(payload),
     openFolder: (payload) => galleryClient.openFolder(payload),
   });

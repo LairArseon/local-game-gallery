@@ -20,6 +20,8 @@ import type {
   ImportGameMediaPayload,
   ImportStagedGameArchivePayload,
   ImportStagedGameArchiveResult,
+  ListLaunchCandidatesPayload,
+  ListLaunchCandidatesResult,
   LogEventPayload,
   OpenExternalUrlPayload,
   OpenExternalUrlResult,
@@ -742,6 +744,12 @@ export const webClient: GalleryClient = {
     }
 
     throw new Error('Path-based drag import is only available in desktop mode. Use the add media button in browser mode.');
+  },
+  async listLaunchCandidates(_payload: ListLaunchCandidatesPayload): Promise<ListLaunchCandidatesResult> {
+    return {
+      candidates: [],
+      message: 'Launch candidate inspection is only available on the host desktop app.',
+    };
   },
   async playGame(_payload: PlayGamePayload) {
     return unsupportedPlayResult();

@@ -477,6 +477,51 @@
   gap: 10px;
 }
 
+.detail-page__edge-nav {
+  position: fixed;
+  top: 50%;
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 92px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(180deg, rgba(10, 14, 20, 0.36), rgba(16, 22, 31, 0.3));
+  color: rgba(247, 246, 242, 0.54);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+  transform: translateY(-50%);
+  transition: opacity 140ms ease, transform 140ms ease, background 140ms ease, border-color 140ms ease, color 140ms ease;
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  opacity: 0.72;
+}
+
+.detail-page__edge-nav:hover:not(:disabled) {
+  background: linear-gradient(180deg, rgba(18, 25, 35, 0.4), rgba(22, 31, 44, 0.28));
+  border-color: rgba(255, 255, 255, 0.14);
+  color: rgba(247, 246, 242, 0.84);
+  opacity: 0.92;
+  transform: translateY(-50%) scale(1.02);
+}
+
+.detail-page__edge-nav:disabled {
+  opacity: 0.16;
+  cursor: default;
+}
+
+.detail-page__edge-nav--previous {
+  left: 10px;
+  border-left: 0;
+  border-radius: 0 18px 18px 0;
+}
+
+.detail-page__edge-nav--next {
+  right: 10px;
+  border-right: 0;
+  border-radius: 18px 0 0 18px;
+}
+
 .detail-page__header h2,
 .detail-section h3 {
   margin: 0;
