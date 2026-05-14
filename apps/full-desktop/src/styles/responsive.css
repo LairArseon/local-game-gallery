@@ -131,6 +131,11 @@
     padding: 18px;
   }
 
+  .focus-card__section-grid,
+  .detail-page .focus-card--vertical .focus-card__section-grid {
+    grid-template-columns: 1fr;
+  }
+
   .game-card--card,
   .game-card--expanded {
     grid-template-columns: 1fr;
@@ -154,6 +159,14 @@
 @media (max-width: 760px) {
   .detail-metadata-grid {
     grid-template-columns: 1fr;
+  }
+
+  .focus-card__header {
+    flex-direction: column;
+  }
+
+  .focus-card__actions {
+    justify-content: flex-start;
   }
 
   .game-card--narrow {

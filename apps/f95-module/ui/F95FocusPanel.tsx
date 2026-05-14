@@ -8,25 +8,11 @@ import {
   getF95BooleanTagValue,
   getF95TagValue,
 } from '../core/f95Tags';
+import { formatF95Rating, parseStoredF95Rating } from '../core/f95Rating';
 
 type F95FocusPanelProps = {
   context: BuiltInModuleRenderContext;
 };
-
-function parseF95Rating(value: string) {
-  const normalizedValue = String(value ?? '').trim().replace(',', '.');
-  const match = normalizedValue.match(/-?\d+(?:\.\d+)?/);
-  if (!match) {
-    return null;
-  }
-
-  const parsedValue = Number.parseFloat(match[0]);
-  if (!Number.isFinite(parsedValue)) {
-    return null;
-  }
-
-  return Math.min(5, Math.max(0, parsedValue));
-}
 
 function formatF95DateTime(value: string) {
   const normalizedValue = String(value ?? '').trim();
@@ -56,7 +42,7 @@ export function F95FocusPanel({ context }: F95FocusPanelProps) {
   const lastUpdateAt = getF95TagValue(moduleTags, F95_LAST_UPDATED_TAG);
   const starsRating = getF95TagValue(moduleTags, F95_STARS_RATING_TAG);
   const isUpToDate = getF95BooleanTagValue(moduleTags, F95_UP_TO_DATE_TAG, true);
-  const parsedRating = parseF95Rating(starsRating);
+  const parsedRating = parseStoredF95Rating(starsRating);
   const formattedUpdatedAt = formatF95DateTime(lastUpdateAt);
 
   if (!threadId && !creator && !formattedUpdatedAt && parsedRating === null) {
@@ -90,7 +76,7 @@ export function F95FocusPanel({ context }: F95FocusPanelProps) {
         </div>
         <div className="f95-focus-panel__field f95-focus-panel__field--wide">
           <dt>F95 score</dt>
-          <dd>{parsedRating === null ? 'Not set' : `${parsedRating.toFixed(1)}/5`}</dd>
+          <dd>{parsedRating === null ? 'Not set' : `${formatF95Rating(parsedRating)}/5`}</dd>
         </div>
       </dl>
     </div>

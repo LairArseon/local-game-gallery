@@ -25,25 +25,12 @@ import {
   formatF95ThreadPageFetchError,
   getF95ThreadPageFetchStepLabel,
 } from '../core/f95ThreadPageV1';
+import { formatF95Rating, parseStoredF95Rating, roundF95RatingForDisplay } from '../core/f95Rating';
+import { F95RatingStars } from './F95RatingStars';
 
 type F95DetailPanelProps = {
   context: BuiltInModuleRenderContext;
 };
-
-function parseF95Rating(value: string) {
-  const normalizedValue = String(value ?? '').trim().replace(',', '.');
-  const match = normalizedValue.match(/-?\d+(?:\.\d+)?/);
-  if (!match) {
-    return null;
-  }
-
-  const parsedValue = Number.parseFloat(match[0]);
-  if (!Number.isFinite(parsedValue)) {
-    return null;
-  }
-
-  return Math.min(5, Math.max(0, parsedValue));
-}
 
 function parseF95VoteCount(value: string) {
   const digitsOnly = String(value ?? '').replace(/[^\d]/g, '');
@@ -53,10 +40,6 @@ function parseF95VoteCount(value: string) {
 
   const parsedValue = Number.parseInt(digitsOnly, 10);
   return Number.isFinite(parsedValue) ? parsedValue : null;
-}
-
-function formatF95Rating(value: number) {
-  return value.toFixed(1);
 }
 
 function formatF95DateTime(value: string) {
@@ -107,9 +90,9 @@ export function F95DetailPanel({ context }: F95DetailPanelProps) {
   const threadTags = parseF95TagList(getF95TagValue(moduleTags, F95_THREAD_TAGS_TAG));
   const isUpToDate = getF95BooleanTagValue(moduleTags, F95_UP_TO_DATE_TAG, true);
   const canDismissPendingUpdate = !isUpToDate && Boolean(context.onGameMetadataTagsChange);
-  const parsedRating = parseF95Rating(starsRating);
+  const parsedRating = parseStoredF95Rating(starsRating);
+  const roundedRating = roundF95RatingForDisplay(parsedRating);
   const parsedVoteCount = parseF95VoteCount(voteCount);
-  const ratingPercent = parsedRating === null ? 0 : (parsedRating / 5) * 100;
   const formattedThreadUpdatedAt = formatF95DateTime(lastUpdateAt);
   const hasLinkedThread = Boolean(threadId || threadUrl);
   const overviewText = overview.trim();
@@ -166,21 +149,13 @@ export function F95DetailPanel({ context }: F95DetailPanelProps) {
                     : 'Store an F95 thread URL in metadata to keep this entry anchored to the source thread.'}
                 </p>
               </div>
-              <div className="f95-module-hero__rating">
-                <span className="f95-module-hero__rating-label">Community rating</span>
-                <strong>{parsedRating === null ? '--' : formatF95Rating(parsedRating)}</strong>
-                <span>{parsedRating === null ? 'No rating stored yet.' : 'out of 5 stars'}</span>
-              </div>
             </div>
           </section>
 
           <div className="f95-module-panel-grid">
             <section className="f95-module-panel f95-module-panel--rating">
               <div className="f95-module-panel__heading">
-                <div>
-                  <strong>Rating snapshot</strong>
-                  <p>Current F95 thread rating normalized to a five-star scale.</p>
-                </div>
+                <strong>Rating snapshot</strong>
               </div>
               {parsedRating === null ? (
                 <p className="f95-module-panel__empty">No rating stored yet. Use the manual fetch action when the thread page has a score available.</p>
@@ -191,9 +166,8 @@ export function F95DetailPanel({ context }: F95DetailPanelProps) {
                     <span className="f95-module-rating-score__scale">/5</span>
                   </div>
                   <div className="f95-module-rating-copy">
-                    <div className="f95-module-rating-stars" aria-label={`F95 rating ${formatF95Rating(parsedRating)} out of 5`}>
-                      <span className="f95-module-rating-stars__base">★★★★★</span>
-                      <span className="f95-module-rating-stars__fill" style={{ width: `${ratingPercent}%` }}>★★★★★</span>
+                    <div className="f95-module-rating-stars-row" aria-label={`F95 rating ${formatF95Rating(parsedRating)} out of 5`}>
+                      <F95RatingStars rating={roundedRating ?? parsedRating} />
                     </div>
                     <p>
                       {parsedVoteCount === null
@@ -207,10 +181,7 @@ export function F95DetailPanel({ context }: F95DetailPanelProps) {
 
             <section className="f95-module-panel">
               <div className="f95-module-panel__heading">
-                <div>
-                  <strong>Thread details</strong>
-                  <p>Core identifiers and parsed metadata currently stored for this thread.</p>
-                </div>
+                <strong>Thread details</strong>
               </div>
               <dl className="f95-module-fact-list">
                 {renderFact('Version', version || 'No version stored yet.')}
@@ -222,16 +193,12 @@ export function F95DetailPanel({ context }: F95DetailPanelProps) {
 
             <section className="f95-module-panel">
               <div className="f95-module-panel__heading">
-                <div>
-                  <strong>Update tracking</strong>
-                  <p>RSS-derived state used to highlight pending updates inside the gallery.</p>
-                </div>
+                <strong>Update tracking</strong>
               </div>
               <dl className="f95-module-fact-list">
                 {renderFact('F95 status', isUpToDate ? 'Up to date' : 'Update available')}
                 {renderFact('Latest tracked update', lastUpdateTitle || 'No update title stored yet.')}
                 {renderFact('Latest feed item id', lastFeedItemId || 'No feed item id stored yet.')}
-                {renderFact('Linked thread', hasLinkedThread ? 'Ready for sync and manual fetch.' : 'Link metadata is incomplete.')}
               </dl>
             </section>
           </div>
@@ -239,10 +206,7 @@ export function F95DetailPanel({ context }: F95DetailPanelProps) {
           {overviewText ? (
             <section className="f95-module-panel f95-module-panel--wide">
               <div className="f95-module-panel__heading">
-                <div>
-                  <strong>Overview</strong>
-                  <p>Synopsis parsed directly from the current F95 thread page.</p>
-                </div>
+                <strong>Overview</strong>
               </div>
               <p className="f95-module-prose">{overviewText}</p>
             </section>
@@ -251,10 +215,7 @@ export function F95DetailPanel({ context }: F95DetailPanelProps) {
           {threadTags.length ? (
             <section className="f95-module-panel">
               <div className="f95-module-panel__heading">
-                <div>
-                  <strong>F95 tags</strong>
-                  <p>Tags currently parsed from the linked thread.</p>
-                </div>
+                <strong>F95 tags</strong>
               </div>
               <div className="f95-module-tag-pills">
                 {threadTags.map((tag) => <span key={tag} className="f95-module-tag-pill">{tag}</span>)}

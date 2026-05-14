@@ -12,6 +12,7 @@ import {
   serializeF95TagList,
   setF95TagValue,
 } from './f95Tags';
+import { normalizeF95RatingString } from './f95Rating';
 
 export type F95ThreadPageMetadata = {
   parserId: 'f95-thread-page-v1';
@@ -267,6 +268,7 @@ function readArticleBodyMetadata(html: string) {
     version,
     threadUpdatedAt,
     starsRating: String(ratingRecord?.ratingValue ?? '').trim(),
+    bestRating: String(ratingRecord?.bestRating ?? '').trim(),
     voteCount: String(ratingRecord?.ratingCount ?? ratingRecord?.reviewCount ?? '').trim(),
   };
 }
@@ -280,6 +282,7 @@ function readRatingFallbacks(html: string) {
 
   return {
     starsRating: ratingValueMatch?.[1]?.trim() ?? '',
+    bestRating: html.match(/bestRating["']?\s*[:=]\s*["']?([0-9]+(?:\.[0-9]+)?)/i)?.[1]?.trim() ?? '',
     voteCount: voteCountMatch?.[1]?.trim() ?? '',
   };
 }
@@ -334,7 +337,10 @@ export const F95_THREAD_PAGE_V1_PARSER = {
       developer: developerFromTitle,
       version: articleMetadata.version,
       threadUpdatedAt: articleMetadata.threadUpdatedAt,
-      starsRating: articleMetadata.starsRating || ratingFallbacks.starsRating,
+      starsRating: normalizeF95RatingString(
+        articleMetadata.starsRating || ratingFallbacks.starsRating,
+        articleMetadata.bestRating || ratingFallbacks.bestRating,
+      ),
       voteCount: articleMetadata.voteCount || ratingFallbacks.voteCount,
       tags: readThreadTags(source),
     };

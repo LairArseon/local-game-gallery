@@ -1791,24 +1791,35 @@ button {
   gap: 8px;
 }
 
+.f95-module-rating-stars-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .f95-module-rating-stars {
-  position: relative;
-  display: inline-block;
-  font-size: 1.05rem;
-  line-height: 1;
-  letter-spacing: 0.12em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.f95-module-rating-stars__base {
-  color: rgba(255, 255, 255, 0.16);
+.f95-module-rating-stars__icon {
+  flex: 0 0 auto;
 }
 
-.f95-module-rating-stars__fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  overflow: hidden;
+.f95-module-rating-stars__icon--full,
+.f95-module-rating-stars__icon--half {
   color: rgba(255, 192, 120, 0.95);
-  white-space: nowrap;
+}
+
+.f95-module-rating-stars__icon--empty {
+  color: rgba(255, 255, 255, 0.18);
+}
+
+.f95-module-rating-stars__label {
+  color: rgba(229, 232, 238, 0.68);
+  font-size: 0.82rem;
 }
 
 .f95-module-fact-list {

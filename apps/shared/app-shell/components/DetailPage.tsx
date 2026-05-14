@@ -215,22 +215,50 @@ export function DetailPage<TGame extends DetailPageGameLike>({
           </button>
         </div>
         <div className="detail-metadata-grid">
-          <div>
-            <p>{t('detail.latestVersion')}: {game.metadata.latestVersion || t('detail.unknown')}</p>
-            <p>{t('detail.status')}: {game.metadata.status || t('detail.notSet')}</p>
-            <p>{t('detail.score')}: {game.metadata.score || t('detail.notSet')}</p>
-            <p>{t('detail.description')}: {game.metadata.description || t('detail.noDescription')}</p>
-            <div className="detail-tags">
-              <strong>{t('detail.notes')}</strong>
-              {game.metadata.notes.filter(Boolean).map((note) => (
-                <p key={note}>{note}</p>
-              ))}
-            </div>
-            {game.metadata.tags.length ? (
-              <div className="detail-tags">
-                <strong>{t('detail.tags')}</strong>
-                <p>{game.metadata.tags.join(', ')}</p>
+          <div className="detail-metadata-main">
+            <dl className="detail-metadata-facts">
+              <div className="detail-metadata-fact">
+                <dt>{t('detail.latestVersion')}</dt>
+                <dd>{game.metadata.latestVersion || t('detail.unknown')}</dd>
               </div>
+              <div className="detail-metadata-fact">
+                <dt>{t('detail.status')}</dt>
+                <dd>{game.metadata.status || t('detail.notSet')}</dd>
+              </div>
+              <div className="detail-metadata-fact">
+                <dt>{t('detail.score')}</dt>
+                <dd>{game.metadata.score || t('detail.notSet')}</dd>
+              </div>
+            </dl>
+            <section className="detail-metadata-card detail-metadata-card--description">
+              <div className="detail-metadata-card__header">
+                <strong>{t('detail.description')}</strong>
+              </div>
+              <p className="detail-metadata-description">{game.metadata.description || t('detail.noDescription')}</p>
+            </section>
+            <section className="detail-metadata-card">
+              <div className="detail-metadata-card__header">
+                <strong>{t('detail.notes')}</strong>
+              </div>
+              {game.metadata.notes.filter(Boolean).length ? (
+                <ul className="detail-metadata-note-list">
+                  {game.metadata.notes.filter(Boolean).map((note) => (
+                    <li key={note}>{note}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="detail-metadata-empty">{t('detail.notSet')}</p>
+              )}
+            </section>
+            {game.metadata.tags.length ? (
+              <section className="detail-metadata-card">
+                <div className="detail-metadata-card__header">
+                  <strong>{t('detail.tags')}</strong>
+                </div>
+                <div className="detail-metadata-tag-list">
+                  {game.metadata.tags.map((tag) => <span key={tag} className="detail-metadata-tag">{tag}</span>)}
+                </div>
+              </section>
             ) : null}
           </div>
           <aside className="detail-versions">
