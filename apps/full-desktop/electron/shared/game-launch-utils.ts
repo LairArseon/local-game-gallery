@@ -1,8 +1,13 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { appendFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import unzipper from 'unzipper';
 import type { LaunchGameCandidate, PlayableVersion } from '../../src/types';
+import {
+  cleanupLaunchIsolationSession,
+  createLaunchIsolationSession,
+  type LaunchIsolationRequest,
+} from './windows-firewall-isolation';
 
 /**
  * Shared game-launch filesystem/process helpers for Electron entrypoints.
@@ -133,13 +138,184 @@ export function toExecutableAbsolutePath(gamePath: string, storedPath: string) {
   return path.join(gamePath, storedPath);
 }
 
-export function launchExecutable(executablePath: string) {
-  const processHandle = spawn(executablePath, [], {
-    cwd: path.dirname(executablePath),
-    detached: true,
-    stdio: 'ignore',
-  });
+type LaunchExecutableOptions = {
+  isolation?: LaunchIsolationRequest | null;
+  onIsolationCleanupError?: (message: string) => Promise<void> | void;
+  onLogEvent?: (event: { level: 'info' | 'warn' | 'error'; source: string; message: string }) => Promise<void> | void;
+  onTrackedProcessExit?: (event: {
+    executablePath: string;
+    pid: number | null;
+    startedAt: string;
+    endedAt: string;
+    durationMs: number;
+    code: number | null;
+    signal: NodeJS.Signals | null;
+  }) => Promise<void> | void;
+};
+
+export type LaunchExecutableResult = {
+  pid: number | null;
+  isolationActive: boolean;
+};
+
+export async function launchExecutable(
+  executablePath: string,
+  options: LaunchExecutableOptions = {},
+): Promise<LaunchExecutableResult> {
+  const startedAtMs = Date.now();
+  const startedAt = new Date(startedAtMs).toISOString();
+  const appendLaunchLog = (event: { level: 'info' | 'warn' | 'error'; source: string; message: string }) => {
+    return Promise.resolve(options.onLogEvent?.(event));
+  };
+
+  if (options.isolation?.enabled) {
+    await appendLaunchLog({
+      level: 'info',
+      source: 'launch-isolation',
+      message: `Preparing network isolation for executable "${executablePath}".`,
+    }).catch(() => undefined);
+  }
+
+  const isolationSession = options.isolation
+    ? await createLaunchIsolationSession(executablePath, options.isolation)
+    : null;
+
+  if (isolationSession) {
+    await appendLaunchLog({
+      level: 'info',
+      source: 'launch-isolation',
+      message: `Created firewall isolation rule group "${isolationSession.ruleGroup}" for "${executablePath}".`,
+    }).catch(() => undefined);
+  }
+
+  let processHandle: ChildProcess;
+  try {
+    await appendLaunchLog({
+      level: 'info',
+      source: 'launch-process',
+      message: `Spawning executable "${executablePath}".`,
+    }).catch(() => undefined);
+
+    processHandle = spawn(executablePath, [], {
+      cwd: path.dirname(executablePath),
+      stdio: 'ignore',
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      processHandle.once('spawn', () => resolve());
+      processHandle.once('error', (error: Error) => reject(error));
+    });
+
+    await appendLaunchLog({
+      level: 'info',
+      source: 'launch-process',
+      message: `Spawned executable "${executablePath}" with pid ${processHandle.pid ?? 'unknown'}.`,
+    }).catch(() => undefined);
+  } catch (error) {
+    await appendLaunchLog({
+      level: 'error',
+      source: 'launch-process',
+      message: `Failed to spawn executable "${executablePath}": ${error instanceof Error ? error.message : 'Unknown error.'}`,
+    }).catch(() => undefined);
+
+    if (isolationSession) {
+      await appendLaunchLog({
+        level: 'warn',
+        source: 'launch-isolation',
+        message: `Launch failed after creating firewall rules; attempting cleanup for rule group "${isolationSession.ruleGroup}".`,
+      }).catch(() => undefined);
+
+      await cleanupLaunchIsolationSession(isolationSession).catch(() => undefined);
+    }
+    throw error;
+  }
+
+  let trackedProcessExitHandled = false;
+  const notifyTrackedProcessExit = (processHandle: ChildProcess, code: number | null, signal: NodeJS.Signals | null) => {
+    if (trackedProcessExitHandled) {
+      return;
+    }
+
+    trackedProcessExitHandled = true;
+    const endedAtMs = Date.now();
+    void Promise.resolve(options.onTrackedProcessExit?.({
+      executablePath,
+      pid: processHandle.pid ?? null,
+      startedAt,
+      endedAt: new Date(endedAtMs).toISOString(),
+      durationMs: Math.max(0, endedAtMs - startedAtMs),
+      code,
+      signal,
+    })).catch(() => undefined);
+  };
+
+  if (isolationSession) {
+    const cleanup = (reason: 'exit' | 'error', code?: number | null, signal?: NodeJS.Signals | null) => {
+      notifyTrackedProcessExit(processHandle, code ?? null, signal ?? null);
+      void appendLaunchLog({
+        level: reason === 'exit' ? 'info' : 'warn',
+        source: 'launch-process',
+        message: reason === 'exit'
+          ? `Tracked launched process for "${executablePath}" exited with code ${code ?? 'null'}${signal ? ` and signal ${signal}` : ''}.`
+          : `Tracked launched process for "${executablePath}" emitted an error event${signal ? ` (${signal})` : ''}.`,
+      }).catch(() => undefined);
+
+      void appendLaunchLog({
+        level: 'info',
+        source: 'launch-isolation',
+        message: `Cleaning firewall isolation rule group "${isolationSession.ruleGroup}" for "${executablePath}".`,
+      }).catch(() => undefined);
+
+      void cleanupLaunchIsolationSession(isolationSession).then(() => {
+        void appendLaunchLog({
+          level: 'info',
+          source: 'launch-isolation',
+          message: `Removed firewall isolation rule group "${isolationSession.ruleGroup}" for "${executablePath}".`,
+        }).catch(() => undefined);
+      }).catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : 'Failed to remove network isolation rules after launch.';
+        void appendLaunchLog({
+          level: 'error',
+          source: 'launch-isolation',
+          message: `Failed to clean firewall isolation rule group "${isolationSession.ruleGroup}": ${message}`,
+        }).catch(() => undefined);
+        void options.onIsolationCleanupError?.(message);
+      });
+    };
+
+    processHandle.once('exit', (code, signal) => cleanup('exit', code, signal));
+    processHandle.once('error', (error) => {
+      void appendLaunchLog({
+        level: 'error',
+        source: 'launch-process',
+        message: `Tracked launched process for "${executablePath}" emitted an error: ${error.message}`,
+      }).catch(() => undefined);
+      cleanup('error', null, null);
+    });
+  } else {
+    processHandle.once('exit', (code, signal) => {
+      notifyTrackedProcessExit(processHandle, code ?? null, signal ?? null);
+      void appendLaunchLog({
+        level: 'info',
+        source: 'launch-process',
+        message: `Tracked launched process for "${executablePath}" exited with code ${code ?? 'null'}${signal ? ` and signal ${signal}` : ''}.`,
+      }).catch(() => undefined);
+    });
+    processHandle.once('error', (error) => {
+      void appendLaunchLog({
+        level: 'error',
+        source: 'launch-process',
+        message: `Tracked launched process for "${executablePath}" emitted an error: ${error.message}`,
+      }).catch(() => undefined);
+      notifyTrackedProcessExit(processHandle, null, null);
+    });
+  }
+
   processHandle.unref();
+  return {
+    pid: processHandle.pid ?? null,
+    isolationActive: Boolean(isolationSession),
+  };
 }
 
 export async function appendGameLaunchActivity(gamePath: string) {

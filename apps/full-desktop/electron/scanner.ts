@@ -7,7 +7,7 @@ import type {
   ScanRequestOptions,
   ScanResult,
 } from '../src/types';
-import { createDefaultMetadata, getLatestVersionName, readGameMetadata, scanGameMedia } from './game-library';
+import { createDefaultMetadata, getLatestVersionName, readGameMetadata, readMetadataPlaytimeSeconds, scanGameMedia } from './game-library';
 import { appendLogEvent } from './logger';
 
 const imageExtensions = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.avif']);
@@ -686,6 +686,7 @@ export async function scanGames(
       : { poster: null, card: null, background: null, screenshots: [] };
     const extras = await scanGameExtras(gamePath, config.hideDotEntries);
     const lastPlayedAt = await readLastPlayedAt(gamePath);
+    const accumulatedPlaytimeSeconds = readMetadataPlaytimeSeconds(metadata);
     games.push({
       name: entry.name,
       path: gamePath,
@@ -693,6 +694,7 @@ export async function scanGames(
       isVaulted: vaultedGamePaths.has(gamePath)
         || (usingMirrorFallback && vaultedGamePaths.has(sourceEquivalentGamePath)),
       lastPlayedAt,
+      accumulatedPlaytimeSeconds,
       hasNfo: true,
       picturesPath: picturesStats?.isDirectory() ? picturesPath : null,
       imageCount,
@@ -892,6 +894,7 @@ export async function scanGame(config: GalleryConfig, gamePath: string): Promise
     isVaulted: (config.vaultedGamePaths ?? []).includes(resolvedGamePath)
       || (usingMirrorFallback && (config.vaultedGamePaths ?? []).includes(sourceEquivalentGamePath)),
     lastPlayedAt,
+    accumulatedPlaytimeSeconds: readMetadataPlaytimeSeconds(metadata),
     hasNfo: true,
     picturesPath: picturesStats?.isDirectory() ? picturesPath : null,
     imageCount,

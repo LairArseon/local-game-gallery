@@ -17,6 +17,7 @@ export type GameSummaryLike = {
   metadata: {
     latestVersion: string;
     launchExecutable?: string;
+    restrictNetworkAccess?: boolean;
   };
   versions: VersionSummaryLike[];
 };
@@ -28,6 +29,7 @@ export type PlayGamePayload = {
   launchMode: 'default' | 'choose-version-temporary';
   skipDecompressPrompt: boolean;
   explicitExecutablePath?: string;
+  restrictNetworkAccess?: boolean;
 };
 
 export type LaunchGameCandidate = {

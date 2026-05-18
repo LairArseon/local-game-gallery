@@ -2,7 +2,7 @@ import type { MouseEvent } from 'react';
 import { ArrowRight, ListVideo, Play } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { GameDisplayLike, SharedFocusCardProps } from '../types/gameDisplayTypes';
-import { formatByteSize, formatLastPlayed } from '../utils/app-helpers';
+import { formatByteSize, formatLastPlayed, formatPlaytimeDuration } from '../utils/app-helpers';
 
 function renderFocusFact(label: string, value: string) {
   return (
@@ -36,6 +36,7 @@ export function FocusCard<TGame extends GameDisplayLike>({
   const score = game.metadata.score || t('detail.notSet');
   const size = game.sizeBytes === null ? t('app.calculating') : formatByteSize(game.sizeBytes);
   const lastPlayed = formatLastPlayedValue(game.lastPlayedAt);
+  const playtime = formatPlaytimeDuration(game.accumulatedPlaytimeSeconds);
   const description = game.metadata.description.trim() || t('detail.noDescription');
   const notePreview = game.metadata.notes.filter(Boolean).slice(0, 2);
   const tagPreview = game.metadata.tags.filter(Boolean);
@@ -166,6 +167,7 @@ export function FocusCard<TGame extends GameDisplayLike>({
           {renderFocusFact(t('detail.score'), score)}
           {renderFocusFact(t('gameView.size'), size)}
           {renderFocusFact(t('gameView.lastPlayed'), lastPlayed)}
+          {renderFocusFact(t('gameView.playtime'), playtime)}
         </dl>
         <div className="focus-card__section-grid">
           <section className="focus-card__section focus-card__section--primary">

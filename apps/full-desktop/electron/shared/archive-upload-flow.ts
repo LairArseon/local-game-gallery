@@ -223,6 +223,9 @@ export async function importStagedGameArchive({
       launchExecutable: typeof metadataPatch.launchExecutable === 'string'
         ? metadataPatch.launchExecutable
         : (existingMetadata?.launchExecutable ?? defaultMetadata.launchExecutable),
+      restrictNetworkAccess: typeof metadataPatch.restrictNetworkAccess === 'boolean'
+        ? metadataPatch.restrictNetworkAccess
+        : (existingMetadata?.restrictNetworkAccess ?? defaultMetadata.restrictNetworkAccess),
     } satisfies GameMetadata;
 
     await saveGameMetadata({

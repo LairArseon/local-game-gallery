@@ -1178,8 +1178,12 @@ export const webClient: GalleryClient = {
         method: 'POST',
         body: JSON.stringify(_payload),
       });
-    } catch {
-      return unsupportedPlayResult();
+    } catch (error) {
+      return {
+        launched: false,
+        executablePath: null,
+        message: error instanceof Error ? error.message : 'Failed to launch game.',
+      };
     }
   },
   async reorderScreenshots(payload: ReorderScreenshotsPayload) {

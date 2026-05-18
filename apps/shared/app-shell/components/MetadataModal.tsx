@@ -16,6 +16,7 @@ type MetadataLike = {
   description: string;
   notes: string[];
   tags: string[];
+  restrictNetworkAccess: boolean;
 };
 
 type MetadataModalProps<TMetadata extends MetadataLike> = {
@@ -85,6 +86,14 @@ export function MetadataModal<TMetadata extends MetadataLike>({
             <label className="field">
               <span>{t('metadata.description')}</span>
               <textarea rows={4} value={metadataDraft.description} onChange={(event) => onSetMetadataDraft({ ...metadataDraft, description: event.target.value })} />
+            </label>
+            <label className="field field--toggle">
+              <span>{t('metadata.allowNetworkAccess')}</span>
+              <input
+                type="checkbox"
+                checked={!metadataDraft.restrictNetworkAccess}
+                onChange={(event) => onSetMetadataDraft({ ...metadataDraft, restrictNetworkAccess: !event.target.checked })}
+              />
             </label>
             <div className="modal-group">
               <div className="modal-group__header">

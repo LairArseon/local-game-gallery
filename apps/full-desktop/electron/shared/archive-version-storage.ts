@@ -104,6 +104,7 @@ export function toDefaultImportMetadata(versionName: string) {
     notes: [] as string[],
     tags: [] as string[],
     launchExecutable: '',
+    restrictNetworkAccess: true,
     customTags: [] as Array<{ key: string; value: string }>,
   };
 }

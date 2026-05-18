@@ -5,6 +5,8 @@
 type AppShellServiceCapabilities = {
   supportsLaunch: boolean;
   supportsHostFolderPicker: boolean;
+  supportsLaunchNetworkIsolation: boolean;
+  requiresLaunchNetworkIsolationElevation: boolean;
   launchPolicy: 'host-desktop-only';
   supportsNativeContextMenu: boolean;
   supportsTrayLifecycle: boolean;
@@ -18,6 +20,8 @@ export const narrowViewportMaxWidthPx = 760;
 export const desktopCapabilitiesDefault: AppShellServiceCapabilities = {
   supportsLaunch: true,
   supportsHostFolderPicker: true,
+  supportsLaunchNetworkIsolation: false,
+  requiresLaunchNetworkIsolationElevation: false,
   launchPolicy: 'host-desktop-only',
   supportsNativeContextMenu: true,
   supportsTrayLifecycle: true,
@@ -29,6 +33,8 @@ export const desktopCapabilitiesDefault: AppShellServiceCapabilities = {
 export const webCapabilitiesDefault: AppShellServiceCapabilities = {
   supportsLaunch: false,
   supportsHostFolderPicker: false,
+  supportsLaunchNetworkIsolation: false,
+  requiresLaunchNetworkIsolationElevation: false,
   launchPolicy: 'host-desktop-only',
   supportsNativeContextMenu: false,
   supportsTrayLifecycle: false,

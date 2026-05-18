@@ -3,6 +3,7 @@ import path from 'node:path';
 import type {
   GameMediaAssets,
   GameMetadata,
+  GameMetadataTag,
   ImportDroppedGameMediaPayload,
   SaveGameMetadataPayload,
   VersionSummary,
@@ -60,12 +61,48 @@ export function createDefaultMetadata(latestVersion = ''): GameMetadata {
     notes: [''],
     tags: [],
     launchExecutable: '',
+    restrictNetworkAccess: true,
     customTags: [],
   };
 }
 
+const playtimeSecondsCustomTagKey = 'playtime_seconds';
+
 function sanitizeKey(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+function findCustomTagIndex(tags: GameMetadataTag[], key: string) {
+  const normalizedKey = sanitizeKey(key);
+  return tags.findIndex((tag) => sanitizeKey(tag.key) === normalizedKey);
+}
+
+export function readMetadataPlaytimeSeconds(metadata: GameMetadata) {
+  const playtimeTag = metadata.customTags.find((tag) => sanitizeKey(tag.key) === playtimeSecondsCustomTagKey);
+  const parsed = Number.parseInt(String(playtimeTag?.value ?? '').trim(), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+export function writeMetadataPlaytimeSeconds(metadata: GameMetadata, playtimeSeconds: number) {
+  const normalizedPlaytimeSeconds = Math.max(0, Math.floor(playtimeSeconds));
+  const nextTags = metadata.customTags.map((tag) => ({ ...tag }));
+  const existingIndex = findCustomTagIndex(nextTags, playtimeSecondsCustomTagKey);
+
+  if (existingIndex >= 0) {
+    nextTags[existingIndex] = {
+      ...nextTags[existingIndex],
+      key: playtimeSecondsCustomTagKey,
+      value: String(normalizedPlaytimeSeconds),
+    };
+  } else {
+    nextTags.push({
+      key: playtimeSecondsCustomTagKey,
+      value: String(normalizedPlaytimeSeconds),
+    });
+  }
+
+  metadata.customTags = nextTags;
+  return metadata;
 }
 
 function encodeNfoValue(value: string) {
@@ -208,6 +245,11 @@ export async function readGameMetadata(gamePath: string, gameName: string, versi
         continue;
       }
 
+      if (key === 'restrict_network_access' || key === 'block_network_access') {
+        metadata.restrictNetworkAccess = ['1', 'true', 'yes', 'on'].includes(decodedValue.trim().toLowerCase());
+        continue;
+      }
+
       if (key === 'tags') {
         for (const tag of decodedValue.split(',').map((entry) => entry.trim()).filter(Boolean)) {
           metadata.tags.push(tag);
@@ -261,6 +303,8 @@ export async function saveGameMetadata(payload: SaveGameMetadataPayload) {
     lines.push(`[launch_executable] ${encodeNfoValue(payload.metadata.launchExecutable.trim())}`);
   }
 
+  lines.push(`[restrict_network_access] ${payload.metadata.restrictNetworkAccess ? 'true' : 'false'}`);
+
   for (const tag of payload.metadata.customTags) {
     const key = sanitizeKey(tag.key);
     if (!key) {
@@ -272,6 +316,30 @@ export async function saveGameMetadata(payload: SaveGameMetadataPayload) {
 
   lines.push('');
   await writeFile(nfoPath, lines.join('\n'), 'utf8');
+}
+
+export async function addGamePlaytimeSeconds(
+  gamePath: string,
+  gameName: string,
+  versions: VersionSummary[],
+  additionalSeconds: number,
+) {
+  const normalizedAdditionalSeconds = Math.max(0, Math.floor(additionalSeconds));
+  if (normalizedAdditionalSeconds <= 0) {
+    return 0;
+  }
+
+  const metadata = await readGameMetadata(gamePath, gameName, versions);
+  const nextPlaytimeSeconds = readMetadataPlaytimeSeconds(metadata) + normalizedAdditionalSeconds;
+  writeMetadataPlaytimeSeconds(metadata, nextPlaytimeSeconds);
+
+  await saveGameMetadata({
+    gamePath,
+    title: gameName,
+    metadata,
+  });
+
+  return nextPlaytimeSeconds;
 }
 
 export async function scanGameMedia(picturesPath: string): Promise<GameMediaAssets> {

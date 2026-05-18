@@ -107,3 +107,25 @@ export function formatByteSize(value: number | null | undefined) {
   const decimals = unitIndex === 0 ? 0 : size < 10 ? 2 : 1;
   return `${size.toFixed(decimals)} ${units[unitIndex]}`;
 }
+
+export function formatPlaytimeDuration(value: number | null | undefined) {
+  const numericValue = Number(value ?? 0);
+  const normalized = Number.isFinite(numericValue) ? Math.max(0, Math.floor(numericValue)) : 0;
+  if (normalized <= 0) {
+    return '0m';
+  }
+
+  const totalMinutes = Math.floor(normalized / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours <= 0) {
+    return `${Math.max(1, totalMinutes)}m`;
+  }
+
+  if (minutes <= 0) {
+    return `${hours}h`;
+  }
+
+  return `${hours}h ${minutes}m`;
+}

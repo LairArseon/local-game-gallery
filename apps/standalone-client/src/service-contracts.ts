@@ -4,6 +4,8 @@ export type LaunchPolicy = 'host-desktop-only';
 
 export type ServiceCapabilities = {
   supportsLaunch: boolean;
+  supportsLaunchNetworkIsolation: boolean;
+  requiresLaunchNetworkIsolationElevation: boolean;
   launchPolicy: LaunchPolicy;
   supportsNativeContextMenu: boolean;
   supportsTrayLifecycle: boolean;

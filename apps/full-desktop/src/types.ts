@@ -4,6 +4,8 @@ export type LaunchPolicy = 'host-desktop-only';
 export type ServiceCapabilities = {
   supportsLaunch: boolean;
   supportsHostFolderPicker: boolean;
+  supportsLaunchNetworkIsolation: boolean;
+  requiresLaunchNetworkIsolationElevation: boolean;
   launchPolicy: LaunchPolicy;
   supportsNativeContextMenu: boolean;
   supportsTrayLifecycle: boolean;
@@ -145,6 +147,7 @@ export type GameMetadata = {
   notes: string[];
   tags: string[];
   launchExecutable: string;
+  restrictNetworkAccess: boolean;
   customTags: GameMetadataTag[];
 };
 
@@ -167,6 +170,7 @@ export type GameSummary = {
   sizeBytes: number | null;
   isVaulted: boolean;
   lastPlayedAt: string | null;
+  accumulatedPlaytimeSeconds: number;
   hasNfo: boolean;
   picturesPath: string | null;
   imageCount: number;
@@ -309,6 +313,7 @@ export type PlayGamePayload = {
   launchMode?: 'default' | 'choose-version-temporary';
   skipDecompressPrompt?: boolean;
   explicitExecutablePath?: string;
+  restrictNetworkAccess?: boolean;
 };
 
 export type LaunchGameCandidate = {

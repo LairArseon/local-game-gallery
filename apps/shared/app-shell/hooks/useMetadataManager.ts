@@ -15,6 +15,7 @@ type GameMetadataLike = {
   notes: string[];
   tags: string[];
   launchExecutable: string;
+  restrictNetworkAccess: boolean;
   customTags: Array<{ key: string; value: string }>;
 };
 
@@ -122,6 +123,7 @@ export function useMetadataManager<
       notes: [...game.metadata.notes],
       tags: [...game.metadata.tags],
       launchExecutable: game.metadata.launchExecutable,
+      restrictNetworkAccess: Boolean(game.metadata.restrictNetworkAccess),
       customTags: game.metadata.customTags.map((tag) => ({ ...tag })),
     } as TMetadata);
     setActiveMetadataTagEditorIndex(null);

@@ -41,7 +41,7 @@ import {
   type VersionStorageProgressEvent,
 } from '../src/types';
 import { loadConfig, saveConfig } from './config';
-import { getLatestVersionName, readGameMetadata, reorderScreenshots, removeScreenshot, saveGameMetadata } from './game-library';
+import { addGamePlaytimeSeconds, getLatestVersionName, readGameMetadata, reorderScreenshots, removeScreenshot, saveGameMetadata } from './game-library';
 import { appendLogEvent, clearLogContents, openLogFolder, readLogContents } from './logger';
 import { scanGame, scanGameSizes, scanGames, type ScanProgressUpdate } from './scanner';
 import { handleArchiveUploadRoutes } from './http/handleArchiveUploadRoutes';
@@ -146,6 +146,11 @@ const imageContentTypes = new Map<string, string>([
   ['.bmp', 'image/bmp'],
   ['.avif', 'image/avif'],
 ]);
+
+function toTrackedPlaytimeSeconds(durationMs: number) {
+  return Math.max(0, Math.floor(durationMs / 1000));
+}
+
 const mediaVariantDirectoryByVariant = {
   smallThumbnail: 'smallThumbnail',
   mediumPreview: 'mediumPreview',
@@ -276,6 +281,15 @@ function normalizeIpAddress(value: string | undefined) {
   return withoutScope;
 }
 
+function isLoopbackHost(value: string) {
+  const normalized = normalizeIpAddress(value);
+  return normalized === '127.0.0.1' || normalized === '::1' || normalized === 'localhost';
+}
+
+function normalizeHostname(value: string | undefined) {
+  return String(value ?? '').trim().toLowerCase().replace(/^\[|\]$/g, '');
+}
+
 function collectLocalAddresses() {
   const addresses = new Set<string>(['127.0.0.1', '::1']);
   const interfaces = os.networkInterfaces();
@@ -289,15 +303,51 @@ function collectLocalAddresses() {
   return addresses;
 }
 
-const localHostAddresses = collectLocalAddresses();
-
 function isRequestFromSameMachine(request: IncomingMessage) {
+  const localHostAddresses = collectLocalAddresses();
   const remoteAddress = normalizeIpAddress(request.socket.remoteAddress);
-  if (!remoteAddress) {
-    return false;
+  const localAddress = normalizeIpAddress(request.socket.localAddress);
+  if (remoteAddress && localHostAddresses.has(remoteAddress)) {
+    return true;
   }
 
-  return localHostAddresses.has(remoteAddress);
+  if (remoteAddress && localAddress && remoteAddress === localAddress) {
+    return true;
+  }
+
+  const requestHosts = [
+    request.headers.origin,
+    request.headers.referer,
+    request.headers.host,
+  ].flatMap((entry) => Array.isArray(entry) ? entry : [entry]);
+  const runtimeHostnames = new Set<string>([
+    normalizeHostname(os.hostname()),
+    'localhost',
+  ]);
+
+  for (const entry of requestHosts) {
+    const normalizedEntry = String(entry ?? '').trim();
+    if (!normalizedEntry) {
+      continue;
+    }
+
+    let hostname = '';
+    try {
+      hostname = normalizeHostname(new URL(normalizedEntry).hostname);
+    } catch {
+      hostname = normalizeHostname(normalizedEntry.split(':')[0]);
+    }
+
+    if (!hostname) {
+      continue;
+    }
+
+    if (isLoopbackHost(hostname) || runtimeHostnames.has(hostname) || localHostAddresses.has(hostname)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function withCorsHeaders(response: ServerResponse) {
@@ -880,18 +930,43 @@ async function launchGameFromService(payload: PlayGamePayload): Promise<PlayGame
       });
     }
 
-    launchExecutable(resolvedExplicitExecutablePath);
+    const launchResult = await launchExecutable(resolvedExplicitExecutablePath, {
+      isolation: {
+        enabled: Boolean(payload.restrictNetworkAccess),
+        gameName,
+        gamePath: resolvedGamePath,
+      },
+      onLogEvent: (event) => appendLogEvent(event).catch(() => undefined),
+      onTrackedProcessExit: async (event) => {
+        const additionalSeconds = toTrackedPlaytimeSeconds(event.durationMs);
+        if (additionalSeconds <= 0) {
+          return;
+        }
+
+        const nextPlaytimeSeconds = await addGamePlaytimeSeconds(resolvedGamePath, gameName, versions, additionalSeconds);
+        await appendLogEvent({
+          level: 'info',
+          source: 'http-service-playtime',
+          message: `Recorded ${additionalSeconds}s of playtime for game "${gameName}" (total ${nextPlaytimeSeconds}s).`,
+        }).catch(() => undefined);
+      },
+      onIsolationCleanupError: (message) => appendLogEvent({
+        level: 'warn',
+        source: 'http-service-play-game-isolation',
+        message: `${message} Game: "${gameName}"`,
+      }).catch(() => undefined),
+    });
     await appendGameLaunchActivity(resolvedGamePath);
     await appendLogEvent({
       level: 'info',
       source: 'http-service-play-game',
-      message: `Launching explicit executable "${resolvedExplicitExecutablePath}" for game "${gameName}"`,
+      message: `Launching explicit executable "${resolvedExplicitExecutablePath}" for game "${gameName}"${launchResult.isolationActive ? ' with network isolation' : ''}`,
     }).catch(() => undefined);
 
     return {
       launched: true,
       executablePath: resolvedExplicitExecutablePath,
-      message: `Launching ${path.basename(resolvedExplicitExecutablePath)}.`,
+      message: `Launching ${path.basename(resolvedExplicitExecutablePath)}${launchResult.isolationActive ? ' with network isolation' : ''}.`,
     };
   }
 
@@ -914,17 +989,42 @@ async function launchGameFromService(payload: PlayGamePayload): Promise<PlayGame
   if (storedExecutable && !hasVersionMismatch && launchMode === 'default') {
     const absoluteStoredPath = toExecutableAbsolutePath(resolvedGamePath, storedExecutable);
     if (await fileExists(absoluteStoredPath)) {
-      launchExecutable(absoluteStoredPath);
+      const launchResult = await launchExecutable(absoluteStoredPath, {
+        isolation: {
+          enabled: Boolean(payload.restrictNetworkAccess),
+          gameName,
+          gamePath: resolvedGamePath,
+        },
+        onLogEvent: (event) => appendLogEvent(event).catch(() => undefined),
+        onTrackedProcessExit: async (event) => {
+          const additionalSeconds = toTrackedPlaytimeSeconds(event.durationMs);
+          if (additionalSeconds <= 0) {
+            return;
+          }
+
+          const nextPlaytimeSeconds = await addGamePlaytimeSeconds(resolvedGamePath, gameName, versions, additionalSeconds);
+          await appendLogEvent({
+            level: 'info',
+            source: 'http-service-playtime',
+            message: `Recorded ${additionalSeconds}s of playtime for game "${gameName}" (total ${nextPlaytimeSeconds}s).`,
+          }).catch(() => undefined);
+        },
+        onIsolationCleanupError: (message) => appendLogEvent({
+          level: 'warn',
+          source: 'http-service-play-game-isolation',
+          message: `${message} Game: "${gameName}"`,
+        }).catch(() => undefined),
+      });
       await appendGameLaunchActivity(resolvedGamePath);
       await appendLogEvent({
         level: 'info',
         source: 'http-service-play-game',
-        message: `Launching stored executable "${absoluteStoredPath}" for game "${gameName}"`,
+        message: `Launching stored executable "${absoluteStoredPath}" for game "${gameName}"${launchResult.isolationActive ? ' with network isolation' : ''}`,
       }).catch(() => undefined);
       return {
         launched: true,
         executablePath: absoluteStoredPath,
-        message: `Launching ${path.basename(absoluteStoredPath)}.`,
+        message: `Launching ${path.basename(absoluteStoredPath)}${launchResult.isolationActive ? ' with network isolation' : ''}.`,
       };
     }
   }
@@ -963,18 +1063,43 @@ async function launchGameFromService(payload: PlayGamePayload): Promise<PlayGame
     });
   }
 
-  launchExecutable(selectedExecutable);
+  const launchResult = await launchExecutable(selectedExecutable, {
+    isolation: {
+      enabled: Boolean(payload.restrictNetworkAccess),
+      gameName,
+      gamePath: resolvedGamePath,
+    },
+    onLogEvent: (event) => appendLogEvent(event).catch(() => undefined),
+    onTrackedProcessExit: async (event) => {
+      const additionalSeconds = toTrackedPlaytimeSeconds(event.durationMs);
+      if (additionalSeconds <= 0) {
+        return;
+      }
+
+      const nextPlaytimeSeconds = await addGamePlaytimeSeconds(resolvedGamePath, gameName, versions, additionalSeconds);
+      await appendLogEvent({
+        level: 'info',
+        source: 'http-service-playtime',
+        message: `Recorded ${additionalSeconds}s of playtime for game "${gameName}" (total ${nextPlaytimeSeconds}s).`,
+      }).catch(() => undefined);
+    },
+    onIsolationCleanupError: (message) => appendLogEvent({
+      level: 'warn',
+      source: 'http-service-play-game-isolation',
+      message: `${message} Game: "${gameName}"`,
+    }).catch(() => undefined),
+  });
   await appendGameLaunchActivity(resolvedGamePath);
   await appendLogEvent({
     level: 'info',
     source: 'http-service-play-game',
-    message: `Launching selected executable "${selectedExecutable}" for game "${gameName}"`,
+    message: `Launching selected executable "${selectedExecutable}" for game "${gameName}"${launchResult.isolationActive ? ' with network isolation' : ''}`,
   }).catch(() => undefined);
 
   return {
     launched: true,
     executablePath: selectedExecutable,
-    message: `Launching ${path.basename(selectedExecutable)}.`,
+    message: `Launching ${path.basename(selectedExecutable)}${launchResult.isolationActive ? ' with network isolation' : ''}.`,
   };
 }
 
@@ -1056,6 +1181,8 @@ export async function startGalleryHttpService({
     return {
       supportsLaunch,
       supportsHostFolderPicker,
+      supportsLaunchNetworkIsolation: supportsLaunch && process.platform === 'win32',
+      requiresLaunchNetworkIsolationElevation: supportsLaunch && process.platform === 'win32',
       launchPolicy: 'host-desktop-only',
       supportsNativeContextMenu: false,
       supportsTrayLifecycle: true,
@@ -1067,6 +1194,8 @@ export async function startGalleryHttpService({
   const localHostCapabilities: ServiceCapabilities = {
     supportsLaunch: !isContainerizedRuntime,
     supportsHostFolderPicker: !isContainerizedRuntime && Boolean(process.versions.electron),
+    supportsLaunchNetworkIsolation: !isContainerizedRuntime && process.platform === 'win32',
+    requiresLaunchNetworkIsolationElevation: !isContainerizedRuntime && process.platform === 'win32',
     launchPolicy: 'host-desktop-only',
     supportsNativeContextMenu: false,
     supportsTrayLifecycle: true,

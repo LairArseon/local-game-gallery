@@ -121,6 +121,7 @@ export function useGameActionsCore<TGame extends GameSummaryLike>({
         launchMode,
         skipDecompressPrompt,
         explicitExecutablePath,
+        restrictNetworkAccess: Boolean(game.metadata.restrictNetworkAccess),
       });
       setStatus(result.message);
     } catch (error) {

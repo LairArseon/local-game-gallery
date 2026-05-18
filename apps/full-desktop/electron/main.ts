@@ -12,7 +12,7 @@ import os from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { loadConfig, saveConfig } from './config';
 import { appendLogEvent, clearLogContents, openLogFolder, readLogContents } from './logger';
-import { getLatestVersionName, importDroppedGameMedia, readGameMetadata, removeScreenshot, reorderScreenshots, saveGameMetadata } from './game-library';
+import { addGamePlaytimeSeconds, getLatestVersionName, importDroppedGameMedia, readGameMetadata, removeScreenshot, reorderScreenshots, saveGameMetadata } from './game-library';
 import { scanGame, scanGameSizes, scanGames, type ScanProgressUpdate } from './scanner';
 import { startGalleryHttpService, type GalleryHttpService } from './service';
 import { registerArchiveUploadHandlers } from './ipc/registerArchiveUploadHandlers';
@@ -83,6 +83,10 @@ let galleryHttpService: GalleryHttpService | null = null;
 let isQuitRequested = false;
 const mainProcessStartedAt = new Date().toISOString();
 const stagedGameArchiveUploads = new Map<string, { filePath: string; originalFileName: string }>();
+
+function toTrackedPlaytimeSeconds(durationMs: number) {
+  return Math.max(0, Math.floor(durationMs / 1000));
+}
 
 function isAllowedExternalUrl(value: string) {
   try {
@@ -203,6 +207,8 @@ function getDesktopServiceCapabilities(): ServiceCapabilities {
   return {
     supportsLaunch: true,
     supportsHostFolderPicker: true,
+    supportsLaunchNetworkIsolation: process.platform === 'win32',
+    requiresLaunchNetworkIsolationElevation: process.platform === 'win32',
     launchPolicy: 'host-desktop-only',
     supportsNativeContextMenu: true,
     supportsTrayLifecycle: true,
@@ -1366,17 +1372,42 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
       });
     }
 
-    launchExecutable(resolvedExplicitExecutablePath);
+    const launchResult = await launchExecutable(resolvedExplicitExecutablePath, {
+      isolation: {
+        enabled: Boolean(payload.restrictNetworkAccess),
+        gameName: payload.gameName,
+        gamePath: payload.gamePath,
+      },
+      onLogEvent: (event) => appendLogEvent(event),
+      onTrackedProcessExit: async (event) => {
+        const additionalSeconds = toTrackedPlaytimeSeconds(event.durationMs);
+        if (additionalSeconds <= 0) {
+          return;
+        }
+
+        const nextPlaytimeSeconds = await addGamePlaytimeSeconds(payload.gamePath, payload.gameName, playableVersions, additionalSeconds);
+        await appendLogEvent({
+          level: 'info',
+          source: 'main-playtime',
+          message: `Recorded ${additionalSeconds}s of playtime for game "${payload.gameName}" (total ${nextPlaytimeSeconds}s).`,
+        });
+      },
+      onIsolationCleanupError: (message) => appendLogEvent({
+        level: 'warn',
+        source: 'main-play-game-isolation',
+        message: `${message} Game: "${payload.gameName}"`,
+      }),
+    });
     await appendGameLaunchActivity(payload.gamePath);
     await appendLogEvent({
       level: 'info',
       source: 'main-play-game',
-      message: `Launching explicit executable "${resolvedExplicitExecutablePath}" for game "${payload.gameName}"`,
+      message: `Launching explicit executable "${resolvedExplicitExecutablePath}" for game "${payload.gameName}"${launchResult.isolationActive ? ' with network isolation' : ''}`,
     });
     return {
       launched: true,
       executablePath: resolvedExplicitExecutablePath,
-      message: `Launching ${path.basename(resolvedExplicitExecutablePath)}.`,
+      message: `Launching ${path.basename(resolvedExplicitExecutablePath)}${launchResult.isolationActive ? ' with network isolation' : ''}.`,
     };
   }
 
@@ -1479,17 +1510,42 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
   if (storedExecutable && !hasVersionMismatch && launchMode === 'default') {
     const absoluteStoredPath = toExecutableAbsolutePath(payload.gamePath, storedExecutable);
     if (await fileExists(absoluteStoredPath)) {
-      launchExecutable(absoluteStoredPath);
+      const launchResult = await launchExecutable(absoluteStoredPath, {
+        isolation: {
+          enabled: Boolean(payload.restrictNetworkAccess),
+          gameName: payload.gameName,
+          gamePath: payload.gamePath,
+        },
+        onLogEvent: (event) => appendLogEvent(event),
+        onTrackedProcessExit: async (event) => {
+          const additionalSeconds = toTrackedPlaytimeSeconds(event.durationMs);
+          if (additionalSeconds <= 0) {
+            return;
+          }
+
+          const nextPlaytimeSeconds = await addGamePlaytimeSeconds(payload.gamePath, payload.gameName, playableVersions, additionalSeconds);
+          await appendLogEvent({
+            level: 'info',
+            source: 'main-playtime',
+            message: `Recorded ${additionalSeconds}s of playtime for game "${payload.gameName}" (total ${nextPlaytimeSeconds}s).`,
+          });
+        },
+        onIsolationCleanupError: (message) => appendLogEvent({
+          level: 'warn',
+          source: 'main-play-game-isolation',
+          message: `${message} Game: "${payload.gameName}"`,
+        }),
+      });
       await appendGameLaunchActivity(payload.gamePath);
       await appendLogEvent({
         level: 'info',
         source: 'main-play-game',
-        message: `Launching stored executable "${absoluteStoredPath}" for game "${payload.gameName}"`,
+        message: `Launching stored executable "${absoluteStoredPath}" for game "${payload.gameName}"${launchResult.isolationActive ? ' with network isolation' : ''}`,
       });
       return {
         launched: true,
         executablePath: absoluteStoredPath,
-        message: `Launching ${path.basename(absoluteStoredPath)}.`,
+        message: `Launching ${path.basename(absoluteStoredPath)}${launchResult.isolationActive ? ' with network isolation' : ''}.`,
       };
     }
   }
@@ -1581,17 +1637,42 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
     });
   }
 
-  launchExecutable(selectedExecutable);
+  const launchResult = await launchExecutable(selectedExecutable, {
+    isolation: {
+      enabled: Boolean(payload.restrictNetworkAccess),
+      gameName: payload.gameName,
+      gamePath: payload.gamePath,
+    },
+    onLogEvent: (event) => appendLogEvent(event),
+    onTrackedProcessExit: async (event) => {
+      const additionalSeconds = toTrackedPlaytimeSeconds(event.durationMs);
+      if (additionalSeconds <= 0) {
+        return;
+      }
+
+      const nextPlaytimeSeconds = await addGamePlaytimeSeconds(payload.gamePath, payload.gameName, playableVersions, additionalSeconds);
+      await appendLogEvent({
+        level: 'info',
+        source: 'main-playtime',
+        message: `Recorded ${additionalSeconds}s of playtime for game "${payload.gameName}" (total ${nextPlaytimeSeconds}s).`,
+      });
+    },
+    onIsolationCleanupError: (message) => appendLogEvent({
+      level: 'warn',
+      source: 'main-play-game-isolation',
+      message: `${message} Game: "${payload.gameName}"`,
+    }),
+  });
   await appendGameLaunchActivity(payload.gamePath);
   await appendLogEvent({
     level: 'info',
     source: 'main-play-game',
-    message: `Launching selected executable "${selectedExecutable}" for game "${payload.gameName}"`,
+    message: `Launching selected executable "${selectedExecutable}" for game "${payload.gameName}"${launchResult.isolationActive ? ' with network isolation' : ''}`,
   });
   return {
     launched: true,
     executablePath: selectedExecutable,
-    message: `Launching ${path.basename(selectedExecutable)}.`,
+    message: `Launching ${path.basename(selectedExecutable)}${launchResult.isolationActive ? ' with network isolation' : ''}.`,
   };
 });
 

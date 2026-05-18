@@ -22,6 +22,7 @@ export type GameDisplayLike = {
   isVaulted: boolean;
   detectedLatestVersion: string;
   lastPlayedAt: string | null;
+  accumulatedPlaytimeSeconds: number;
   createdPicturesFolder: boolean;
   createdGameNfo: boolean;
   createdVersionNfoCount: number;
