@@ -87,7 +87,9 @@
     "score-asc": "Score up",
     "score-desc": "Score down",
     "size-asc": "Size up",
-    "size-desc": "Size down"
+    "size-desc": "Size down",
+    "playtime-asc": "Time played up",
+    "playtime-desc": "Time played down"
   },
   "topbar": {
     "searchAria": "Search games",

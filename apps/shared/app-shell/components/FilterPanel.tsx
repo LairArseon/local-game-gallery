@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { ChevronDown, Funnel } from 'lucide-react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CustomSelect } from './CustomSelect';
 import type { FilterOrderByModeLike, FilterPresetLike } from '../types/filterManagerTypes';
 import type { FilterPanelProps } from '../types/filterPanelTypes';
 
-const filterOrderByModes: FilterOrderByModeLike[] = ['alpha-asc', 'alpha-desc', 'score-asc', 'score-desc', 'size-asc', 'size-desc'];
+const filterOrderByModes: FilterOrderByModeLike[] = ['alpha-asc', 'alpha-desc', 'score-asc', 'score-desc', 'size-asc', 'size-desc', 'playtime-asc', 'playtime-desc'];
 
 type PresetContextMenuState = {
   x: number;
@@ -53,10 +54,21 @@ export function FilterPanel<
   onResetStagedFilters,
 }: FilterPanelProps<TOrderBy, TPreset>) {
   const { t } = useTranslation();
+  const statusMenuId = useId();
   const [presetContextMenu, setPresetContextMenu] = useState<PresetContextMenuState>(null);
   const [activePresetRenameName, setActivePresetRenameName] = useState<string | null>(null);
   const [draftPresetRenameName, setDraftPresetRenameName] = useState('');
+  const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
   const presetContextMenuRef = useRef<HTMLDivElement | null>(null);
+  const statusMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const normalizedSelectedStatuses = statusChoices.filter((statusOption) => draftStatus.includes(statusOption));
+  const isEveryStatusSelected = statusChoices.length > 0 && normalizedSelectedStatuses.length === statusChoices.length;
+  const activeStatusCount = isEveryStatusSelected ? 0 : normalizedSelectedStatuses.length;
+  const statusTriggerLabel = activeStatusCount === 1
+    ? normalizedSelectedStatuses[0]
+    : t('filters.anyStatus');
+  const showActiveStatusIndicator = activeStatusCount > 1;
 
   useEffect(() => {
     if (!presetContextMenu) {
@@ -99,6 +111,43 @@ export function FilterPanel<
       setDraftPresetRenameName('');
     }
   }, [activePresetRenameName, filterPresets]);
+
+  useEffect(() => {
+    if (!isStatusMenuOpen) {
+      return;
+    }
+
+    const closeMenuIfOutside = (event: MouseEvent) => {
+      const targetNode = event.target as Node | null;
+      if (targetNode && statusMenuRef.current?.contains(targetNode)) {
+        return;
+      }
+
+      setIsStatusMenuOpen(false);
+    };
+
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsStatusMenuOpen(false);
+      }
+    };
+
+    window.addEventListener('mousedown', closeMenuIfOutside, true);
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      window.removeEventListener('mousedown', closeMenuIfOutside, true);
+      window.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [isStatusMenuOpen]);
+
+  function toggleStatusChoice(statusOption: string) {
+    const nextSelectedStatuses = draftStatus.includes(statusOption)
+      ? draftStatus.filter((entry) => entry !== statusOption)
+      : [...draftStatus, statusOption];
+    const normalizedStatuses = statusChoices.filter((entry) => nextSelectedStatuses.includes(entry));
+
+    onChangeDraftStatus(normalizedStatuses.length >= statusChoices.length ? [] : normalizedStatuses);
+  }
 
   function beginPresetRename(name: string) {
     setActivePresetRenameName(name);
@@ -249,15 +298,49 @@ export function FilterPanel<
 
             <label className="field topbar-filters__field topbar-filters__field--full">
               <span>{t('filters.status')}</span>
-              <CustomSelect
-                ariaLabel={t('filters.filterStatusAria')}
-                value={draftStatus}
-                options={[
-                  { value: '', label: t('filters.anyStatus') },
-                  ...statusChoices.map((statusOption) => ({ value: statusOption, label: statusOption })),
-                ]}
-                onChange={onChangeDraftStatus}
-              />
+              <div className={`topbar-status-select ${isStatusMenuOpen ? 'topbar-status-select--open' : ''}`.trim()} ref={statusMenuRef}>
+                <button
+                  type="button"
+                  className={`topbar-status-select__trigger ${showActiveStatusIndicator ? 'topbar-status-select__trigger--active' : ''}`.trim()}
+                  aria-haspopup="dialog"
+                  aria-label={t('filters.filterStatusAria')}
+                  aria-expanded={isStatusMenuOpen}
+                  aria-controls={statusMenuId}
+                  onClick={() => setIsStatusMenuOpen((current) => !current)}
+                >
+                  <span className="topbar-status-select__trigger-text">{statusTriggerLabel}</span>
+                  <span className="topbar-status-select__trigger-icons">
+                    {showActiveStatusIndicator ? <Funnel className="topbar-status-select__active-indicator" size={14} aria-hidden="true" /> : null}
+                    <ChevronDown size={15} aria-hidden="true" />
+                  </span>
+                </button>
+                {isStatusMenuOpen ? (
+                  <div className="topbar-status-select__menu" id={statusMenuId} role="dialog" aria-label={t('filters.filterStatusAria')}>
+                    <button
+                      className="topbar-status-select__clear"
+                      type="button"
+                      onClick={() => onChangeDraftStatus([])}
+                    >
+                      {t('filters.anyStatus')}
+                    </button>
+                    <div className="topbar-status-select__options" role="group" aria-label={t('filters.status')}>
+                      {statusChoices.map((statusOption) => {
+                        const isChecked = normalizedSelectedStatuses.includes(statusOption) && !isEveryStatusSelected;
+                        return (
+                          <label className="topbar-status-select__option" key={statusOption}>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleStatusChoice(statusOption)}
+                            />
+                            <span className="topbar-status-select__option-label">{statusOption}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </label>
           </div>
         </div>

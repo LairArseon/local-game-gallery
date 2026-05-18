@@ -10,6 +10,34 @@ import type {
   UseFilterManagerCoreArgs,
 } from '../types/filterManagerTypes';
 
+function normalizeStatusSelection(status: unknown, statusChoices: string[]): string[] {
+  const rawValues = Array.isArray(status)
+    ? status
+    : typeof status === 'string'
+      ? [status]
+      : [];
+
+  const normalizedChoices = statusChoices
+    .map((choice) => choice.trim())
+    .filter(Boolean);
+
+  if (normalizedChoices.length === 0) {
+    return [...new Set(rawValues
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.trim())
+      .filter(Boolean))];
+  }
+
+  const choicesByKey = new Map(normalizedChoices.map((choice) => [choice.toLowerCase(), choice]));
+  const normalized = rawValues
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => choicesByKey.get(value.trim().toLowerCase()) ?? null)
+    .filter((value): value is string => Boolean(value));
+
+  const deduped = [...new Set(normalized)];
+  return deduped.length >= normalizedChoices.length ? [] : deduped;
+}
+
 export function useFilterManagerCore<
   TOrderBy extends FilterOrderByModeLike,
   TPreset extends FilterPresetLike<TOrderBy>,
@@ -34,7 +62,7 @@ export function useFilterManagerCore<
   const [draftTagRules, setDraftTagRules] = useState<string[]>([]);
   const [activeFilterRuleEditorIndex, setActiveFilterRuleEditorIndex] = useState<number | null>(null);
   const [draftMinScore, setDraftMinScore] = useState('');
-  const [draftStatus, setDraftStatus] = useState('');
+  const [draftStatus, setDraftStatus] = useState<string[]>([]);
   const [draftOrderBy, setDraftOrderBy] = useState<TOrderBy>('alpha-asc' as TOrderBy);
   const [isPresetNamingOpen, setIsPresetNamingOpen] = useState(false);
   const [draftPresetName, setDraftPresetName] = useState('');
@@ -42,7 +70,7 @@ export function useFilterManagerCore<
 
   const [appliedTagRules, setAppliedTagRules] = useState<string[]>([]);
   const [appliedMinScore, setAppliedMinScore] = useState<number | null>(null);
-  const [appliedStatus, setAppliedStatus] = useState('');
+  const [appliedStatus, setAppliedStatus] = useState<string[]>([]);
   const [appliedOrderBy, setAppliedOrderBy] = useState<TOrderBy>('alpha-asc' as TOrderBy);
 
   const topUsedFilterSuggestions = useMemo(() => {
@@ -80,7 +108,7 @@ export function useFilterManagerCore<
     setActiveFilterRuleEditorIndex(null);
     setActiveTagAutocomplete(null);
     setDraftMinScore('');
-    setDraftStatus('');
+    setDraftStatus([]);
     setDraftOrderBy('alpha-asc' as TOrderBy);
   }
 
@@ -104,7 +132,7 @@ export function useFilterManagerCore<
       name,
       tagRules: normalizeTagRules(draftTagRules),
       minScore: draftMinScore.trim(),
-      status: draftStatus,
+      status: normalizeStatusSelection(draftStatus, config.statusChoices),
       orderBy: draftOrderBy,
     } as TPreset;
 
@@ -135,7 +163,7 @@ export function useFilterManagerCore<
   function loadFilterPresetToDraft(preset: TPreset) {
     setDraftTagRules([...preset.tagRules]);
     setDraftMinScore(preset.minScore);
-    setDraftStatus(preset.status ?? '');
+    setDraftStatus(normalizeStatusSelection((preset as { status?: unknown }).status, config?.statusChoices ?? []));
     setDraftOrderBy(preset.orderBy);
   }
 
@@ -204,7 +232,7 @@ export function useFilterManagerCore<
     const parsedMinScore = Number.parseFloat(draftMinScore);
     setAppliedMinScore(Number.isFinite(parsedMinScore) ? parsedMinScore : null);
 
-    setAppliedStatus(draftStatus.trim());
+    setAppliedStatus(normalizeStatusSelection(draftStatus, config?.statusChoices ?? []));
     const isSizeSort = draftOrderBy === 'size-asc' || draftOrderBy === 'size-desc';
     if (isSizeSort && !isSizeOrderingEnabled) {
       setAppliedOrderBy('alpha-asc' as TOrderBy);
@@ -212,7 +240,7 @@ export function useFilterManagerCore<
     }
 
     setAppliedOrderBy(draftOrderBy);
-  }, [draftTagRules, draftMinScore, draftStatus, draftOrderBy, normalizeTagRules, isSizeOrderingEnabled]);
+  }, [draftTagRules, draftMinScore, draftStatus, draftOrderBy, normalizeTagRules, isSizeOrderingEnabled, config]);
 
   const filteredGames = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -223,6 +251,7 @@ export function useFilterManagerCore<
       .filter((rule) => rule.startsWith('-'))
       .map((rule) => rule.slice(1).trim().toLowerCase())
       .filter(Boolean);
+    const appliedStatusKeys = new Set(appliedStatus.map((status) => status.trim().toLowerCase()).filter(Boolean));
 
     const filtered = games.filter((game) => {
       if (query) {
@@ -248,7 +277,7 @@ export function useFilterManagerCore<
         return false;
       }
 
-      if (appliedStatus && game.metadata.status.trim().toLowerCase() !== appliedStatus.trim().toLowerCase()) {
+      if (appliedStatusKeys.size > 0 && !appliedStatusKeys.has(game.metadata.status.trim().toLowerCase())) {
         return false;
       }
 
@@ -285,6 +314,23 @@ export function useFilterManagerCore<
 
         if (leftScore !== rightScore) {
           return rightScore - leftScore;
+        }
+
+        return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
+      }
+
+      if (appliedOrderBy === 'playtime-asc' || appliedOrderBy === 'playtime-desc') {
+        const leftPlaytime = Number.isFinite(left.accumulatedPlaytimeSeconds)
+          ? Number(left.accumulatedPlaytimeSeconds)
+          : 0;
+        const rightPlaytime = Number.isFinite(right.accumulatedPlaytimeSeconds)
+          ? Number(right.accumulatedPlaytimeSeconds)
+          : 0;
+
+        if (leftPlaytime !== rightPlaytime) {
+          return appliedOrderBy === 'playtime-asc'
+            ? leftPlaytime - rightPlaytime
+            : rightPlaytime - leftPlaytime;
         }
 
         return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });

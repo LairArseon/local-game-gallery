@@ -9,13 +9,13 @@ export type TagAutocompleteState = {
   highlighted: number;
 } | null;
 
-export type FilterOrderByModeLike = 'alpha-asc' | 'alpha-desc' | 'score-asc' | 'score-desc' | 'size-asc' | 'size-desc';
+export type FilterOrderByModeLike = 'alpha-asc' | 'alpha-desc' | 'score-asc' | 'score-desc' | 'size-asc' | 'size-desc' | 'playtime-asc' | 'playtime-desc';
 
 export type FilterPresetLike<TOrderBy extends FilterOrderByModeLike> = {
   name: string;
   tagRules: string[];
   minScore: string;
-  status: string;
+  status: string[];
   orderBy: TOrderBy;
 };
 
@@ -23,6 +23,7 @@ export type GalleryConfigLike<
   TOrderBy extends FilterOrderByModeLike,
   TPreset extends FilterPresetLike<TOrderBy>,
 > = {
+  statusChoices: string[];
   tagPool: string[];
   tagPoolUsage: Record<string, number>;
   filterPresets: TPreset[];
@@ -31,6 +32,7 @@ export type GalleryConfigLike<
 export type GameSummaryLike = {
   name: string;
   sizeBytes?: number | null;
+  accumulatedPlaytimeSeconds?: number | null;
   versions: Array<{ name: string }>;
   metadata: {
     tags: string[];

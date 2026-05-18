@@ -87,7 +87,9 @@
     "score-asc": "Puntuación ascendente",
     "score-desc": "Puntuación descendente",
     "size-asc": "Tamaño ascendente",
-    "size-desc": "Tamaño descendente"
+    "size-desc": "Tamaño descendente",
+    "playtime-asc": "Tiempo jugado ascendente",
+    "playtime-desc": "Tiempo jugado descendente"
   },
   "topbar": {
     "searchAria": "Buscar juegos",

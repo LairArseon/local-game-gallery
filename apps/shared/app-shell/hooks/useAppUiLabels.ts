@@ -47,6 +47,8 @@ export function useAppUiLabels(t: Translate) {
     'score-desc': t('orderBy.score-desc'),
     'size-asc': t('orderBy.size-asc'),
     'size-desc': t('orderBy.size-desc'),
+    'playtime-asc': t('orderBy.playtime-asc'),
+    'playtime-desc': t('orderBy.playtime-desc'),
   }), [t]);
 
   return {

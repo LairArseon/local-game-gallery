@@ -890,7 +890,7 @@ button {
   background: rgba(255, 255, 255, 0.1);
 }
 
-.topbar-filters input,
+.topbar-filters input:not([type='checkbox']),
 .topbar-filters select {
   width: 100%;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -1012,6 +1012,146 @@ button {
 .custom-select__option--selected {
   background: rgba(95, 170, 255, 0.24);
   color: #f7f6f2;
+}
+
+.topbar-status-select {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.topbar-status-select--open {
+  z-index: 150;
+}
+
+.topbar-status-select__trigger {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(7, 10, 16, 0.78);
+  color: #f7f6f2;
+  padding: 0.7rem 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.topbar-status-select__trigger--active {
+  border-color: rgba(125, 188, 255, 0.42);
+}
+
+.topbar-status-select__trigger:focus-visible {
+  outline: 2px solid rgba(125, 188, 255, 0.75);
+  outline-offset: 1px;
+}
+
+.topbar-status-select__trigger-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.topbar-status-select__trigger-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(247, 246, 242, 0.72);
+}
+
+.topbar-status-select__active-indicator {
+  color: rgba(125, 188, 255, 0.96);
+}
+
+.topbar-status-select__menu {
+  box-sizing: border-box;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  z-index: 180;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(8, 11, 18, 0.98);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.topbar-status-select__clear {
+  border: 0;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(247, 246, 242, 0.86);
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+}
+
+.topbar-status-select__clear:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.topbar-status-select__clear:focus-visible {
+  outline: 2px solid rgba(125, 188, 255, 0.75);
+  outline-offset: 1px;
+}
+
+.topbar-status-select__options {
+  display: grid;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.topbar-status-select__option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border-radius: 9px;
+  padding: 0.45rem 0.55rem;
+  cursor: pointer;
+  color: rgba(247, 246, 242, 0.9);
+  overflow: hidden;
+}
+
+.topbar-status-select__option:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.topbar-status-select__option input {
+  appearance: auto;
+  -webkit-appearance: checkbox;
+  width: 1rem;
+  min-width: 1rem;
+  max-width: 1rem;
+  height: 1rem;
+  margin: 0;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(7, 10, 16, 0.92);
+  accent-color: rgba(125, 188, 255, 0.96);
+}
+
+.topbar-status-select__option-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .topbar-filters__actions {

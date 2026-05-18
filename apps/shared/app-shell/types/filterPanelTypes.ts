@@ -21,7 +21,7 @@ export type FilterPanelProps<
   topUsedFilterSuggestions: TopUsedSuggestion[];
   draftMinScore: string;
   draftOrderBy: TOrderBy;
-  draftStatus: string;
+  draftStatus: string[];
   orderByModeLabels: Record<TOrderBy, string>;
   isSizeOrderingEnabled: boolean;
   statusChoices: string[];
@@ -44,7 +44,7 @@ export type FilterPanelProps<
   onAddSuggestionTag: (tag: string) => void;
   onChangeDraftMinScore: (value: string) => void;
   onChangeDraftOrderBy: (value: TOrderBy) => void;
-  onChangeDraftStatus: (value: string) => void;
+  onChangeDraftStatus: (value: string[]) => void;
   onBeginSavePreset: () => void;
   onChangeDraftPresetName: (value: string) => void;
   onSaveCurrentFilterPreset: () => void;

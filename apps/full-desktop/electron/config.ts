@@ -198,6 +198,59 @@ function normalizeModulesState(value: unknown): GalleryConfig['modules'] {
   return Object.fromEntries(normalizedEntries);
 }
 
+function normalizeFilterPresetStatuses(value: unknown, statusChoices: string[]): string[] {
+  const rawStatuses = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? [value]
+      : [];
+
+  const normalizedStatusChoices = [...new Set(statusChoices.map((entry) => entry.trim()).filter(Boolean))];
+  if (!normalizedStatusChoices.length) {
+    return [];
+  }
+
+  const normalizedStatusChoiceMap = new Map(
+    normalizedStatusChoices.map((entry) => [entry.toLowerCase(), entry] as const),
+  );
+
+  const normalizedStatuses = [...new Set(
+    rawStatuses
+      .filter((entry): entry is string => typeof entry === 'string')
+      .map((entry) => normalizedStatusChoiceMap.get(entry.trim().toLowerCase()) ?? null)
+      .filter((entry): entry is string => Boolean(entry)),
+  )];
+
+  return normalizedStatuses.length >= normalizedStatusChoices.length ? [] : normalizedStatuses;
+}
+
+function normalizeFilterPresets(value: unknown, statusChoices: string[]): GalleryConfig['filterPresets'] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter(isPlainObject)
+    .map((preset): GalleryConfig['filterPresets'][number] => ({
+      name: String(preset.name ?? '').trim(),
+      tagRules: Array.isArray(preset.tagRules)
+        ? preset.tagRules.map((rule) => String(rule).trim()).filter(Boolean)
+        : [],
+      minScore: String(preset.minScore ?? '').trim(),
+      status: normalizeFilterPresetStatuses(preset.status, statusChoices),
+      orderBy: preset.orderBy === 'alpha-desc'
+        || preset.orderBy === 'score-asc'
+        || preset.orderBy === 'score-desc'
+        || preset.orderBy === 'size-asc'
+        || preset.orderBy === 'size-desc'
+        || preset.orderBy === 'playtime-asc'
+        || preset.orderBy === 'playtime-desc'
+        ? preset.orderBy
+        : 'alpha-asc',
+    }))
+    .filter((preset) => preset.name);
+}
+
 const defaultConfig: GalleryConfig = {
   language: 'en',
   dismissedVersionMismatches: {},
@@ -241,6 +294,7 @@ export async function loadConfig() {
     const fileContents = await readFile(configPath, 'utf8');
     const parsed = JSON.parse(fileContents) as Partial<GalleryConfig>;
     const merged = { ...defaultConfig, ...parsed } as GalleryConfig;
+    const normalizedStatusChoices = [...new Set((parsed.statusChoices ?? merged.statusChoices ?? []).map((value) => String(value).trim()).filter(Boolean))];
 
     return {
       ...merged,
@@ -248,6 +302,8 @@ export async function loadConfig() {
       metadataMirrorSyncPolicy: normalizeMetadataMirrorSyncPolicy(parsed.metadataMirrorSyncPolicy ?? merged.metadataMirrorSyncPolicy),
       metadataMirrorSyncInterval: normalizeMetadataMirrorSyncInterval(parsed.metadataMirrorSyncInterval ?? merged.metadataMirrorSyncInterval),
       lastMetadataMirrorSyncAt: normalizeLastMetadataMirrorSyncAt(parsed.lastMetadataMirrorSyncAt ?? merged.lastMetadataMirrorSyncAt),
+      statusChoices: normalizedStatusChoices,
+      filterPresets: normalizeFilterPresets(parsed.filterPresets ?? merged.filterPresets, normalizedStatusChoices),
       vaultPin: deobfuscateVaultPin(String(parsed.vaultPin ?? merged.vaultPin ?? '').trim()),
     };
   } catch {
@@ -257,6 +313,7 @@ export async function loadConfig() {
 
 export async function saveConfig(config: GalleryConfig) {
   const normalizedLanguage = config.language === 'es' ? 'es' : 'en';
+  const normalizedStatusChoices = [...new Set((config.statusChoices ?? []).map((value) => value.trim()).filter(Boolean))];
 
   const normalizedConfig: GalleryConfig = {
     ...defaultConfig,
@@ -275,7 +332,7 @@ export async function saveConfig(config: GalleryConfig) {
     metadataMirrorSyncInterval: normalizeMetadataMirrorSyncInterval(config.metadataMirrorSyncInterval),
     lastMetadataMirrorSyncAt: normalizeLastMetadataMirrorSyncAt(config.lastMetadataMirrorSyncAt),
     excludePatterns: [...new Set(config.excludePatterns.map((pattern) => pattern.trim()).filter(Boolean))],
-    statusChoices: [...new Set((config.statusChoices ?? []).map((value) => value.trim()).filter(Boolean))],
+    statusChoices: normalizedStatusChoices,
     tagPool: [...new Set((config.tagPool ?? []).map((value) => value.trim()).filter(Boolean))],
     showSystemMenuBar: Boolean(config.showSystemMenuBar),
     tagPoolUsage: Object.fromEntries(
@@ -289,15 +346,7 @@ export async function saveConfig(config: GalleryConfig) {
     uiDynamicGridScaling: Boolean(config.uiDynamicGridScaling),
     uiGlobalZoom: normalizeGlobalZoom(config.uiGlobalZoom, defaultConfig.uiGlobalZoom),
     appIconPngPath: String(config.appIconPngPath ?? '').trim(),
-    filterPresets: (config.filterPresets ?? [])
-      .map((preset) => ({
-        ...preset,
-        name: preset.name.trim(),
-        tagRules: preset.tagRules.map((rule) => rule.trim()).filter(Boolean),
-        minScore: String(preset.minScore ?? '').trim(),
-        status: String(preset.status ?? '').trim(),
-      }))
-      .filter((preset) => preset.name),
+    filterPresets: normalizeFilterPresets(config.filterPresets, normalizedStatusChoices),
   };
   const configPath = await getConfigPath();
   const persistedConfig: GalleryConfig = {

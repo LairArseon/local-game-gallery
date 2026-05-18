@@ -31,7 +31,7 @@ export type ServiceApiVersionInfo = {
 export const GALLERY_VIEW_MODES = ['poster', 'card', 'compact', 'expanded'] as const;
 export type GalleryViewMode = (typeof GALLERY_VIEW_MODES)[number];
 
-export const FILTER_ORDER_BY_MODES = ['alpha-asc', 'alpha-desc', 'score-asc', 'score-desc', 'size-asc', 'size-desc'] as const;
+export const FILTER_ORDER_BY_MODES = ['alpha-asc', 'alpha-desc', 'score-asc', 'score-desc', 'size-asc', 'size-desc', 'playtime-asc', 'playtime-desc'] as const;
 export type FilterOrderByMode = (typeof FILTER_ORDER_BY_MODES)[number];
 
 export const APP_LANGUAGES = ['en', 'es'] as const;
@@ -41,7 +41,7 @@ export type FilterPreset = {
   name: string;
   tagRules: string[];
   minScore: string;
-  status: string;
+  status: string[];
   orderBy: FilterOrderByMode;
 };
 
