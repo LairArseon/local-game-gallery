@@ -3,11 +3,12 @@ import { Archive, ArrowLeft, ChevronLeft, ChevronRight, FolderOpen, ListVideo, P
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import type { MediaImageVariant } from '../types/gameDisplayTypes';
+import type { VersionStorageState } from '../types';
 
 type DetailPageVersionLike = {
   path: string;
   name: string;
-  storageState?: 'compressed' | 'decompressed';
+  storageState?: VersionStorageState;
   hasNfo?: boolean;
 };
 
@@ -55,8 +56,9 @@ type DetailPageProps<TGame extends DetailPageGameLike> = {
   onOpenMetadata: (gamePath: string) => void;
   onOpenGameFolder: (gamePath: string) => void;
   onOpenVersionFolder: (versionPath: string) => void;
-  onOpenVersionContextMenu: (versionPath: string, versionName: string) => void;
+  onOpenVersionContextMenu: (versionPath: string, versionName: string, storageState?: VersionStorageState) => void;
   onCompressVersion: (gamePath: string, gameName: string, versionPath: string, versionName: string) => Promise<void>;
+  onRemoveVersionContent?: (gamePath: string, gameName: string, versionPath: string, versionName: string) => Promise<void>;
   onOpenPictures: (gamePath: string) => void;
   onOpenScreenshot: (imagePath: string) => void;
   enableArchiveUpload?: boolean;
@@ -89,6 +91,7 @@ export function DetailPage<TGame extends DetailPageGameLike>({
   onOpenVersionFolder,
   onOpenVersionContextMenu,
   onCompressVersion,
+  onRemoveVersionContent,
   onOpenPictures,
   onOpenScreenshot,
   onPlayWithVersionPrompt,
@@ -127,7 +130,20 @@ export function DetailPage<TGame extends DetailPageGameLike>({
     ? game.versions.find((version) => version.path === versionContextMenu.versionPath) ?? null
     : null;
   const contextVersionIsCompressed = selectedContextVersion?.storageState === 'compressed';
+  const contextVersionIsRemoved = selectedContextVersion?.storageState === 'removed';
   const extras = game.extras ?? [];
+
+  function getStorageStateLabel(storageState: VersionStorageState | undefined) {
+    if (storageState === 'compressed') {
+      return t('detail.storageCompressed');
+    }
+
+    if (storageState === 'removed') {
+      return t('detail.storageRemoved');
+    }
+
+    return t('detail.storageDecompressed');
+  }
   const edgeNavigation = typeof document !== 'undefined' && (onNavigatePrevious || onNavigateNext)
     ? createPortal(
       <>
@@ -337,7 +353,7 @@ export function DetailPage<TGame extends DetailPageGameLike>({
                           }
 
                           event.preventDefault();
-                          onOpenVersionContextMenu(version.path, version.name);
+                          onOpenVersionContextMenu(version.path, version.name, version.storageState);
                           return;
                         }
 
@@ -361,13 +377,13 @@ export function DetailPage<TGame extends DetailPageGameLike>({
                       <span>{version.name}</span>
                       <span
                         className="detail-versions__state"
-                        title={`${version.storageState === 'compressed' ? t('detail.storageCompressed') : t('detail.storageDecompressed')} · ${version.hasNfo ? t('detail.hasNfo') : t('detail.noNfo')}`}
+                        title={`${getStorageStateLabel(version.storageState)} · ${version.hasNfo ? t('detail.hasNfo') : t('detail.noNfo')}`}
                       >
                         {version.storageState === 'compressed'
                           ? <Archive size={14} aria-hidden="true" />
                           : <FolderOpen size={14} aria-hidden="true" />}
                         <span className="detail-versions__state-text">
-                          {version.storageState === 'compressed' ? t('detail.storageCompressed') : t('detail.storageDecompressed')}
+                          {getStorageStateLabel(version.storageState)}
                         </span>
                       </span>
                     </button>
@@ -493,28 +509,42 @@ export function DetailPage<TGame extends DetailPageGameLike>({
           >
             {t('detail.downloadVersion')}
           </button>
-          <button
-            className="context-menu__item"
-            type="button"
-            onClick={() => {
-              setVersionContextMenu(null);
-              if (contextVersionIsCompressed) {
-                void onDecompressVersion?.(game.path, game.name, versionContextMenu.versionPath, versionContextMenu.versionName);
-                return;
-              }
+          {!contextVersionIsRemoved ? (
+            <button
+              className="context-menu__item"
+              type="button"
+              onClick={() => {
+                setVersionContextMenu(null);
+                if (contextVersionIsCompressed) {
+                  void onDecompressVersion?.(game.path, game.name, versionContextMenu.versionPath, versionContextMenu.versionName);
+                  return;
+                }
 
-              void onCompressVersion(game.path, game.name, versionContextMenu.versionPath, versionContextMenu.versionName);
-            }}
-          >
-            {contextVersionIsCompressed ? t('detail.decompressVersion') : t('detail.compressVersion')}
-          </button>
+                void onCompressVersion(game.path, game.name, versionContextMenu.versionPath, versionContextMenu.versionName);
+              }}
+            >
+              {contextVersionIsCompressed ? t('detail.decompressVersion') : t('detail.compressVersion')}
+            </button>
+          ) : null}
+          {!contextVersionIsRemoved ? (
+            <button
+              className="context-menu__item"
+              type="button"
+              onClick={() => {
+                setVersionContextMenu(null);
+                void onRemoveVersionContent?.(game.path, game.name, versionContextMenu.versionPath, versionContextMenu.versionName);
+              }}
+            >
+              {t('detail.removeVersionContent')}
+            </button>
+          ) : null}
           {supportsNativeContextMenu ? (
             <button
               className="context-menu__item"
               type="button"
               onClick={() => {
                 setVersionContextMenu(null);
-                onOpenVersionContextMenu(versionContextMenu.versionPath, versionContextMenu.versionName);
+                onOpenVersionContextMenu(versionContextMenu.versionPath, versionContextMenu.versionName, selectedContextVersion?.storageState);
               }}
             >
               {t('detail.moreVersionActions')}

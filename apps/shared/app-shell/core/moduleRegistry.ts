@@ -95,7 +95,7 @@ export function resolveModuleConfigState(
   moduleDefinition: BuiltInModuleDefinition,
   configuredState: ModuleHostConfigState | null | undefined,
 ): ModuleHostConfigState {
-  const installed = true;
+  const installed = configuredState?.installed ?? true;
 
   return {
     installed,

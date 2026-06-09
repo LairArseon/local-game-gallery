@@ -32,6 +32,11 @@ function loadPackagedModules(repoRoot) {
       entrySourcePath: path.join(repoRoot, 'apps', 'f95-module', 'module.ts'),
       manifestSourcePath: path.join(repoRoot, 'apps', 'f95-module', 'manifest.json'),
     },
+    {
+      id: 'isolation',
+      entrySourcePath: path.join(repoRoot, 'apps', 'isolation-module', 'module.ts'),
+      manifestSourcePath: path.join(repoRoot, 'apps', 'isolation-module', 'manifest.json'),
+    },
   ];
 
   return moduleDescriptors.map((descriptor) => {

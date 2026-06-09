@@ -23,6 +23,11 @@ type GalleryClientLike = {
     versionName: string;
     operationId?: string;
   }) => Promise<{ message?: string }>;
+  removeVersionContent: (args: {
+    gamePath: string;
+    versionPath: string;
+    versionName: string;
+  }) => Promise<{ message?: string }>;
   onVersionStorageProgress?: (callback: (payload: {
     operationId: string;
     operation: 'compress' | 'decompress';
@@ -352,9 +357,38 @@ export function useVersionStorage({
     }
   }, [galleryClient, logAppEvent, refreshGame, setStatus, t]);
 
+  const removeVersionContent = useCallback(async (
+    gamePath: string,
+    gameName: string,
+    versionPath: string,
+    versionName: string,
+  ) => {
+    try {
+      await logAppEvent(
+        `Remove-content requested from UI for game "${gameName}" version "${versionName}" (${versionPath}).`,
+        'info',
+        'version-storage',
+      );
+
+      const result = await galleryClient.removeVersionContent({
+        gamePath,
+        versionPath,
+        versionName,
+      });
+
+      setStatus(result.message || t('detail.removeVersionSuccess', { version: versionName }));
+      await refreshGame(gamePath);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t('detail.removeVersionFailedUnknown');
+      setStatus(t('detail.removeVersionFailed', { message }));
+      await logAppEvent(`Remove-content failed (${versionPath}): ${message}`, 'error', 'version-storage');
+    }
+  }, [galleryClient, logAppEvent, refreshGame, setStatus, t]);
+
   return {
     compressVersion,
     decompressVersion,
+    removeVersionContent,
     compressionProgress,
   };
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import type { VersionStorageState } from '../types';
 import type { MediaImageVariant } from '../types/gameDisplayTypes';
 
 type GameWithScreenshots = {
@@ -28,6 +29,12 @@ type ModalHostProps<TGame extends GameWithScreenshots> = {
   decompressLaunchVersionName: string;
   onConfirmDecompressLaunch: () => void;
   onCancelDecompressLaunch: () => void;
+  isRemoveVersionContentConfirmOpen: boolean;
+  removeVersionContentGameName: string;
+  removeVersionContentVersionName: string;
+  removeVersionContentStorageState: VersionStorageState | null;
+  onConfirmRemoveVersionContent: () => void;
+  onCancelRemoveVersionContent: () => void;
   screenshotModalPath: string | null;
   setScreenshotModalPath: (nextPath: string | null) => void;
   filePathToSrc: (filePath: string | null, variant?: MediaImageVariant) => string | null;
@@ -52,6 +59,12 @@ export function ModalHost<TGame extends GameWithScreenshots>({
   decompressLaunchVersionName,
   onConfirmDecompressLaunch,
   onCancelDecompressLaunch,
+  isRemoveVersionContentConfirmOpen,
+  removeVersionContentGameName,
+  removeVersionContentVersionName,
+  removeVersionContentStorageState,
+  onConfirmRemoveVersionContent,
+  onCancelRemoveVersionContent,
   screenshotModalPath,
   setScreenshotModalPath,
   filePathToSrc,
@@ -200,6 +213,26 @@ export function ModalHost<TGame extends GameWithScreenshots>({
               <div className="modal-panel__vault-actions">
                 <button className="button" type="button" onClick={onCancelDecompressLaunch}>{t('common.cancel')}</button>
                 <button className="button button--primary" type="button" onClick={onConfirmDecompressLaunch}>{t('detail.decompressLaunchConfirmAction')}</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {isRemoveVersionContentConfirmOpen ? (
+        <div className="modal-backdrop" onClick={onCancelRemoveVersionContent}>
+          <section className="modal-panel modal-panel--vault modal-panel--danger" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-panel__body modal-panel__body--vault modal-panel__body--danger">
+              <h3>{t('detail.removeVersionConfirmTitle')}</h3>
+              <p>
+                {removeVersionContentStorageState === 'compressed'
+                  ? t('detail.removeVersionConfirmCompressedBody', { game: removeVersionContentGameName, version: removeVersionContentVersionName })
+                  : t('detail.removeVersionConfirmDecompressedBody', { game: removeVersionContentGameName, version: removeVersionContentVersionName })}
+              </p>
+              <p>{t('detail.removeVersionConfirmHint')}</p>
+              <div className="modal-panel__vault-actions">
+                <button className="button" type="button" onClick={onCancelRemoveVersionContent}>{t('common.cancel')}</button>
+                <button className="button button--danger" type="button" onClick={onConfirmRemoveVersionContent}>{t('detail.removeVersionConfirmAction')}</button>
               </div>
             </div>
           </section>

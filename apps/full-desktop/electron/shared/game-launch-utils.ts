@@ -4,10 +4,10 @@ import path from 'node:path';
 import unzipper from 'unzipper';
 import type { LaunchGameCandidate, PlayableVersion } from '../../src/types';
 import {
-  cleanupLaunchIsolationSession,
-  createLaunchIsolationSession,
+  type LaunchIsolationProvider,
   type LaunchIsolationRequest,
-} from './windows-firewall-isolation';
+} from './launch-isolation-provider';
+import { resolveLaunchIsolationProvider } from './launch-isolation-provider-registry';
 
 /**
  * Shared game-launch filesystem/process helpers for Electron entrypoints.
@@ -86,6 +86,10 @@ export async function listLaunchCandidates(
       continue;
     }
 
+    if (version.storageState === 'removed') {
+      continue;
+    }
+
     const relativeExecutablePaths = version.storageState === 'compressed'
       ? await findExecutablesInArchive(String(version.storageArchivePath ?? '').trim())
       : (await findExecutablesInFolder(resolvedVersionPath)).map((candidatePath) => toNormalizedRelativeExecutablePath(resolvedVersionPath, candidatePath));
@@ -140,6 +144,7 @@ export function toExecutableAbsolutePath(gamePath: string, storedPath: string) {
 
 type LaunchExecutableOptions = {
   isolation?: LaunchIsolationRequest | null;
+  isolationProvider?: LaunchIsolationProvider | null;
   onIsolationCleanupError?: (message: string) => Promise<void> | void;
   onLogEvent?: (event: { level: 'info' | 'warn' | 'error'; source: string; message: string }) => Promise<void> | void;
   onTrackedProcessExit?: (event: {
@@ -164,6 +169,7 @@ export async function launchExecutable(
 ): Promise<LaunchExecutableResult> {
   const startedAtMs = Date.now();
   const startedAt = new Date(startedAtMs).toISOString();
+  const isolationProvider = options.isolationProvider ?? resolveLaunchIsolationProvider();
   const appendLaunchLog = (event: { level: 'info' | 'warn' | 'error'; source: string; message: string }) => {
     return Promise.resolve(options.onLogEvent?.(event));
   };
@@ -171,19 +177,19 @@ export async function launchExecutable(
   if (options.isolation?.enabled) {
     await appendLaunchLog({
       level: 'info',
-      source: 'launch-isolation',
+      source: 'module:isolation/launch',
       message: `Preparing network isolation for executable "${executablePath}".`,
     }).catch(() => undefined);
   }
 
-  const isolationSession = options.isolation
-    ? await createLaunchIsolationSession(executablePath, options.isolation)
+  const isolationSession = options.isolation && isolationProvider?.isSupported()
+    ? await isolationProvider.createSession(executablePath, options.isolation)
     : null;
 
   if (isolationSession) {
     await appendLaunchLog({
       level: 'info',
-      source: 'launch-isolation',
+      source: 'module:isolation/launch',
       message: `Created firewall isolation rule group "${isolationSession.ruleGroup}" for "${executablePath}".`,
     }).catch(() => undefined);
   }
@@ -221,11 +227,11 @@ export async function launchExecutable(
     if (isolationSession) {
       await appendLaunchLog({
         level: 'warn',
-        source: 'launch-isolation',
+        source: 'module:isolation/launch',
         message: `Launch failed after creating firewall rules; attempting cleanup for rule group "${isolationSession.ruleGroup}".`,
       }).catch(() => undefined);
 
-      await cleanupLaunchIsolationSession(isolationSession).catch(() => undefined);
+      await isolationProvider?.cleanupSession(isolationSession).catch(() => undefined);
     }
     throw error;
   }
@@ -262,21 +268,21 @@ export async function launchExecutable(
 
       void appendLaunchLog({
         level: 'info',
-        source: 'launch-isolation',
+        source: 'module:isolation/launch',
         message: `Cleaning firewall isolation rule group "${isolationSession.ruleGroup}" for "${executablePath}".`,
       }).catch(() => undefined);
 
-      void cleanupLaunchIsolationSession(isolationSession).then(() => {
+      void isolationProvider?.cleanupSession(isolationSession).then(() => {
         void appendLaunchLog({
           level: 'info',
-          source: 'launch-isolation',
+          source: 'module:isolation/launch',
           message: `Removed firewall isolation rule group "${isolationSession.ruleGroup}" for "${executablePath}".`,
         }).catch(() => undefined);
       }).catch((error: unknown) => {
         const message = error instanceof Error ? error.message : 'Failed to remove network isolation rules after launch.';
         void appendLaunchLog({
           level: 'error',
-          source: 'launch-isolation',
+          source: 'module:isolation/launch',
           message: `Failed to clean firewall isolation rule group "${isolationSession.ruleGroup}": ${message}`,
         }).catch(() => undefined);
         void options.onIsolationCleanupError?.(message);

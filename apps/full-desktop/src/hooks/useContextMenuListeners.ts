@@ -18,6 +18,7 @@ type UseContextMenuListenersArgs = {
   removeVaultPin: () => Promise<unknown>;
   onCompressVersion: (versionPath: string) => Promise<void>;
   onDecompressVersion: (versionPath: string) => Promise<void>;
+  onRemoveVersionContent: (versionPath: string) => Promise<void>;
   setStatus: Dispatch<SetStateAction<string>>;
 };
 

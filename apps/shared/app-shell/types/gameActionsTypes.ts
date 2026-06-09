@@ -2,11 +2,12 @@
  * Shared type contracts for game action orchestration.
  */
 import type { Dispatch, SetStateAction } from 'react';
+import type { VersionStorageState } from '../types';
 
 export type VersionSummaryLike = {
   name: string;
   path: string;
-  storageState: 'compressed' | 'decompressed';
+  storageState: VersionStorageState;
   storageArchivePath?: string | null;
 };
 
@@ -39,7 +40,7 @@ export type LaunchGameCandidate = {
   executablePath: string;
   relativeExecutablePath: string;
   storedExecutablePath: string;
-  storageState: 'compressed' | 'decompressed';
+  storageState: VersionStorageState;
   requiresDecompression: boolean;
 };
 

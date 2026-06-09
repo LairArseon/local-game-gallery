@@ -7,6 +7,8 @@ type AppShellServiceCapabilities = {
   supportsHostFolderPicker: boolean;
   supportsLaunchNetworkIsolation: boolean;
   requiresLaunchNetworkIsolationElevation: boolean;
+  launchNetworkIsolationBackend?: 'none' | 'powershell' | 'native';
+  launchNetworkIsolationNativeHelperPresent?: boolean;
   launchPolicy: 'host-desktop-only';
   supportsNativeContextMenu: boolean;
   supportsTrayLifecycle: boolean;
@@ -22,6 +24,8 @@ export const desktopCapabilitiesDefault: AppShellServiceCapabilities = {
   supportsHostFolderPicker: true,
   supportsLaunchNetworkIsolation: false,
   requiresLaunchNetworkIsolationElevation: false,
+  launchNetworkIsolationBackend: 'none',
+  launchNetworkIsolationNativeHelperPresent: false,
   launchPolicy: 'host-desktop-only',
   supportsNativeContextMenu: true,
   supportsTrayLifecycle: true,
@@ -35,6 +39,8 @@ export const webCapabilitiesDefault: AppShellServiceCapabilities = {
   supportsHostFolderPicker: false,
   supportsLaunchNetworkIsolation: false,
   requiresLaunchNetworkIsolationElevation: false,
+  launchNetworkIsolationBackend: 'none',
+  launchNetworkIsolationNativeHelperPresent: false,
   launchPolicy: 'host-desktop-only',
   supportsNativeContextMenu: false,
   supportsTrayLifecycle: false,

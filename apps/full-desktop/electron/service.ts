@@ -12,6 +12,7 @@ import { copyFile, cp, mkdtemp, mkdir, readFile, readdir, rm, stat, unlink, writ
 import os from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
+import { resolveLaunchIsolationProvider } from './shared/launch-isolation-provider-registry';
 import {
   type GameMetadata,
   type GalleryConfig,
@@ -34,6 +35,8 @@ import {
   type CompressGameVersionResult,
   type DecompressGameVersionPayload,
   type DecompressGameVersionResult,
+  type RemoveVersionContentPayload,
+  type RemoveVersionContentResult,
   type ScanResult,
   type ServiceApiVersionInfo,
   type ServiceCapabilities,
@@ -51,6 +54,7 @@ import {
   createZipFromFolder,
   decompressVersionFromStorage,
   isPathInside,
+  removeVersionContentFromStorage,
   resolveVersionStorageArchive,
   toDownloadSafeFileName,
 } from './shared/archive-version-storage';
@@ -63,6 +67,7 @@ import {
   toExecutableAbsolutePath,
   toStoredExecutablePath,
 } from './shared/game-launch-utils';
+import { isIsolationModuleActive } from './shared/isolation-module-state';
 import { removeStagedArchiveUpload } from './shared/staged-archive-upload';
 
 type ApiSuccess<T> = {
@@ -891,6 +896,10 @@ async function launchGameFromService(payload: PlayGamePayload): Promise<PlayGame
   })).filter((version) => version.path);
 
   const metadata = await readGameMetadata(resolvedGamePath, gameName, versions);
+  const runtimeConfig = await loadRuntimeConfig();
+  const isolationProvider = isIsolationModuleActive(runtimeConfig)
+    ? resolveLaunchIsolationProvider()
+    : null;
   const detectedLatestVersion = getLatestVersionName(versions);
   const hasVersionMismatch = Boolean(
     detectedLatestVersion
@@ -902,6 +911,14 @@ async function launchGameFromService(payload: PlayGamePayload): Promise<PlayGame
   if (explicitExecutablePath) {
     const resolvedExplicitExecutablePath = path.resolve(explicitExecutablePath);
     const explicitVersion = resolveLaunchVersionForExecutable(resolvedExplicitExecutablePath, versions);
+    if (explicitVersion?.storageState === 'removed') {
+      return {
+        launched: false,
+        executablePath: null,
+        message: `Version "${explicitVersion.name}" was removed and cannot be launched.`,
+      };
+    }
+
     if (explicitVersion?.storageState === 'compressed') {
       await appendLogEvent({
         level: 'info',
@@ -932,10 +949,11 @@ async function launchGameFromService(payload: PlayGamePayload): Promise<PlayGame
 
     const launchResult = await launchExecutable(resolvedExplicitExecutablePath, {
       isolation: {
-        enabled: Boolean(payload.restrictNetworkAccess),
+        enabled: Boolean(payload.restrictNetworkAccess) && Boolean(isolationProvider),
         gameName,
         gamePath: resolvedGamePath,
       },
+      isolationProvider,
       onLogEvent: (event) => appendLogEvent(event).catch(() => undefined),
       onTrackedProcessExit: async (event) => {
         const additionalSeconds = toTrackedPlaytimeSeconds(event.durationMs);
@@ -952,7 +970,7 @@ async function launchGameFromService(payload: PlayGamePayload): Promise<PlayGame
       },
       onIsolationCleanupError: (message) => appendLogEvent({
         level: 'warn',
-        source: 'http-service-play-game-isolation',
+        source: 'module:isolation/service',
         message: `${message} Game: "${gameName}"`,
       }).catch(() => undefined),
     });
@@ -974,6 +992,19 @@ async function launchGameFromService(payload: PlayGamePayload): Promise<PlayGame
     ? (metadata.latestVersion || detectedLatestVersion)
     : versions[0]?.name) || versions[0]?.name || '';
   const preferredVersion = versions.find((version) => version.name === preferredVersionName) ?? versions[0];
+  if (preferredVersion?.storageState === 'removed') {
+    await appendLogEvent({
+      level: 'warn',
+      source: 'http-service-play-game',
+      message: `Launch blocked because version "${preferredVersion.name}" for game "${gameName}" is marked removed.`,
+    }).catch(() => undefined);
+    return {
+      launched: false,
+      executablePath: null,
+      message: `Version "${preferredVersion.name}" was removed and cannot be launched.`,
+    };
+  }
+
   if (preferredVersion?.storageState === 'compressed') {
     await appendLogEvent({
       level: 'info',
@@ -991,10 +1022,11 @@ async function launchGameFromService(payload: PlayGamePayload): Promise<PlayGame
     if (await fileExists(absoluteStoredPath)) {
       const launchResult = await launchExecutable(absoluteStoredPath, {
         isolation: {
-          enabled: Boolean(payload.restrictNetworkAccess),
+          enabled: Boolean(payload.restrictNetworkAccess) && Boolean(isolationProvider),
           gameName,
           gamePath: resolvedGamePath,
         },
+        isolationProvider,
         onLogEvent: (event) => appendLogEvent(event).catch(() => undefined),
         onTrackedProcessExit: async (event) => {
           const additionalSeconds = toTrackedPlaytimeSeconds(event.durationMs);
@@ -1011,7 +1043,7 @@ async function launchGameFromService(payload: PlayGamePayload): Promise<PlayGame
         },
         onIsolationCleanupError: (message) => appendLogEvent({
           level: 'warn',
-          source: 'http-service-play-game-isolation',
+          source: 'module:isolation/service',
           message: `${message} Game: "${gameName}"`,
         }).catch(() => undefined),
       });
@@ -1032,9 +1064,9 @@ async function launchGameFromService(payload: PlayGamePayload): Promise<PlayGame
   const searchFolders = preferredVersion
     ? [preferredVersion.path, ...versions.filter((version) => version.path !== preferredVersion.path).map((version) => version.path)]
     : launchMode === 'choose-version-temporary' && versions.length
-      ? [versions[0]?.path ?? resolvedGamePath]
+      ? [versions.find((version) => version.storageState !== 'removed')?.path ?? resolvedGamePath]
       : versions.length
-        ? versions.map((version) => version.path)
+        ? versions.filter((version) => version.storageState !== 'removed').map((version) => version.path)
         : [resolvedGamePath];
   const discoveredExecutables = [...new Set((await Promise.all(searchFolders.map((folder) => findExecutablesInFolder(folder)))).flat())].sort();
 
@@ -1065,10 +1097,11 @@ async function launchGameFromService(payload: PlayGamePayload): Promise<PlayGame
 
   const launchResult = await launchExecutable(selectedExecutable, {
     isolation: {
-      enabled: Boolean(payload.restrictNetworkAccess),
+      enabled: Boolean(payload.restrictNetworkAccess) && Boolean(isolationProvider),
       gameName,
       gamePath: resolvedGamePath,
     },
+    isolationProvider,
     onLogEvent: (event) => appendLogEvent(event).catch(() => undefined),
     onTrackedProcessExit: async (event) => {
       const additionalSeconds = toTrackedPlaytimeSeconds(event.durationMs);
@@ -1085,7 +1118,7 @@ async function launchGameFromService(payload: PlayGamePayload): Promise<PlayGame
     },
     onIsolationCleanupError: (message) => appendLogEvent({
       level: 'warn',
-      source: 'http-service-play-game-isolation',
+      source: 'module:isolation/service',
       message: `${message} Game: "${gameName}"`,
     }).catch(() => undefined),
   });
@@ -1174,15 +1207,27 @@ export async function startGalleryHttpService({
   const resolvedHost = normalizeHost(host);
   const resolvedPort = normalizePort(port);
 
-  const resolveRequestCapabilities = (request: IncomingMessage): ServiceCapabilities => {
-    const supportsLaunch = !isContainerizedRuntime && isRequestFromSameMachine(request);
-    const supportsHostFolderPicker = supportsLaunch && Boolean(process.versions.electron);
+  const createServiceCapabilities = (
+    supportsLaunch: boolean,
+    supportsHostFolderPicker: boolean,
+    isolationFeatureEnabled: boolean,
+  ): ServiceCapabilities => {
+    const isolationProvider = isolationFeatureEnabled
+      ? resolveLaunchIsolationProvider()
+      : null;
+    const isolationDiagnostics = isolationProvider?.getDiagnostics?.();
 
     return {
       supportsLaunch,
       supportsHostFolderPicker,
-      supportsLaunchNetworkIsolation: supportsLaunch && process.platform === 'win32',
-      requiresLaunchNetworkIsolationElevation: supportsLaunch && process.platform === 'win32',
+      supportsLaunchNetworkIsolation: supportsLaunch && Boolean(isolationProvider?.isSupported()),
+      requiresLaunchNetworkIsolationElevation: supportsLaunch && Boolean(isolationProvider?.requiresElevation()),
+      launchNetworkIsolationBackend: isolationDiagnostics?.backend ?? 'none',
+      launchNetworkIsolationNativeHelperPresent: isolationDiagnostics?.nativeHelperPresent ?? false,
+      launchNetworkIsolationNativeHelperCompatible: isolationDiagnostics?.nativeHelperCompatible ?? false,
+      launchNetworkIsolationNativeHelperVersion: isolationDiagnostics?.nativeHelperVersion ?? null,
+      launchNetworkIsolationRequiredHelperVersion: isolationDiagnostics?.requiredHelperVersion ?? null,
+      launchNetworkIsolationHelperCompatibilityMessage: isolationDiagnostics?.helperCompatibilityMessage ?? '',
       launchPolicy: 'host-desktop-only',
       supportsNativeContextMenu: false,
       supportsTrayLifecycle: true,
@@ -1191,18 +1236,17 @@ export async function startGalleryHttpService({
       isGamesRootEditable: !isContainerizedRuntime,
     };
   };
-  const localHostCapabilities: ServiceCapabilities = {
-    supportsLaunch: !isContainerizedRuntime,
-    supportsHostFolderPicker: !isContainerizedRuntime && Boolean(process.versions.electron),
-    supportsLaunchNetworkIsolation: !isContainerizedRuntime && process.platform === 'win32',
-    requiresLaunchNetworkIsolationElevation: !isContainerizedRuntime && process.platform === 'win32',
-    launchPolicy: 'host-desktop-only',
-    supportsNativeContextMenu: false,
-    supportsTrayLifecycle: true,
-    clientMode: 'web',
-    isContainerized: isContainerizedRuntime,
-    isGamesRootEditable: !isContainerizedRuntime,
+
+  const resolveRequestCapabilities = (request: IncomingMessage, config?: GalleryConfig | null): ServiceCapabilities => {
+    const supportsLaunch = !isContainerizedRuntime && isRequestFromSameMachine(request);
+    const supportsHostFolderPicker = supportsLaunch && Boolean(process.versions.electron);
+    return createServiceCapabilities(supportsLaunch, supportsHostFolderPicker, isIsolationModuleActive(config));
   };
+  const localHostCapabilities: ServiceCapabilities = createServiceCapabilities(
+    !isContainerizedRuntime,
+    !isContainerizedRuntime && Boolean(process.versions.electron),
+    true,
+  );
 
   const apiVersion: ServiceApiVersionInfo = {
     apiVersion: 'http-v1',
@@ -1240,7 +1284,8 @@ export async function startGalleryHttpService({
       }
 
       if (method === 'GET' && route === '/api/capabilities') {
-        sendOk(response, resolveRequestCapabilities(request));
+        const config = await loadRuntimeConfig();
+        sendOk(response, resolveRequestCapabilities(request, config));
         return;
       }
 
@@ -1820,6 +1865,31 @@ export async function startGalleryHttpService({
           sendOk(response, result);
         } catch (error) {
           sendError(response, 400, 'decompress_version_failed', toErrorMessage(error, 'Failed to decompress version.'));
+        }
+        return;
+      }
+
+      if (method === 'POST' && route === '/api/version-storage/remove-content') {
+        try {
+          const payload = await readJsonBody<RemoveVersionContentPayload>(request);
+          const gamePath = String(payload.gamePath ?? '').trim();
+          const versionPath = String(payload.versionPath ?? '').trim();
+          const versionName = String(payload.versionName ?? '').trim() || path.basename(versionPath || gamePath || 'Version');
+          if (!gamePath || !versionPath) {
+            sendError(response, 400, 'invalid_version_storage_payload', 'Game path and version path are required for removing version content.');
+            return;
+          }
+
+          const result = await removeVersionContentFromStorage(
+            gamePath,
+            versionPath,
+            versionName,
+            'http-service-version-storage',
+            appendLogEvent,
+          );
+          sendOk<RemoveVersionContentResult>(response, result);
+        } catch (error) {
+          sendError(response, 400, 'remove_version_content_failed', toErrorMessage(error, 'Failed to remove version content.'));
         }
         return;
       }

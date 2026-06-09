@@ -1736,7 +1736,64 @@ button {
   line-height: 1.45;
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.38);
   pointer-events: none;
-  z-index: 120;
+  z-index: 260;
+}
+
+.isolation-setup {
+  display: grid;
+  gap: 10px;
+}
+
+.isolation-setup__intro,
+.isolation-setup__detail {
+  margin: 0;
+}
+
+.isolation-setup__summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 8px;
+}
+
+.isolation-setup__item {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(7, 10, 16, 0.38);
+}
+
+.isolation-setup__label {
+  font-size: 0.72rem;
+  color: rgba(247, 246, 242, 0.56);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.isolation-setup__value {
+  font-size: 0.84rem;
+  color: rgba(247, 246, 242, 0.92);
+}
+
+.isolation-setup__value--ok {
+  color: rgba(160, 255, 198, 0.9);
+}
+
+.isolation-setup__value--warning {
+  color: rgba(255, 209, 107, 0.95);
+}
+
+.isolation-setup__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.isolation-setup__help {
+  font-size: 0.74rem;
+  font-weight: 700;
 }
 
 .setup-log-actions {

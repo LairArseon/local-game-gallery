@@ -36,6 +36,8 @@ import type {
   CompressGameVersionResult,
   DecompressGameVersionPayload,
   DecompressGameVersionResult,
+  RemoveVersionContentPayload,
+  RemoveVersionContentResult,
   StageGameArchiveUploadPayload,
   StageGameArchiveUploadResult,
   SaveGameMetadataPayload,
@@ -1027,12 +1029,19 @@ export const webClient: GalleryClient = {
     };
   },
   async showVersionContextMenu(payload: VersionContextMenuPayload) {
+    const versionActionOptions = [{ action: 'open-version-folder', label: 'Open version folder' }];
+
+    if (payload.storageState === 'compressed') {
+      versionActionOptions.push({ action: 'decompress-version', label: 'Decompress version' });
+      versionActionOptions.push({ action: 'remove-version-content', label: 'Remove version content' });
+    } else if (payload.storageState === 'decompressed' || !payload.storageState) {
+      versionActionOptions.push({ action: 'compress-version', label: 'Compress version' });
+      versionActionOptions.push({ action: 'remove-version-content', label: 'Remove version content' });
+    }
+
     const selectedAction = promptContextAction(
       `Actions for ${payload.versionName}`,
-      [
-        { action: 'open-version-folder', label: 'Open version folder' },
-        { action: 'compress-version', label: 'Compress version' },
-      ],
+      versionActionOptions,
     );
     if (!selectedAction) {
       return;
@@ -1245,6 +1254,12 @@ export const webClient: GalleryClient = {
       stopVersionStorageProgressPolling(operationId);
       throw error;
     }
+  },
+  async removeVersionContent(payload: RemoveVersionContentPayload): Promise<RemoveVersionContentResult> {
+    return requestApi<RemoveVersionContentResult>('/api/version-storage/remove-content', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
   async pickArchiveUploadFile(): Promise<PickArchiveUploadFileResult | null> {
     const response = await requestApi<{ selectedFile: PickArchiveUploadFileResult | null }>('/api/pick-archive-upload-file', {

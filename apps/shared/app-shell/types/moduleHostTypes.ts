@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { GalleryApi, GalleryConfig, NotificationFeedItem, GameSummary } from '../types';
+import type { GalleryApi, GalleryConfig, NotificationFeedItem, GameSummary, ServiceCapabilities } from '../types';
 
 export type ModuleHostStateValue =
   | string
@@ -37,17 +37,20 @@ export type ModuleHostGameLike = {
   name: string;
   metadata: {
     customTags: ModuleHostGameTag[];
+    restrictNetworkAccess?: boolean;
   };
 };
 
 export type ModuleHostMetadataDraftLike = {
   customTags: ModuleHostGameTag[];
+  restrictNetworkAccess?: boolean;
 };
 
 export type BuiltInModuleRenderContext = {
   moduleId: string;
   moduleDisplayName: string;
   configState: ModuleHostConfigState;
+  serviceCapabilities?: ServiceCapabilities | null;
   hostSurface?: 'focus' | 'detail';
   onConfigStateChange?: (nextConfigState: ModuleHostConfigState) => void;
   logAppEvent?: (message: string, level?: 'info' | 'warn' | 'error', source?: string) => Promise<void>;

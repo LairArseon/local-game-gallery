@@ -12,6 +12,8 @@ import type {
   CompressGameVersionResult,
   DecompressGameVersionPayload,
   DecompressGameVersionResult,
+  RemoveVersionContentPayload,
+  RemoveVersionContentResult,
   GalleryConfig,
   GameContextMenuAction,
   GameContextMenuPayload,
@@ -868,6 +870,12 @@ export const webClient: GalleryClient = {
     return unsupportedOperation<DecompressGameVersionResult>(
       'decompressGameVersion',
       'Version decompression is only available on the host desktop app.',
+    );
+  },
+  async removeVersionContent(_payload: RemoveVersionContentPayload): Promise<RemoveVersionContentResult> {
+    return unsupportedOperation<RemoveVersionContentResult>(
+      'removeVersionContent',
+      'Removing version content is only available on the host desktop app.',
     );
   },
   async pickArchiveUploadFile(): Promise<PickArchiveUploadFileResult | null> {

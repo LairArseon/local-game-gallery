@@ -1,14 +1,46 @@
 import process from 'node:process';
+import path from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 import { appendLogEvent } from './logger';
 import { startGalleryHttpService } from './service';
 
-async function run() {
-  const startedAt = new Date().toISOString();
-  const appVersion = String(
+function resolveServiceAppVersion() {
+  const envVersion = String(
     process.env.LGG_SERVICE_BUILD
       ?? process.env.npm_package_version
-      ?? '1.0.0',
-  ).trim() || '1.0.0';
+      ?? '',
+  ).trim();
+  if (envVersion) {
+    return envVersion;
+  }
+
+  const candidatePaths = [
+    path.join(__dirname, '..', '..', 'package.json'),
+    path.join(process.cwd(), 'package.json'),
+  ];
+
+  for (const candidatePath of candidatePaths) {
+    if (!existsSync(candidatePath)) {
+      continue;
+    }
+
+    try {
+      const packageJson = JSON.parse(readFileSync(candidatePath, 'utf8')) as { version?: string };
+      const version = String(packageJson.version ?? '').trim();
+      if (version) {
+        return version;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return '1.0.0';
+}
+
+async function run() {
+  const startedAt = new Date().toISOString();
+  const appVersion = resolveServiceAppVersion();
 
   const service = await startGalleryHttpService({
     appVersion,

@@ -21,6 +21,8 @@ import {
   createZipFromFolder,
   decompressVersionFromStorage,
   isPathInside,
+  listRuntimeVersionEntries,
+  removeVersionContentFromStorage,
   resolveVersionStorageArchive,
   toDownloadSafeFileName,
   type VersionStorageProgressUpdate,
@@ -34,6 +36,8 @@ import {
   toExecutableAbsolutePath,
   toStoredExecutablePath,
 } from './shared/game-launch-utils';
+import { isIsolationModuleActive } from './shared/isolation-module-state';
+import { resolveLaunchIsolationProvider } from './shared/launch-isolation-provider-registry';
 import type {
   ApplyRuntimeAppIconPayload,
   ApplyRuntimeAppIconResult,
@@ -69,6 +73,8 @@ import type {
   CompressGameVersionResult,
   DecompressGameVersionPayload,
   DecompressGameVersionResult,
+  RemoveVersionContentPayload,
+  RemoveVersionContentResult,
   VersionStorageProgressEvent,
   ServiceApiVersionInfo,
   ServiceCapabilities,
@@ -90,7 +96,7 @@ function toTrackedPlaytimeSeconds(durationMs: number) {
 
 function isAllowedExternalUrl(value: string) {
   try {
-    const parsed = new URL(String(value ?? '').trim());
+    const parsed = new URL(value);
     return parsed.protocol === 'https:' || parsed.protocol === 'http:';
   } catch {
     return false;
@@ -203,12 +209,23 @@ function getServiceHealthSnapshot(): ServiceHealthStatus {
   };
 }
 
-function getDesktopServiceCapabilities(): ServiceCapabilities {
+async function getDesktopServiceCapabilities(): Promise<ServiceCapabilities> {
+  const config = await loadConfig();
+  const isolationProvider = isIsolationModuleActive(config)
+    ? resolveLaunchIsolationProvider()
+    : null;
+  const isolationDiagnostics = isolationProvider?.getDiagnostics?.();
   return {
     supportsLaunch: true,
     supportsHostFolderPicker: true,
-    supportsLaunchNetworkIsolation: process.platform === 'win32',
-    requiresLaunchNetworkIsolationElevation: process.platform === 'win32',
+    supportsLaunchNetworkIsolation: Boolean(isolationProvider?.isSupported()),
+    requiresLaunchNetworkIsolationElevation: Boolean(isolationProvider?.requiresElevation()),
+    launchNetworkIsolationBackend: isolationDiagnostics?.backend ?? 'none',
+    launchNetworkIsolationNativeHelperPresent: isolationDiagnostics?.nativeHelperPresent ?? false,
+    launchNetworkIsolationNativeHelperCompatible: isolationDiagnostics?.nativeHelperCompatible ?? false,
+    launchNetworkIsolationNativeHelperVersion: isolationDiagnostics?.nativeHelperVersion ?? null,
+    launchNetworkIsolationRequiredHelperVersion: isolationDiagnostics?.requiredHelperVersion ?? null,
+    launchNetworkIsolationHelperCompatibilityMessage: isolationDiagnostics?.helperCompatibilityMessage ?? '',
     launchPolicy: 'host-desktop-only',
     supportsNativeContextMenu: true,
     supportsTrayLifecycle: true,
@@ -1269,6 +1286,28 @@ ipcMain.handle('gallery:decompress-game-version', async (_event, payload: Decomp
   );
 });
 
+ipcMain.handle('gallery:remove-version-content', async (_event, payload: RemoveVersionContentPayload): Promise<RemoveVersionContentResult> => {
+  const gamePath = String(payload?.gamePath ?? '').trim();
+  const versionPath = String(payload?.versionPath ?? '').trim();
+  const versionName = String(payload?.versionName ?? '').trim() || path.basename(versionPath || gamePath || 'Version');
+
+  if (!gamePath || !versionPath) {
+    return {
+      removed: false,
+      removedEntries: 0,
+      message: 'Game path and version path are required for removing version content.',
+    };
+  }
+
+  return removeVersionContentFromStorage(
+    gamePath,
+    versionPath,
+    versionName,
+    'main-version-storage',
+    appendLogEvent,
+  );
+});
+
 ipcMain.handle('gallery:log-event', async (_event, payload: LogEventPayload) => {
   await appendLogEvent(payload);
 });
@@ -1344,10 +1383,22 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
   );
   const explicitExecutablePath = String(payload.explicitExecutablePath ?? '').trim();
   const window = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+  const config = await loadConfig();
+  const isolationProvider = isIsolationModuleActive(config)
+    ? resolveLaunchIsolationProvider()
+    : null;
 
   if (explicitExecutablePath) {
     const resolvedExplicitExecutablePath = path.resolve(explicitExecutablePath);
     const explicitVersion = resolveLaunchVersionForExecutable(resolvedExplicitExecutablePath, playableVersions);
+
+    if (explicitVersion?.storageState === 'removed') {
+      return {
+        launched: false,
+        executablePath: null,
+        message: `Version "${explicitVersion.name}" was removed and cannot be launched.`,
+      };
+    }
 
     if (explicitVersion?.storageState === 'compressed') {
       await decompressVersionFromStorage(payload.gamePath, explicitVersion.path, explicitVersion.name, 'main-version-storage', appendLogEvent);
@@ -1374,10 +1425,11 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
 
     const launchResult = await launchExecutable(resolvedExplicitExecutablePath, {
       isolation: {
-        enabled: Boolean(payload.restrictNetworkAccess),
+        enabled: Boolean(payload.restrictNetworkAccess) && Boolean(isolationProvider),
         gameName: payload.gameName,
         gamePath: payload.gamePath,
       },
+      isolationProvider,
       onLogEvent: (event) => appendLogEvent(event),
       onTrackedProcessExit: async (event) => {
         const additionalSeconds = toTrackedPlaytimeSeconds(event.durationMs);
@@ -1394,7 +1446,7 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
       },
       onIsolationCleanupError: (message) => appendLogEvent({
         level: 'warn',
-        source: 'main-play-game-isolation',
+        source: 'module:isolation/desktop',
         message: `${message} Game: "${payload.gameName}"`,
       }),
     });
@@ -1462,6 +1514,19 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
     : versionsToSearch[0]?.name) || versionsToSearch[0]?.name || '';
   const preferredVersion = versionsToSearch.find((version) => version.name === preferredVersionName) ?? versionsToSearch[0];
 
+  if (preferredVersion?.storageState === 'removed') {
+    await appendLogEvent({
+      level: 'warn',
+      source: 'main-play-game',
+      message: `Launch blocked because version "${preferredVersion.name}" for game "${payload.gameName}" is marked removed.`,
+    }).catch(() => undefined);
+    return {
+      launched: false,
+      executablePath: null,
+      message: `Version "${preferredVersion.name}" was removed and cannot be launched.`,
+    };
+  }
+
   if (preferredVersion?.storageState === 'compressed' && !payload.skipDecompressPrompt) {
     const confirmation = window
       ? await dialog.showMessageBox(window, {
@@ -1512,10 +1577,11 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
     if (await fileExists(absoluteStoredPath)) {
       const launchResult = await launchExecutable(absoluteStoredPath, {
         isolation: {
-          enabled: Boolean(payload.restrictNetworkAccess),
+          enabled: Boolean(payload.restrictNetworkAccess) && Boolean(isolationProvider),
           gameName: payload.gameName,
           gamePath: payload.gamePath,
         },
+        isolationProvider,
         onLogEvent: (event) => appendLogEvent(event),
         onTrackedProcessExit: async (event) => {
           const additionalSeconds = toTrackedPlaytimeSeconds(event.durationMs);
@@ -1532,7 +1598,7 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
         },
         onIsolationCleanupError: (message) => appendLogEvent({
           level: 'warn',
-          source: 'main-play-game-isolation',
+          source: 'module:isolation/desktop',
           message: `${message} Game: "${payload.gameName}"`,
         }),
       });
@@ -1552,7 +1618,9 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
 
   const searchFolders = preferredVersion
     ? [preferredVersion.path, ...versionsToSearch.filter((version) => version.path !== preferredVersion.path).map((version) => version.path)]
-    : versionsToSearch.map((version) => version.path);
+    : versionsToSearch
+      .filter((version) => version.storageState !== 'removed')
+      .map((version) => version.path);
   const discoveredExecutables = [...new Set((await Promise.all(searchFolders.map((folder) => findExecutablesInFolder(folder)))).flat())].sort();
 
   if (!discoveredExecutables.length) {
@@ -1639,10 +1707,11 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
 
   const launchResult = await launchExecutable(selectedExecutable, {
     isolation: {
-      enabled: Boolean(payload.restrictNetworkAccess),
+      enabled: Boolean(payload.restrictNetworkAccess) && Boolean(isolationProvider),
       gameName: payload.gameName,
       gamePath: payload.gamePath,
     },
+    isolationProvider,
     onLogEvent: (event) => appendLogEvent(event),
     onTrackedProcessExit: async (event) => {
       const additionalSeconds = toTrackedPlaytimeSeconds(event.durationMs);
@@ -1659,7 +1728,7 @@ ipcMain.handle('gallery:play-game', async (event, payload: PlayGamePayload): Pro
     },
     onIsolationCleanupError: (message) => appendLogEvent({
       level: 'warn',
-      source: 'main-play-game-isolation',
+      source: 'module:isolation/desktop',
       message: `${message} Game: "${payload.gameName}"`,
     }),
   });
@@ -1784,8 +1853,59 @@ ipcMain.handle('gallery:show-version-context-menu', async (event, payload: Versi
   }
 
   const versionPath = String(payload.versionPath ?? '').trim();
-  const storedArchive = versionPath ? await resolveVersionStorageArchive(versionPath) : null;
-  const isCompressed = Boolean(storedArchive);
+  const storageState = payload.storageState
+    ?? (versionPath
+      ? await (async () => {
+          const storedArchive = await resolveVersionStorageArchive(versionPath);
+          if (storedArchive) {
+            return 'compressed' as const;
+          }
+
+          const runtimeEntries = await listRuntimeVersionEntries(versionPath);
+          return runtimeEntries.length > 0 ? 'decompressed' as const : 'removed' as const;
+        })()
+      : 'decompressed');
+
+  const actionItems: Electron.MenuItemConstructorOptions[] = [];
+  if (storageState === 'compressed') {
+    actionItems.push({
+      label: 'Decompress version',
+      click: () => {
+        window.webContents.send('gallery:version-context-menu-action', {
+          action: 'decompress-version',
+          versionPath,
+        });
+      },
+    });
+    actionItems.push({
+      label: 'Remove version content',
+      click: () => {
+        window.webContents.send('gallery:version-context-menu-action', {
+          action: 'remove-version-content',
+          versionPath,
+        });
+      },
+    });
+  } else if (storageState === 'decompressed') {
+    actionItems.push({
+      label: 'Compress version',
+      click: () => {
+        window.webContents.send('gallery:version-context-menu-action', {
+          action: 'compress-version',
+          versionPath,
+        });
+      },
+    });
+    actionItems.push({
+      label: 'Remove version content',
+      click: () => {
+        window.webContents.send('gallery:version-context-menu-action', {
+          action: 'remove-version-content',
+          versionPath,
+        });
+      },
+    });
+  }
 
   const menu = Menu.buildFromTemplate([
     {
@@ -1797,15 +1917,7 @@ ipcMain.handle('gallery:show-version-context-menu', async (event, payload: Versi
         });
       },
     },
-    {
-      label: isCompressed ? 'Decompress version' : 'Compress version',
-      click: () => {
-        window.webContents.send('gallery:version-context-menu-action', {
-          action: isCompressed ? 'decompress-version' : 'compress-version',
-          versionPath,
-        });
-      },
-    },
+    ...actionItems,
   ]);
 
   menu.popup({ window });

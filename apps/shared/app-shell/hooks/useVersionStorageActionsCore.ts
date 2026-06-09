@@ -6,10 +6,12 @@
  * and compression/decompression implementations.
  */
 import { useCallback, type Dispatch, type SetStateAction } from 'react';
+import type { VersionStorageState } from '../types';
 
 type GameVersionRef = {
   path: string;
   name: string;
+  storageState: VersionStorageState;
 };
 
 type GameRef = {
@@ -36,6 +38,8 @@ type UseVersionStorageActionsCoreArgs<
   t: (key: string, options?: Record<string, unknown>) => string;
   compressVersion: (gamePath: string, gameName: string, versionPath: string, versionName: string) => Promise<void>;
   decompressVersion: (gamePath: string, gameName: string, versionPath: string, versionName: string) => Promise<void>;
+  removeVersionContent: (gamePath: string, gameName: string, versionPath: string, versionName: string) => Promise<void>;
+  confirmRemoveVersionContent: (gameName: string, versionName: string, storageState: VersionStorageState) => Promise<boolean>;
   compressionProgress: TCompressionProgress | null;
 };
 
@@ -52,6 +56,8 @@ export function useVersionStorageActionsCore<
   t,
   compressVersion,
   decompressVersion,
+  removeVersionContent,
+  confirmRemoveVersionContent,
   compressionProgress,
 }: UseVersionStorageActionsCoreArgs<TGame, TScanResult, TCompressionProgress>) {
   const refreshSingleGame = useCallback(async (gamePath: string) => {
@@ -103,6 +109,23 @@ export function useVersionStorageActionsCore<
     await decompressVersion(game.path, game.name, version.path, version.name);
   }, [decompressVersion, games, setStatus, t]);
 
+  const onRemoveVersionContentByPath = useCallback(async (versionPath: string) => {
+    const game = games.find((candidate) => candidate.versions.some((version) => version.path === versionPath));
+    const version = game?.versions.find((candidate) => candidate.path === versionPath);
+    if (!game || !version) {
+      setStatus(t('status.unableFindSelectedGame'));
+      return;
+    }
+
+    const confirmed = await confirmRemoveVersionContent(game.name, version.name, version.storageState);
+    if (!confirmed) {
+      setStatus(t('detail.removeVersionCanceled'));
+      return;
+    }
+
+    await removeVersionContent(game.path, game.name, version.path, version.name);
+  }, [confirmRemoveVersionContent, games, removeVersionContent, setStatus, t]);
+
   const decompressVersionForLaunch = useCallback(async (
     gamePath: string,
     gameName: string,
@@ -116,9 +139,11 @@ export function useVersionStorageActionsCore<
     refreshSingleGame,
     compressVersion,
     decompressVersion,
+    removeVersionContent,
     compressionProgress,
     onCompressVersionByPath,
     onDecompressVersionByPath,
+    onRemoveVersionContentByPath,
     decompressVersionForLaunch,
   };
 }

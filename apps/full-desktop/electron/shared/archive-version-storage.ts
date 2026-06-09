@@ -5,7 +5,7 @@ import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import archiver from 'archiver';
 import unzipper from 'unzipper';
-import type { CompressGameVersionResult, DecompressGameVersionResult } from '../../src/types';
+import type { CompressGameVersionResult, DecompressGameVersionResult, RemoveVersionContentResult } from '../../src/types';
 
 /**
  * Shared Electron archive and version-storage helpers.
@@ -402,6 +402,63 @@ export async function listRuntimeVersionEntries(versionPath: string) {
 
     return true;
   });
+}
+
+export async function removeVersionContentFromStorage(
+  gamePath: string,
+  versionPath: string,
+  versionName: string,
+  source: string,
+  appendLogEvent: VersionStorageLogFn,
+): Promise<RemoveVersionContentResult> {
+  const resolvedGamePath = path.resolve(gamePath);
+  const resolvedVersionPath = path.resolve(versionPath);
+
+  if (!isPathInside(resolvedGamePath, resolvedVersionPath)) {
+    throw new Error('Invalid version removal path.');
+  }
+
+  const versionStats = await stat(resolvedVersionPath).catch(() => null);
+  if (!versionStats?.isDirectory()) {
+    throw new Error('Selected version folder was not found on disk.');
+  }
+
+  const existingArchive = await resolveVersionStorageArchive(resolvedVersionPath);
+  const runtimeEntries = await listRuntimeVersionEntries(resolvedVersionPath);
+  const removedEntries = runtimeEntries.length + (existingArchive ? 1 : 0);
+  if (!removedEntries) {
+    return {
+      removed: true,
+      removedEntries: 0,
+      message: `${versionName} is already removed.`,
+    };
+  }
+
+  await appendLogEvent({
+    level: 'info',
+    source,
+    message: `Removing stored content for version "${versionName}" at "${resolvedVersionPath}" (${removedEntries} entries).`,
+  }).catch(() => undefined);
+
+  if (existingArchive) {
+    await unlink(existingArchive.archivePath).catch(() => undefined);
+  }
+
+  for (const entry of runtimeEntries) {
+    await rm(path.join(resolvedVersionPath, entry.name), { recursive: true, force: true });
+  }
+
+  await appendLogEvent({
+    level: 'info',
+    source,
+    message: `Removed stored content for version "${versionName}" while preserving the folder and NFO files.`,
+  }).catch(() => undefined);
+
+  return {
+    removed: true,
+    removedEntries,
+    message: `Removed content for ${versionName}.`,
+  };
 }
 
 export async function compressVersionForStorage(

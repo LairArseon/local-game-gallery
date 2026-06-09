@@ -22,9 +22,10 @@ type DetailPageProps = {
   onOpenArchiveUploadForGame: (gamePath: string, gameName: string) => void;
   onOpenGameFolder: (gamePath: string) => void;
   onOpenVersionFolder: (versionPath: string) => void;
-  onOpenVersionContextMenu: (versionPath: string, versionName: string) => void;
+  onOpenVersionContextMenu: (versionPath: string, versionName: string, storageState?: GameSummary['versions'][number]['storageState']) => void;
   onCompressVersion: (gamePath: string, gameName: string, versionPath: string, versionName: string) => Promise<void>;
   onDecompressVersion: (gamePath: string, gameName: string, versionPath: string, versionName: string) => Promise<void>;
+  onRemoveVersionContent: (gamePath: string, gameName: string, versionPath: string, versionName: string) => Promise<void>;
   onDownloadVersion: (gamePath: string, versionPath: string, versionName: string) => void;
   onDownloadExtra: (gamePath: string, relativePath: string, itemName: string, isDirectory: boolean) => void;
   onOpenPictures: (gamePath: string) => void;
@@ -54,6 +55,7 @@ export function DetailPage({
   onOpenVersionContextMenu,
   onCompressVersion,
   onDecompressVersion,
+  onRemoveVersionContent,
   onDownloadVersion,
   onDownloadExtra,
   onOpenPictures,
@@ -83,6 +85,7 @@ export function DetailPage({
       onOpenVersionFolder={onOpenVersionFolder}
       onOpenVersionContextMenu={onOpenVersionContextMenu}
       onCompressVersion={onCompressVersion}
+      onRemoveVersionContent={onRemoveVersionContent}
       onOpenPictures={onOpenPictures}
       onOpenScreenshot={onOpenScreenshot}
       enableArchiveUpload={true}

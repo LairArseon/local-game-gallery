@@ -1,0 +1,25 @@
+{
+  "id": "isolation",
+  "displayName": "Isolation Module",
+  "description": "Provides launch-isolation setup, diagnostics, and module-owned log identity for optional host-side network isolation.",
+  "version": "",
+  "entry": "./index.js",
+  "hostApiVersion": "1",
+  "installerComponentId": "isolation",
+  "contributes": [
+    {
+      "id": "isolation.setup.section",
+      "slot": "setup.section",
+      "title": "Isolation Module",
+      "description": "Optional setup and diagnostics surface for launch isolation.",
+      "order": 110
+    },
+    {
+      "id": "isolation.metadata.editor.section",
+      "slot": "metadata.editor.section",
+      "title": "Isolation Rules",
+      "description": "Per-game launch connectivity policy owned by the Isolation module.",
+      "order": 110
+    }
+  ]
+}

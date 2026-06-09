@@ -100,10 +100,13 @@ Expected outputs:
 - `release/full-desktop/Local Game Gallery Setup <version>.exe`
 - `release/standalone-client/Local Game Gallery Client Setup <version>.exe`
 - `release/bundle-installer/Local Game Gallery Bundle Setup <version>.exe`
+- `release/isolation-helper/LocalGameGallery.IsolationHelper.exe`
+- `release/isolation-helper/helper-version.json`
 
 Notes:
 
 - Each installer step prunes stale installer artifacts from previous versions in its target release folder.
+- `dist:all:win` also copies the built isolation helper and its version manifest into `release/isolation-helper/` for direct distribution and GitHub release upload.
 - Packaging regenerates icon assets via `npm run build:icon`.
 - If `icon/icon.png` is missing, icon generation falls back to `icon/standalone-client-icon/icon.png` as source for root icon output.
 - Desktop packaging includes runtime dependencies from `node_modules/**/*` inside installer payload.

@@ -1,15 +1,18 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { ServiceCapabilities } from '../types';
 import type { ModuleHostConfigState } from '../types/moduleHostTypes';
 import type { ResolvedBuiltInModule } from '../core/moduleRegistry';
 
 type BuiltInModuleSetupSectionsProps = {
   modules: ResolvedBuiltInModule[];
+  serviceCapabilities?: ServiceCapabilities | null;
   onConfigStateChange: (moduleId: string, nextConfigState: ModuleHostConfigState) => void;
 };
 
 export function BuiltInModuleSetupSections({
   modules,
+  serviceCapabilities,
   onConfigStateChange,
 }: BuiltInModuleSetupSectionsProps) {
   const { t } = useTranslation();
@@ -45,6 +48,7 @@ export function BuiltInModuleSetupSections({
               <input
                 type="checkbox"
                 checked={configState.enabled}
+                disabled={!configState.installed}
                 onChange={(event) => {
                   onConfigStateChange(definition.id, {
                     ...configState,
@@ -60,6 +64,7 @@ export function BuiltInModuleSetupSections({
                 moduleId: definition.id,
                 moduleDisplayName: definition.displayName,
                 configState,
+                serviceCapabilities,
                 onConfigStateChange: (nextConfigState) => onConfigStateChange(definition.id, nextConfigState),
               })}
             </div>

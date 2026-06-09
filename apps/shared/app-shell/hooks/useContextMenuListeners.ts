@@ -28,6 +28,7 @@ type UseContextMenuListenersArgs<TGame extends GameSummaryLike> = {
   removeVaultPin: () => Promise<unknown>;
   onCompressVersion: (versionPath: string) => Promise<void>;
   onDecompressVersion: (versionPath: string) => Promise<void>;
+  onRemoveVersionContent: (versionPath: string) => Promise<void>;
   setStatus: Dispatch<SetStateAction<string>>;
 };
 
@@ -47,6 +48,7 @@ export function useContextMenuListeners<TGame extends GameSummaryLike>({
   removeVaultPin,
   onCompressVersion,
   onDecompressVersion,
+  onRemoveVersionContent,
   setStatus,
 }: UseContextMenuListenersArgs<TGame>) {
   const { t } = useTranslation();
@@ -120,13 +122,18 @@ export function useContextMenuListeners<TGame extends GameSummaryLike>({
 
       if (payload.action === 'decompress-version') {
         void onDecompressVersion(payload.versionPath);
+        return;
+      }
+
+      if (payload.action === 'remove-version-content') {
+        void onRemoveVersionContent(payload.versionPath);
       }
     });
 
     return () => {
       dispose();
     };
-  }, [galleryClient, onCompressVersion, onDecompressVersion, openFolderInExplorer]);
+  }, [galleryClient, onCompressVersion, onDecompressVersion, onRemoveVersionContent, openFolderInExplorer]);
 
   useEffect(() => {
     const dispose = galleryClient.onVaultContextMenuAction((payload) => {

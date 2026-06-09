@@ -1,6 +1,6 @@
 {
   "name": "local-game-gallery",
-  "version": "3.3.0",
+  "version": "3.5.0",
   "private": true,
   "author": "Lair Arseon",
   "license": "CC0-1.0",
@@ -17,18 +17,20 @@
     "dev:service": "npm run build:electron && npm run start:service",
     "dev:service:headless": "npm run build:electron && concurrently -k \"npm:watch:electron\" \"npm:dev:service:headless:run\"",
     "dev:service:headless:run": "nodemon --watch dist-electron --ext js,cjs --exec node dist-electron/electron/service-cli.js",
-    "watch:electron": "tsc -p apps/full-desktop/electron/tsconfig.json --watch --preserveWatchOutput",
+    "watch:electron": "concurrently -k \"tsc -p apps/full-desktop/electron/tsconfig.json --watch --preserveWatchOutput\" \"tsc -p apps/isolation-module/electron/tsconfig.json --watch --preserveWatchOutput\"",
     "watch:standalone-electron": "tsc -p apps/standalone-client/electron/tsconfig.json --watch --preserveWatchOutput",
     "dev:electron": "cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 wait-on tcp:127.0.0.1:5173 file:dist-electron/electron/main.js && nodemon --watch dist-electron --ext js,cjs --exec electron .",
     "dev:standalone-electron": "cross-env LGG_STANDALONE_DEV_SERVER_URL=http://127.0.0.1:5174 wait-on tcp:127.0.0.1:5174 file:dist-standalone-electron/electron/main.js && nodemon --watch dist-standalone-electron --ext js,cjs --exec electron dist-standalone-electron/electron/main.js",
     "build": "npm run build:renderer && npm run build:electron",
     "build:full-desktop": "npm run build:renderer && npm run build:electron",
     "build:renderer": "vite build --config apps/full-desktop/vite.config.ts",
+    "build:isolation-helper": "node scripts/build-isolation-helper.mjs",
+    "build:isolation-helper:optional": "node scripts/build-isolation-helper.mjs --optional",
     "build:web-client": "vite build --config apps/web-client/vite.config.ts",
     "build:standalone-client": "npm run build:standalone-renderer && npm run build:standalone-electron",
     "build:standalone-renderer": "vite build --config apps/standalone-client/vite.config.ts",
     "build:standalone-electron": "tsc -p apps/standalone-client/electron/tsconfig.json",
-    "build:electron": "tsc -p apps/full-desktop/electron/tsconfig.json",
+    "build:electron": "npm run build:isolation-helper:optional && tsc -p apps/full-desktop/electron/tsconfig.json && tsc -p apps/isolation-module/electron/tsconfig.json",
     "build:service": "npm run build:electron",
     "start:service": "electron dist-electron/electron/service-tray.js",
     "start:service:headless": "node dist-electron/electron/service-cli.js",
@@ -88,6 +90,9 @@
     "appId": "com.localgamegallery.app",
     "productName": "Local Game Gallery",
     "asar": true,
+    "asarUnpack": [
+      "dist-electron/electron/isolation-helper/**/*"
+    ],
     "directories": {
       "output": "release/full-desktop"
     },

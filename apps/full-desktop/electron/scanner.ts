@@ -7,6 +7,7 @@ import type {
   ScanRequestOptions,
   ScanResult,
 } from '../src/types';
+import { listRuntimeVersionEntries } from './shared/archive-version-storage';
 import { createDefaultMetadata, getLatestVersionName, readGameMetadata, readMetadataPlaytimeSeconds, scanGameMedia } from './game-library';
 import { appendLogEvent } from './logger';
 
@@ -295,16 +296,17 @@ async function ensureDefaultVersionNfo(versionPath: string, versionName: string)
 async function detectVersionStorageState(versionPath: string) {
   const entries = await readDirectoryEntriesSafe(versionPath);
   const archiveEntry = entries.find((entry) => entry.isFile() && versionStorageArchivePattern.test(entry.name));
-  if (!archiveEntry) {
+  if (archiveEntry) {
     return {
-      storageState: 'decompressed' as const,
-      storageArchivePath: null,
+      storageState: 'compressed' as const,
+      storageArchivePath: path.join(versionPath, archiveEntry.name),
     };
   }
 
+  const runtimeEntries = await listRuntimeVersionEntries(versionPath);
   return {
-    storageState: 'compressed' as const,
-    storageArchivePath: path.join(versionPath, archiveEntry.name),
+    storageState: runtimeEntries.length > 0 ? 'decompressed' as const : 'removed' as const,
+    storageArchivePath: null,
   };
 }
 
@@ -592,7 +594,7 @@ export async function scanGames(
       name: string;
       path: string;
       hasNfo: boolean;
-      storageState: 'compressed' | 'decompressed';
+      storageState: 'compressed' | 'decompressed' | 'removed';
       storageArchivePath: string | null;
     }> = gameEntries
       .filter((child) => child.isDirectory() && versionPattern.test(child.name))
@@ -836,7 +838,7 @@ export async function scanGame(config: GalleryConfig, gamePath: string): Promise
     name: string;
     path: string;
     hasNfo: boolean;
-    storageState: 'compressed' | 'decompressed';
+    storageState: 'compressed' | 'decompressed' | 'removed';
     storageArchivePath: string | null;
   }> = gameEntries
     .filter((child) => child.isDirectory() && versionPattern.test(child.name))

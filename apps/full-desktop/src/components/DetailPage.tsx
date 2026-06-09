@@ -21,8 +21,9 @@ type DetailPageProps = {
   onOpenMetadata: (gamePath: string) => void;
   onOpenGameFolder: (gamePath: string) => void;
   onOpenVersionFolder: (versionPath: string) => void;
-  onOpenVersionContextMenu: (versionPath: string, versionName: string) => void;
+  onOpenVersionContextMenu: (versionPath: string, versionName: string, storageState?: GameSummary['versions'][number]['storageState']) => void;
   onCompressVersion: (gamePath: string, gameName: string, versionPath: string, versionName: string) => Promise<void>;
+  onRemoveVersionContent: (gamePath: string, gameName: string, versionPath: string, versionName: string) => Promise<void>;
   onOpenPictures: (gamePath: string) => void;
   onOpenScreenshot: (imagePath: string) => void;
   moduleDetailContent?: ReactNode;
@@ -45,6 +46,7 @@ export function DetailPage({
   onOpenVersionFolder,
   onOpenVersionContextMenu,
   onCompressVersion,
+  onRemoveVersionContent,
   onOpenPictures,
   onOpenScreenshot,
   moduleDetailContent,
@@ -67,6 +69,7 @@ export function DetailPage({
       onOpenVersionFolder={onOpenVersionFolder}
       onOpenVersionContextMenu={onOpenVersionContextMenu}
       onCompressVersion={onCompressVersion}
+      onRemoveVersionContent={onRemoveVersionContent}
       onOpenPictures={onOpenPictures}
       onOpenScreenshot={onOpenScreenshot}
       enableArchiveUpload={false}

@@ -41,6 +41,8 @@ import type {
   CompressGameVersionResult,
   DecompressGameVersionPayload,
   DecompressGameVersionResult,
+  RemoveVersionContentPayload,
+  RemoveVersionContentResult,
   VersionStorageProgressEvent,
   VaultContextMenuAction,
   VaultContextMenuPayload,
@@ -98,6 +100,7 @@ const api: GalleryApi = {
   saveVersionDownload: (payload: SaveVersionDownloadPayload): Promise<SaveVersionDownloadResult> => ipcRenderer.invoke('gallery:save-version-download', payload),
   compressGameVersion: (payload: CompressGameVersionPayload): Promise<CompressGameVersionResult> => ipcRenderer.invoke('gallery:compress-game-version', payload),
   decompressGameVersion: (payload: DecompressGameVersionPayload): Promise<DecompressGameVersionResult> => ipcRenderer.invoke('gallery:decompress-game-version', payload),
+  removeVersionContent: (payload: RemoveVersionContentPayload): Promise<RemoveVersionContentResult> => ipcRenderer.invoke('gallery:remove-version-content', payload),
   onVersionStorageProgress: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: VersionStorageProgressEvent) => {
       callback(payload);

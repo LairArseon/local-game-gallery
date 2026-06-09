@@ -262,9 +262,10 @@ function requestQuit() {
 
 async function startService() {
   const appVersion = String(
-    process.env.LGG_SERVICE_BUILD
-      ?? process.env.npm_package_version
-      ?? '1.0.0',
+    app.getVersion()
+      || process.env.LGG_SERVICE_BUILD
+      || process.env.npm_package_version
+      || '1.0.0',
   ).trim() || '1.0.0';
 
   galleryHttpService = await startGalleryHttpService({

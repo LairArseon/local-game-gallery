@@ -5,6 +5,7 @@
  * decompress-before-launch confirmation dialogs.
  */
 import { useEffect, useRef, useState } from 'react';
+import type { VersionStorageState } from '../types';
 import type { LaunchGameCandidate } from '../types/gameActionsTypes';
 
 export type DecompressLaunchConfirmContext = {
@@ -18,15 +19,23 @@ export type ExecutableChoiceContext = {
   candidates: LaunchGameCandidate[];
 };
 
+export type RemoveVersionContentConfirmContext = {
+  gameName: string;
+  versionName: string;
+  storageState: VersionStorageState;
+};
+
 export function useModalConfirmations() {
   const [isMirrorSyncConfirmOpen, setIsMirrorSyncConfirmOpen] = useState(false);
   const [isMirrorParityConfirmOpen, setIsMirrorParityConfirmOpen] = useState(false);
   const [decompressLaunchConfirmContext, setDecompressLaunchConfirmContext] = useState<DecompressLaunchConfirmContext | null>(null);
+  const [removeVersionContentConfirmContext, setRemoveVersionContentConfirmContext] = useState<RemoveVersionContentConfirmContext | null>(null);
   const [executableChoiceContext, setExecutableChoiceContext] = useState<ExecutableChoiceContext | null>(null);
 
   const mirrorSyncConfirmResolveRef = useRef<((shouldSync: boolean) => void) | null>(null);
   const mirrorParityConfirmResolveRef = useRef<((shouldSync: boolean) => void) | null>(null);
   const decompressLaunchConfirmResolveRef = useRef<((shouldDecompress: boolean) => void) | null>(null);
+  const removeVersionContentConfirmResolveRef = useRef<((shouldRemove: boolean) => void) | null>(null);
   const executableChoiceResolveRef = useRef<((candidate: LaunchGameCandidate | null) => void) | null>(null);
 
   useEffect(() => () => {
@@ -43,6 +52,11 @@ export function useModalConfirmations() {
     if (decompressLaunchConfirmResolveRef.current) {
       decompressLaunchConfirmResolveRef.current(false);
       decompressLaunchConfirmResolveRef.current = null;
+    }
+
+    if (removeVersionContentConfirmResolveRef.current) {
+      removeVersionContentConfirmResolveRef.current(false);
+      removeVersionContentConfirmResolveRef.current = null;
     }
 
     if (executableChoiceResolveRef.current) {
@@ -108,6 +122,25 @@ export function useModalConfirmations() {
     resolve?.(shouldDecompress);
   }
 
+  async function confirmRemoveVersionContent(gameName: string, versionName: string, storageState: VersionStorageState) {
+    return new Promise<boolean>((resolve) => {
+      if (removeVersionContentConfirmResolveRef.current) {
+        removeVersionContentConfirmResolveRef.current(false);
+      }
+
+      removeVersionContentConfirmResolveRef.current = resolve;
+      setRemoveVersionContentConfirmContext({ gameName, versionName, storageState });
+    });
+  }
+
+  function resolveRemoveVersionContentConfirmation(shouldRemove: boolean) {
+    setRemoveVersionContentConfirmContext(null);
+
+    const resolve = removeVersionContentConfirmResolveRef.current;
+    removeVersionContentConfirmResolveRef.current = null;
+    resolve?.(shouldRemove);
+  }
+
   async function confirmExecutableChoice(context: ExecutableChoiceContext) {
     return new Promise<LaunchGameCandidate | null>((resolve) => {
       if (executableChoiceResolveRef.current) {
@@ -131,6 +164,7 @@ export function useModalConfirmations() {
     isMirrorSyncConfirmOpen,
     isMirrorParityConfirmOpen,
     decompressLaunchConfirmContext,
+    removeVersionContentConfirmContext,
     executableChoiceContext,
     confirmInitialMirrorSync,
     resolveInitialMirrorSyncConfirmation,
@@ -138,6 +172,8 @@ export function useModalConfirmations() {
     resolveMirrorParitySyncConfirmation,
     confirmDecompressBeforeLaunch,
     resolveDecompressBeforeLaunchConfirmation,
+    confirmRemoveVersionContent,
+    resolveRemoveVersionContentConfirmation,
     confirmExecutableChoice,
     resolveExecutableChoice,
   };

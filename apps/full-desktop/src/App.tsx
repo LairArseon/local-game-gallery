@@ -129,6 +129,7 @@ function App() {
     isMirrorSyncConfirmOpen,
     isMirrorParityConfirmOpen,
     decompressLaunchConfirmContext,
+    removeVersionContentConfirmContext,
     executableChoiceContext,
     confirmInitialMirrorSync,
     resolveInitialMirrorSyncConfirmation,
@@ -136,6 +137,8 @@ function App() {
     resolveMirrorParitySyncConfirmation,
     confirmDecompressBeforeLaunch,
     resolveDecompressBeforeLaunchConfirmation,
+    confirmRemoveVersionContent,
+    resolveRemoveVersionContentConfirmation,
     confirmExecutableChoice,
     resolveExecutableChoice,
   } = useModalConfirmations();
@@ -566,6 +569,7 @@ function App() {
     compressionProgress,
     onCompressVersionByPath,
     onDecompressVersionByPath,
+    onRemoveVersionContentByPath,
     decompressVersionForLaunch,
   } = useVersionStorageActions({
     games: scanResult.games,
@@ -575,6 +579,7 @@ function App() {
     setStatus,
     t,
     logAppEvent,
+    confirmRemoveVersionContent,
   });
 
   const compressionProgressLabel = useVersionStorageProgressLabel(compressionProgress, t);
@@ -817,6 +822,7 @@ function App() {
     removeVaultPin,
     onCompressVersion: onCompressVersionByPath,
     onDecompressVersion: onDecompressVersionByPath,
+    onRemoveVersionContent: onRemoveVersionContentByPath,
     setStatus,
   });
 
@@ -952,13 +958,13 @@ function App() {
               return current;
             }
 
-            const metadataOnlyDraft = { customTags: current.customTags };
             const nextMetadataDraft = typeof updater === 'function'
-              ? updater(metadataOnlyDraft)
+              ? updater(current)
               : updater;
 
             return {
               ...current,
+              ...nextMetadataDraft,
               customTags: nextMetadataDraft.customTags,
             };
           });
@@ -1230,6 +1236,7 @@ function App() {
           moduleSetupContent={(
             <BuiltInModuleSetupSections
               modules={resolvedBuiltInModules}
+              serviceCapabilities={serviceCapabilities}
               onConfigStateChange={onModuleConfigStateChange}
             />
           )}
@@ -1254,6 +1261,9 @@ function App() {
           onOpenVersionFolder={onOpenVersionFolder}
           onOpenVersionContextMenu={onOpenVersionContextMenu}
           onCompressVersion={compressVersion}
+          onRemoveVersionContent={async (_gamePath, _gameName, versionPath) => {
+            await onRemoveVersionContentByPath(versionPath);
+          }}
           onOpenPictures={openPicturesModal}
           onOpenScreenshot={setScreenshotModalPath}
           renderModuleDetailContent={renderModuleDetailContent}
@@ -1286,6 +1296,9 @@ function App() {
         decompressLaunchVersionName={decompressLaunchConfirmContext?.versionName ?? ''}
         onConfirmDecompressLaunch={() => resolveDecompressBeforeLaunchConfirmation(true)}
         onCancelDecompressLaunch={() => resolveDecompressBeforeLaunchConfirmation(false)}
+        removeVersionContentConfirmContext={removeVersionContentConfirmContext}
+        onConfirmRemoveVersionContent={() => resolveRemoveVersionContentConfirmation(true)}
+        onCancelRemoveVersionContent={() => resolveRemoveVersionContentConfirmation(false)}
         executableChoiceContext={executableChoiceContext}
         onSelectExecutableChoice={(executablePath) => resolveExecutableChoice(
           executableChoiceContext?.candidates.find((candidate) => candidate.executablePath === executablePath) ?? null,

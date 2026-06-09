@@ -32,6 +32,7 @@ const buildTargets = [
     command: 'build:electron',
     sourceEntries: [
       'apps/full-desktop/electron',
+      'apps/isolation-module/electron',
     ],
     outputEntries: [
       'dist-electron/electron/service-tray.js',

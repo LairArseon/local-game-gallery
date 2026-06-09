@@ -8,7 +8,7 @@ type GameSummaryLike = {
 
 type GalleryClientLike = {
   setMenuBarVisibility: (nextVisible: boolean) => Promise<unknown> | unknown;
-  showVersionContextMenu: (args: { versionPath: string; versionName: string }) => Promise<unknown> | unknown;
+  showVersionContextMenu: (args: { versionPath: string; versionName: string; storageState?: 'compressed' | 'decompressed' | 'removed' | null }) => Promise<unknown> | unknown;
   showGameContextMenu: (args: {
     gamePath: string;
     gameName: string;
@@ -102,7 +102,7 @@ export function useAppViewHandlers<TGame extends GameSummaryLike>({
     void openFolderInExplorer(versionPath);
   }, [openFolderInExplorer]);
 
-  const onOpenVersionContextMenu = useCallback((versionPath: string, versionName: string) => {
+  const onOpenVersionContextMenu = useCallback((versionPath: string, versionName: string, storageState?: 'compressed' | 'decompressed' | 'removed') => {
     if (!supportsNativeContextMenu) {
       return;
     }
@@ -110,6 +110,7 @@ export function useAppViewHandlers<TGame extends GameSummaryLike>({
     void galleryClient.showVersionContextMenu({
       versionPath,
       versionName,
+      storageState: storageState ?? null,
     });
   }, [galleryClient, supportsNativeContextMenu]);
 

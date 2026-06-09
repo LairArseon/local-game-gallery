@@ -6,6 +6,12 @@ export type ServiceCapabilities = {
   supportsHostFolderPicker: boolean;
   supportsLaunchNetworkIsolation: boolean;
   requiresLaunchNetworkIsolationElevation: boolean;
+  launchNetworkIsolationBackend?: 'none' | 'powershell' | 'native';
+  launchNetworkIsolationNativeHelperPresent?: boolean;
+  launchNetworkIsolationNativeHelperCompatible?: boolean;
+  launchNetworkIsolationNativeHelperVersion?: string | null;
+  launchNetworkIsolationRequiredHelperVersion?: string | null;
+  launchNetworkIsolationHelperCompatibilityMessage?: string;
   launchPolicy: LaunchPolicy;
   supportsNativeContextMenu: boolean;
   supportsTrayLifecycle: boolean;
@@ -119,18 +125,20 @@ export type ApplyRuntimeAppIconResult = {
   message: string;
 };
 
+export type VersionStorageState = 'compressed' | 'decompressed' | 'removed';
+
 export type VersionSummary = {
   name: string;
   path: string;
   hasNfo: boolean;
-  storageState: 'compressed' | 'decompressed';
+  storageState: VersionStorageState;
   storageArchivePath: string | null;
 };
 
 export type PlayableVersion = {
   name: string;
   path: string;
-  storageState: 'compressed' | 'decompressed';
+  storageState: VersionStorageState;
   storageArchivePath?: string | null;
 };
 
@@ -247,10 +255,11 @@ export type GameContextMenuAction = {
 export type VersionContextMenuPayload = {
   versionPath: string;
   versionName: string;
+  storageState?: VersionStorageState | null;
 };
 
 export type VersionContextMenuAction = {
-  action: 'open-version-folder' | 'compress-version' | 'decompress-version';
+  action: 'open-version-folder' | 'compress-version' | 'decompress-version' | 'remove-version-content';
   versionPath: string;
 };
 
@@ -323,7 +332,7 @@ export type LaunchGameCandidate = {
   executablePath: string;
   relativeExecutablePath: string;
   storedExecutablePath: string;
-  storageState: 'compressed' | 'decompressed';
+  storageState: VersionStorageState;
   requiresDecompression: boolean;
 };
 
@@ -417,6 +426,18 @@ export type VersionStorageProgressEvent = {
 export type DecompressGameVersionResult = {
   decompressed: boolean;
   extractedEntries: number;
+  message: string;
+};
+
+export type RemoveVersionContentPayload = {
+  gamePath: string;
+  versionPath: string;
+  versionName?: string;
+};
+
+export type RemoveVersionContentResult = {
+  removed: boolean;
+  removedEntries: number;
   message: string;
 };
 
@@ -527,6 +548,7 @@ export type GalleryApi = {
   saveVersionDownload: (payload: SaveVersionDownloadPayload) => Promise<SaveVersionDownloadResult>;
   compressGameVersion: (payload: CompressGameVersionPayload) => Promise<CompressGameVersionResult>;
   decompressGameVersion: (payload: DecompressGameVersionPayload) => Promise<DecompressGameVersionResult>;
+  removeVersionContent: (payload: RemoveVersionContentPayload) => Promise<RemoveVersionContentResult>;
   onVersionStorageProgress?: (callback: (payload: VersionStorageProgressEvent) => void) => () => void;
   pickArchiveUploadFile: () => Promise<PickArchiveUploadFileResult | null>;
   stageGameArchiveUpload: (payload: StageGameArchiveUploadPayload) => Promise<StageGameArchiveUploadResult>;

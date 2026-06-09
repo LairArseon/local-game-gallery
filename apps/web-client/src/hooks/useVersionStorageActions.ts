@@ -25,6 +25,7 @@ type UseVersionStorageActionsArgs = {
   setStatus: Dispatch<SetStateAction<string>>;
   t: (key: string, options?: Record<string, unknown>) => string;
   logAppEvent: (message: string, level?: 'info' | 'warn' | 'error', source?: string) => Promise<void>;
+  confirmRemoveVersionContent: (gameName: string, versionName: string, storageState: ScanResult['games'][number]['versions'][number]['storageState']) => Promise<boolean>;
 };
 
 export function useVersionStorageActions({
@@ -35,6 +36,7 @@ export function useVersionStorageActions({
   setStatus,
   t,
   logAppEvent,
+  confirmRemoveVersionContent,
 }: UseVersionStorageActionsArgs) {
   const normalizeSizePathKey = (value: string) => String(value ?? '').trim().replace(/\\/g, '/').toLowerCase();
 
@@ -80,7 +82,7 @@ export function useVersionStorageActions({
     }
   }, [galleryClient, refreshScan, setScanResult]);
 
-  const { compressVersion, decompressVersion, compressionProgress } = useVersionStorage({
+  const { compressVersion, decompressVersion, removeVersionContent, compressionProgress } = useVersionStorage({
     galleryClient,
     setStatus,
     t,
@@ -91,6 +93,7 @@ export function useVersionStorageActions({
   const {
     onCompressVersionByPath,
     onDecompressVersionByPath,
+    onRemoveVersionContentByPath,
     decompressVersionForLaunch,
   } = useVersionStorageActionsCore({
     games,
@@ -101,15 +104,19 @@ export function useVersionStorageActions({
     t,
     compressVersion,
     decompressVersion,
+    removeVersionContent,
+    confirmRemoveVersionContent,
     compressionProgress,
   });
 
   return {
     compressVersion,
     decompressVersion,
+    removeVersionContent,
     compressionProgress,
     onCompressVersionByPath,
     onDecompressVersionByPath,
+    onRemoveVersionContentByPath,
     decompressVersionForLaunch,
   };
 }

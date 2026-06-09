@@ -20,7 +20,7 @@ import type { GameMetadata, GameSummary } from '../types';
 import type { BrowserMediaUploadProgress } from '../client/adapters/webClient';
 import { ModalHost as SharedModalHost } from '../../../shared/app-shell/components/ModalHost';
 import type { ParsedGalleryLogEntry } from '../../../shared/app-shell/core/moduleLogSources';
-import type { ExecutableChoiceContext } from '../../../shared/app-shell/hooks/useModalConfirmations';
+import type { ExecutableChoiceContext, RemoveVersionContentConfirmContext } from '../../../shared/app-shell/hooks/useModalConfirmations';
 
 type TagAutocompleteState = {
   scope: 'pool' | 'filter' | 'metadata';
@@ -41,6 +41,9 @@ type ModalHostProps = {
   decompressLaunchVersionName: string;
   onConfirmDecompressLaunch: () => void;
   onCancelDecompressLaunch: () => void;
+  removeVersionContentConfirmContext: RemoveVersionContentConfirmContext | null;
+  onConfirmRemoveVersionContent: () => void;
+  onCancelRemoveVersionContent: () => void;
   executableChoiceContext: ExecutableChoiceContext | null;
   onSelectExecutableChoice: (executablePath: string) => void;
   onCancelExecutableChoice: () => void;
@@ -131,6 +134,9 @@ export function ModalHost({
   decompressLaunchVersionName,
   onConfirmDecompressLaunch,
   onCancelDecompressLaunch,
+  removeVersionContentConfirmContext,
+  onConfirmRemoveVersionContent,
+  onCancelRemoveVersionContent,
   executableChoiceContext,
   onSelectExecutableChoice,
   onCancelExecutableChoice,
@@ -330,6 +336,12 @@ export function ModalHost({
       decompressLaunchVersionName={decompressLaunchVersionName}
       onConfirmDecompressLaunch={onConfirmDecompressLaunch}
       onCancelDecompressLaunch={onCancelDecompressLaunch}
+      isRemoveVersionContentConfirmOpen={Boolean(removeVersionContentConfirmContext)}
+      removeVersionContentGameName={removeVersionContentConfirmContext?.gameName ?? ''}
+      removeVersionContentVersionName={removeVersionContentConfirmContext?.versionName ?? ''}
+      removeVersionContentStorageState={removeVersionContentConfirmContext?.storageState ?? null}
+      onConfirmRemoveVersionContent={onConfirmRemoveVersionContent}
+      onCancelRemoveVersionContent={onCancelRemoveVersionContent}
       screenshotModalPath={screenshotModalPath}
       setScreenshotModalPath={setScreenshotModalPath}
       filePathToSrc={filePathToSrc}

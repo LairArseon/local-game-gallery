@@ -73,10 +73,7 @@ jobs:
           if ($majorInc -lt 0 -or $minorInc -lt 0 -or $patchInc -lt 0) {
             throw 'Version increments must be non-negative integers.'
           }
-
-          if (($majorInc + $minorInc + $patchInc) -eq 0) {
-            throw 'At least one of major_increment, minor_increment, or patch_increment must be greater than 0.'
-          }
+          $hasVersionIncrement = ($majorInc + $minorInc + $patchInc) -gt 0
 
           $currentVersion = (node -p "require('./package.json').version").Trim()
           if ($currentVersion -notmatch '^(\d+)\.(\d+)\.(\d+)$') {
@@ -87,24 +84,34 @@ jobs:
           $currentMinor = [int]$Matches[2]
           $currentPatch = [int]$Matches[3]
 
-          $newMajor = $currentMajor + $majorInc
-          $newMinor = $currentMinor + $minorInc
-          $newPatch = $currentPatch + $patchInc
-          $newVersion = "$newMajor.$newMinor.$newPatch"
+          if ($hasVersionIncrement) {
+            $newMajor = $currentMajor + $majorInc
+            $newMinor = $currentMinor + $minorInc
+            $newPatch = $currentPatch + $patchInc
+            $newVersion = "$newMajor.$newMinor.$newPatch"
+          } else {
+            $newVersion = $currentVersion
+          }
+
           $newTag = "v$newVersion"
 
           $existingTag = git tag -l $newTag
-          if ($existingTag) {
+          if ($existingTag -and $hasVersionIncrement) {
             throw "Tag $newTag already exists. Choose different increments."
           }
 
-          npm version $newVersion --no-git-tag-version
+          if ($hasVersionIncrement) {
+            npm version $newVersion --no-git-tag-version
 
-          git add package.json package-lock.json
-          git commit -m "chore(release): bump version to $newVersion"
-          git tag $newTag
-          git push origin HEAD:${{ inputs.branch }}
-          git push origin $newTag
+            git add package.json package-lock.json
+            git commit -m "chore(release): bump version to $newVersion"
+            git tag $newTag
+            git push origin HEAD:${{ inputs.branch }}
+            git push origin $newTag
+          } elseif (-not $existingTag) {
+            git tag $newTag
+            git push origin $newTag
+          }
 
           "new_version=$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "new_tag=$newTag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
@@ -122,8 +129,16 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
       - name: Install dependencies
         run: npm ci
+
+      - name: Build isolation helper
+        run: npm run build:isolation-helper
 
       - name: Build Windows installers
         run: npm run dist:all:win
@@ -135,13 +150,15 @@ jobs:
             Get-ChildItem -Path release/full-desktop -File -Filter '* Setup *.exe' -ErrorAction SilentlyContinue
             Get-ChildItem -Path release/standalone-client -File -Filter '* Setup *.exe' -ErrorAction SilentlyContinue
             Get-ChildItem -Path release/bundle-installer -File -Filter '* Setup *.exe' -ErrorAction SilentlyContinue
+            Get-ChildItem -Path release/isolation-helper -File -Filter '*.exe' -ErrorAction SilentlyContinue
+            Get-ChildItem -Path release/isolation-helper -File -Filter '*.json' -ErrorAction SilentlyContinue
           )
 
           if (-not $assets -or $assets.Count -eq 0) {
-            throw 'No installer Setup .exe files found in release/. Packaging may have failed.'
+            throw 'No release .exe files found in release/. Packaging may have failed.'
           }
 
-          Write-Host 'Found installer assets:'
+          Write-Host 'Found release assets:'
           $assets | ForEach-Object { Write-Host "- $($_.FullName)" }
 
       - name: Create GitHub release and upload assets
@@ -157,5 +174,7 @@ jobs:
             release/full-desktop/* Setup *.exe
             release/standalone-client/* Setup *.exe
             release/bundle-installer/* Setup *.exe
+            release/isolation-helper/*.exe
+            release/isolation-helper/*.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

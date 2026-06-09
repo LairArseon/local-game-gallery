@@ -6,6 +6,12 @@ export type ServiceCapabilities = {
   supportsLaunch: boolean;
   supportsLaunchNetworkIsolation: boolean;
   requiresLaunchNetworkIsolationElevation: boolean;
+  launchNetworkIsolationBackend?: 'none' | 'powershell' | 'native';
+  launchNetworkIsolationNativeHelperPresent?: boolean;
+  launchNetworkIsolationNativeHelperCompatible?: boolean;
+  launchNetworkIsolationNativeHelperVersion?: string | null;
+  launchNetworkIsolationRequiredHelperVersion?: string | null;
+  launchNetworkIsolationHelperCompatibilityMessage?: string;
   launchPolicy: LaunchPolicy;
   supportsNativeContextMenu: boolean;
   supportsTrayLifecycle: boolean;

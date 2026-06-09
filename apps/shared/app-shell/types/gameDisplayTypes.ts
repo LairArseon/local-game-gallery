@@ -1,5 +1,6 @@
 import type { MouseEvent } from 'react';
 import type { ReactNode } from 'react';
+import type { VersionStorageState } from '../types';
 
 export type GalleryViewModeLike = 'poster' | 'card' | 'compact' | 'expanded';
 export type MediaImageVariant = 'original' | 'smallThumbnail' | 'mediumPreview';
@@ -8,7 +9,7 @@ export type GameVersionDisplayLike = {
   name: string;
   path: string;
   hasNfo: boolean;
-  storageState: 'compressed' | 'decompressed';
+  storageState: VersionStorageState;
   storageArchivePath?: string | null;
 };
 
