@@ -22,6 +22,7 @@ type TagAutocompleteState = {
 type MetadataModalProps = {
   metadataDraft: GameMetadata;
   statusChoices: string[];
+  canOpenAllTagsSelector: boolean;
   activeMetadataTagEditorIndex: number | null;
   activeTagAutocomplete: TagAutocompleteState;
   activeTagSuggestions: string[];
@@ -33,12 +34,14 @@ type MetadataModalProps = {
   onSetActiveTagAutocomplete: (value: TagAutocompleteState | ((current: TagAutocompleteState) => TagAutocompleteState)) => void;
   onHandleTagAutocompleteKeyDown: (event: KeyboardEvent<HTMLInputElement>, scope: 'pool' | 'filter' | 'metadata', index: number) => void;
   onApplyTagSuggestion: (scope: 'pool' | 'filter' | 'metadata', index: number, suggestion: string) => void;
+  onOpenAllTagsSelector: () => void;
   extraMetadataSections?: ReactNode;
 };
 
 export function MetadataModal({
   metadataDraft,
   statusChoices,
+  canOpenAllTagsSelector,
   activeMetadataTagEditorIndex,
   activeTagAutocomplete,
   activeTagSuggestions,
@@ -50,12 +53,14 @@ export function MetadataModal({
   onSetActiveTagAutocomplete,
   onHandleTagAutocompleteKeyDown,
   onApplyTagSuggestion,
+  onOpenAllTagsSelector,
   extraMetadataSections,
 }: MetadataModalProps) {
   return (
     <SharedMetadataModal<GameMetadata>
       metadataDraft={metadataDraft}
       statusChoices={statusChoices}
+      canOpenAllTagsSelector={canOpenAllTagsSelector}
       activeMetadataTagEditorIndex={activeMetadataTagEditorIndex}
       activeTagAutocomplete={activeTagAutocomplete}
       activeTagSuggestions={activeTagSuggestions}
@@ -67,6 +72,7 @@ export function MetadataModal({
       onSetActiveTagAutocomplete={onSetActiveTagAutocomplete}
       onHandleTagAutocompleteKeyDown={onHandleTagAutocompleteKeyDown}
       onApplyTagSuggestion={onApplyTagSuggestion}
+      onOpenAllTagsSelector={onOpenAllTagsSelector}
       extraMetadataSections={extraMetadataSections}
     />
   );

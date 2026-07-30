@@ -114,6 +114,13 @@
   align-items: start;
 }
 
+.modal-panel__body--all-tags {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
 .modal-panel__body--launch-choice {
   display: grid;
   gap: 18px;

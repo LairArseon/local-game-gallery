@@ -28,6 +28,24 @@ type UseTopbarPanelHandlersArgs = {
   setDraftPresetName: Dispatch<SetStateAction<string>>;
 };
 
+function mergeUniqueTags(currentTags: string[], incomingTags: string[]) {
+  const knownTags = new Set(currentTags.map((entry) => entry.trim().toLowerCase()).filter(Boolean));
+  const nextTags = [...currentTags];
+
+  for (const tag of incomingTags) {
+    const normalized = tag.trim();
+    const key = normalized.toLowerCase();
+    if (!normalized || knownTags.has(key)) {
+      continue;
+    }
+
+    knownTags.add(key);
+    nextTags.push(normalized);
+  }
+
+  return nextTags;
+}
+
 export function useTopbarPanelHandlers({
   draftTagRules,
   setDraftTagRules,
@@ -123,7 +141,13 @@ export function useTopbarPanelHandlers({
   }, [draftTagRules.length, setDraftTagRules, setActiveFilterRuleEditorIndex, setActiveTagAutocomplete]);
 
   const onAddSuggestionTag = useCallback((tag: string) => {
-    setDraftTagRules((current) => [...current, tag]);
+    setDraftTagRules((current) => mergeUniqueTags(current, [tag]));
+    setActiveFilterRuleEditorIndex(null);
+    setActiveTagAutocomplete(null);
+  }, [setDraftTagRules, setActiveFilterRuleEditorIndex, setActiveTagAutocomplete]);
+
+  const onAddMultipleSuggestionTags = useCallback((tags: string[]) => {
+    setDraftTagRules((current) => mergeUniqueTags(current, tags));
     setActiveFilterRuleEditorIndex(null);
     setActiveTagAutocomplete(null);
   }, [setDraftTagRules, setActiveFilterRuleEditorIndex, setActiveTagAutocomplete]);
@@ -158,6 +182,7 @@ export function useTopbarPanelHandlers({
     onApplyRuleSuggestion,
     onAddRule,
     onAddSuggestionTag,
+    onAddMultipleSuggestionTags,
     onSaveCurrentFilterPreset,
     onCancelPresetNaming,
     onRenameFilterPreset,

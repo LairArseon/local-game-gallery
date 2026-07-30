@@ -166,9 +166,11 @@
   "filters": {
     "tagRules": "Reglas de etiquetas",
     "tagRulesHint": "Haz clic en una burbuja para editarla. Clic derecho para eliminarla. Usa - al inicio para excluir.",
+    "topUsedTitle": "Etiquetas mas usadas",
     "emptyTag": "Etiqueta vacía",
     "rulePlaceholder": "ejemplo: roguelike o -horror",
     "addTagRule": "Agregar regla de etiqueta",
+    "browseAllTags": "Ver todas",
     "topUsedHint": "Etiquetas más usadas. Haz clic para agregar como filtro.",
     "usedInGames_one": "Usada en {{count}} juego",
     "usedInGames_other": "Usada en {{count}} juegos",
@@ -263,6 +265,7 @@
     "notes": "Notas",
     "addNote": "Agregar nota",
     "tags": "Etiquetas",
+    "browseTags": "Ver etiquetas",
     "tagsHint": "Haz clic en una burbuja para editarla. Clic derecho para eliminarla.",
     "tagPlaceholder": "ejemplo: roguelike",
     "saveMetadata": "Guardar metadatos"
