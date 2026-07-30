@@ -6,6 +6,11 @@ export type TopUsedSuggestion = {
   count: number;
 };
 
+export type AllTagsSuggestion = {
+  tag: string;
+  count: number;
+};
+
 export type FilterPanelProps<
   TOrderBy extends FilterOrderByModeLike,
   TPreset extends FilterPresetLike<TOrderBy>,
@@ -19,6 +24,7 @@ export type FilterPanelProps<
   } | null;
   activeTagSuggestions: string[];
   topUsedFilterSuggestions: TopUsedSuggestion[];
+  allTagSuggestions: AllTagsSuggestion[];
   draftMinScore: string;
   draftOrderBy: TOrderBy;
   draftStatus: string[];
@@ -42,6 +48,7 @@ export type FilterPanelProps<
   onApplyRuleSuggestion: (index: number, suggestion: string) => void;
   onAddRule: () => void;
   onAddSuggestionTag: (tag: string) => void;
+  onOpenAllTagsSelector: () => void;
   onChangeDraftMinScore: (value: string) => void;
   onChangeDraftOrderBy: (value: TOrderBy) => void;
   onChangeDraftStatus: (value: string[]) => void;

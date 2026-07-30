@@ -12,6 +12,7 @@ type GameWithScreenshots = {
 
 type ModalHostProps<TGame extends GameWithScreenshots> = {
   games: TGame[];
+  allTagsSelectorModal?: ReactNode;
   metadataModal: ReactNode;
   mediaModal: ReactNode;
   logViewerModal: ReactNode;
@@ -42,6 +43,7 @@ type ModalHostProps<TGame extends GameWithScreenshots> = {
 
 export function ModalHost<TGame extends GameWithScreenshots>({
   games,
+  allTagsSelectorModal,
   metadataModal,
   mediaModal,
   logViewerModal,
@@ -169,6 +171,7 @@ export function ModalHost<TGame extends GameWithScreenshots>({
   return (
     <>
       {metadataModal}
+      {allTagsSelectorModal}
       {mediaModal}
       {logViewerModal}
       {executableChoiceModal}

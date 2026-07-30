@@ -812,6 +812,21 @@ button {
   background: rgba(68, 150, 210, 0.16);
 }
 
+.tag-bubble--action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-style: dashed;
+  border-color: rgba(223, 231, 245, 0.34);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tag-bubble--active {
+  border-color: rgba(125, 188, 255, 0.88);
+  background: rgba(86, 170, 255, 0.3);
+  box-shadow: inset 0 0 0 1px rgba(214, 234, 255, 0.2);
+}
+
 .tag-bubble__metric {
   display: inline-flex;
   align-items: center;

@@ -52,7 +52,7 @@ import { BuiltInModuleMetadataSections } from '../../shared/app-shell/components
 import { useBuiltInModuleRefreshSync } from '../../shared/app-shell/hooks/useBuiltInModuleRefreshSync';
 import { useBuiltInModuleRegistry } from '../../shared/app-shell/hooks/useBuiltInModuleRegistry';
 import { resolveConfiguredModules } from '../../shared/app-shell/core/moduleRegistry';
-import { formatByteSize } from '../../shared/app-shell/utils/app-helpers';
+import { formatByteSize, normalizeMetadataTags, normalizeTagPool } from '../../shared/app-shell/utils/app-helpers';
 
 const emptyScan: ScanResult = createEmptyScan();
 const maxConcurrentSizeRequests = 6;
@@ -79,6 +79,8 @@ function resolveSingleGameSize(
   return null;
 }
 
+type AllTagsSelectorContext = 'filter' | 'metadata' | null;
+
 function App() {
   const { t, i18n } = useTranslation();
   const galleryClient = useGalleryClient();
@@ -99,6 +101,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isTagPoolPanelOpen, setIsTagPoolPanelOpen] = useState(false);
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
+  const [allTagsSelectorContext, setAllTagsSelectorContext] = useState<AllTagsSelectorContext>(null);
   const [screenshotModalPath, setScreenshotModalPath] = useState<string | null>(null);
   const [focusCarouselIndexByGamePath, setFocusCarouselIndexByGamePath] = useState<Record<string, number>>({});
   const [serviceCapabilities, setServiceCapabilities] = useState<ServiceCapabilities>(() => (
@@ -670,6 +673,7 @@ function App() {
     onApplyRuleSuggestion,
     onAddRule,
     onAddSuggestionTag,
+    onAddMultipleSuggestionTags,
     onSaveCurrentFilterPreset,
     onCancelPresetNaming,
     onRenameFilterPreset,
@@ -693,6 +697,55 @@ function App() {
     setIsPresetNamingOpen,
     setDraftPresetName,
   });
+
+  const allTagsSelectorSelectedTags = useMemo(() => {
+    if (allTagsSelectorContext === 'filter') {
+      return normalizeTagPool(draftTagRules);
+    }
+
+    if (allTagsSelectorContext === 'metadata') {
+      return normalizeMetadataTags(metadataDraft?.tags ?? []);
+    }
+
+    return [];
+  }, [allTagsSelectorContext, draftTagRules, metadataDraft?.tags]);
+
+  const openFilterAllTagsSelector = useCallback(() => {
+    setAllTagsSelectorContext('filter');
+  }, []);
+
+  const openMetadataAllTagsSelector = useCallback(() => {
+    setAllTagsSelectorContext('metadata');
+  }, []);
+
+  const closeAllTagsSelector = useCallback(() => {
+    setAllTagsSelectorContext(null);
+  }, []);
+
+  const acceptAllTagsSelector = useCallback((selectedTags: string[]) => {
+    if (allTagsSelectorContext === 'filter') {
+      onAddMultipleSuggestionTags(selectedTags);
+      setAllTagsSelectorContext(null);
+      return;
+    }
+
+    if (allTagsSelectorContext === 'metadata') {
+      setMetadataDraft((current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          tags: normalizeMetadataTags([...current.tags, ...selectedTags]),
+        };
+      });
+      setAllTagsSelectorContext(null);
+      return;
+    }
+
+    setAllTagsSelectorContext(null);
+  }, [allTagsSelectorContext, onAddMultipleSuggestionTags, setMetadataDraft]);
 
   const {
     isVersionNotificationsOpen,
@@ -758,6 +811,12 @@ function App() {
     t,
     onOpenNotificationCenter: () => setIsVersionNotificationsOpen(true),
   });
+
+  const allTagsSelectorTags = useMemo(() => (
+    normalizeTagPool(config?.tagPool ?? [])
+      .map((tag) => ({ tag, count: effectiveTagPoolUsage[tag] ?? 0 }))
+      .sort((left, right) => right.count - left.count || left.tag.localeCompare(right.tag, undefined, { sensitivity: 'base' }))
+  ), [config?.tagPool, effectiveTagPoolUsage]);
 
   const {
     vaultAwareVersionMismatchGames,
@@ -1161,6 +1220,7 @@ function App() {
             activeTagAutocomplete,
             activeTagSuggestions,
             topUsedFilterSuggestions: vaultAwareTopUsedFilterSuggestions,
+            allTagSuggestions: allTagsSelectorTags,
             draftMinScore,
             draftOrderBy,
             draftStatus,
@@ -1180,6 +1240,7 @@ function App() {
             onApplyRuleSuggestion,
             onAddRule,
             onAddSuggestionTag,
+            onOpenAllTagsSelector: openFilterAllTagsSelector,
             onChangeDraftMinScore: setDraftMinScore,
             onChangeDraftOrderBy: setDraftOrderBy,
             onChangeDraftStatus: setDraftStatus,
@@ -1285,6 +1346,12 @@ function App() {
       {/* Global overlays flow: metadata/media/log/screenshot modal orchestration. */}
       <ModalHost
         games={scanResult.games}
+        isAllTagsSelectorOpen={allTagsSelectorContext !== null}
+        allTagsSelectorTags={allTagsSelectorTags}
+        allTagsSelectorSelectedTags={allTagsSelectorSelectedTags}
+        openAllTagsSelector={openMetadataAllTagsSelector}
+        closeAllTagsSelector={closeAllTagsSelector}
+        acceptAllTagsSelector={acceptAllTagsSelector}
         isMirrorSyncConfirmOpen={isMirrorSyncConfirmOpen}
         onConfirmMirrorSync={() => resolveInitialMirrorSyncConfirmation(true)}
         onCancelMirrorSync={() => resolveInitialMirrorSyncConfirmation(false)}

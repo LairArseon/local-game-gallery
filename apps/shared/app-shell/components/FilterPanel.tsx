@@ -22,6 +22,7 @@ export function FilterPanel<
   activeTagAutocomplete,
   activeTagSuggestions,
   topUsedFilterSuggestions,
+  allTagSuggestions,
   draftMinScore,
   draftOrderBy,
   draftStatus,
@@ -41,6 +42,7 @@ export function FilterPanel<
   onApplyRuleSuggestion,
   onAddRule,
   onAddSuggestionTag,
+  onOpenAllTagsSelector,
   onChangeDraftMinScore,
   onChangeDraftOrderBy,
   onChangeDraftStatus,
@@ -246,6 +248,12 @@ export function FilterPanel<
             </button>
           </div>
           <div className="topbar-filters__suggestions">
+            <div className="topbar-filters__heading">
+              <strong>{t('filters.topUsedTitle')}</strong>
+              <button className="button button--icon" type="button" onClick={onOpenAllTagsSelector}>
+                {t('filters.browseAllTags')}
+              </button>
+            </div>
             <p className="topbar-filters__hint">{t('filters.topUsedHint')}</p>
             <div className="tag-bubbles">
               {topUsedFilterSuggestions.map((entry) => (
@@ -264,6 +272,9 @@ export function FilterPanel<
                 <p className="topbar-filters__hint topbar-filters__hint--inline">{t('filters.noSuggestions')}</p>
               ) : null}
             </div>
+            {!allTagSuggestions.length ? (
+              <p className="topbar-filters__hint topbar-filters__hint--inline">{t('filters.noSuggestions')}</p>
+            ) : null}
           </div>
         </div>
 

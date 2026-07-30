@@ -21,6 +21,7 @@ type MetadataLike = {
 type MetadataModalProps<TMetadata extends MetadataLike> = {
   metadataDraft: TMetadata;
   statusChoices: string[];
+  canOpenAllTagsSelector: boolean;
   activeMetadataTagEditorIndex: number | null;
   activeTagAutocomplete: TagAutocompleteState;
   activeTagSuggestions: string[];
@@ -32,12 +33,14 @@ type MetadataModalProps<TMetadata extends MetadataLike> = {
   onSetActiveTagAutocomplete: (value: TagAutocompleteState | ((current: TagAutocompleteState) => TagAutocompleteState)) => void;
   onHandleTagAutocompleteKeyDown: (event: KeyboardEvent<HTMLInputElement>, scope: 'pool' | 'filter' | 'metadata', index: number) => void;
   onApplyTagSuggestion: (scope: 'pool' | 'filter' | 'metadata', index: number, suggestion: string) => void;
+  onOpenAllTagsSelector: () => void;
   extraMetadataSections?: ReactNode;
 };
 
 export function MetadataModal<TMetadata extends MetadataLike>({
   metadataDraft,
   statusChoices,
+  canOpenAllTagsSelector,
   activeMetadataTagEditorIndex,
   activeTagAutocomplete,
   activeTagSuggestions,
@@ -49,6 +52,7 @@ export function MetadataModal<TMetadata extends MetadataLike>({
   onSetActiveTagAutocomplete,
   onHandleTagAutocompleteKeyDown,
   onApplyTagSuggestion,
+  onOpenAllTagsSelector,
   extraMetadataSections,
 }: MetadataModalProps<TMetadata>) {
   const { t } = useTranslation();
@@ -105,6 +109,11 @@ export function MetadataModal<TMetadata extends MetadataLike>({
             <div className="modal-group modal-group--tight">
               <div className="modal-group__header">
                 <strong>{t('metadata.tags')}</strong>
+                {canOpenAllTagsSelector ? (
+                  <button className="button button--icon" type="button" onClick={onOpenAllTagsSelector}>
+                    {t('metadata.browseTags')}
+                  </button>
+                ) : null}
               </div>
               <p className="topbar-filters__hint">{t('metadata.tagsHint')}</p>
               <div className="tag-bubbles">

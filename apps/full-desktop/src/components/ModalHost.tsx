@@ -15,6 +15,7 @@ import { MediaModal } from './MediaModal';
 import { MetadataModal } from './MetadataModal';
 import { VaultPinModal } from './VaultPinModal';
 import { VaultUnlockModal } from './VaultUnlockModal';
+import { AllTagsSelectorModal } from '../../../shared/app-shell/components/AllTagsSelectorModal';
 import { ExecutableChoiceModal } from '../../../shared/app-shell/components/ExecutableChoiceModal';
 import type { GameMetadata, GameSummary } from '../types';
 import { ModalHost as SharedModalHost } from '../../../shared/app-shell/components/ModalHost';
@@ -29,6 +30,12 @@ type TagAutocompleteState = {
 
 type ModalHostProps = {
   games: GameSummary[];
+  isAllTagsSelectorOpen: boolean;
+  allTagsSelectorTags: Array<{ tag: string; count: number }>;
+  allTagsSelectorSelectedTags: string[];
+  openAllTagsSelector: () => void;
+  closeAllTagsSelector: () => void;
+  acceptAllTagsSelector: (selectedTags: string[]) => void;
   isMirrorSyncConfirmOpen: boolean;
   onConfirmMirrorSync: () => void;
   onCancelMirrorSync: () => void;
@@ -121,6 +128,12 @@ type ModalHostProps = {
 
 export function ModalHost({
   games,
+  isAllTagsSelectorOpen,
+  allTagsSelectorTags,
+  allTagsSelectorSelectedTags,
+  openAllTagsSelector,
+  closeAllTagsSelector,
+  acceptAllTagsSelector,
   isMirrorSyncConfirmOpen,
   onConfirmMirrorSync,
   onCancelMirrorSync,
@@ -206,10 +219,20 @@ export function ModalHost({
   saveVaultPin,
   cancelVaultPinEditor,
 }: ModalHostProps) {
+  const allTagsSelectorModal: ReactNode = isAllTagsSelectorOpen ? (
+    <AllTagsSelectorModal
+      availableTags={allTagsSelectorTags}
+      selectedTags={allTagsSelectorSelectedTags}
+      onClose={closeAllTagsSelector}
+      onAccept={acceptAllTagsSelector}
+    />
+  ) : null;
+
   const metadataModal: ReactNode = metadataModalGamePath && metadataDraft ? (
     <MetadataModal
       metadataDraft={metadataDraft}
       statusChoices={statusChoices}
+      canOpenAllTagsSelector={allTagsSelectorTags.length > 0}
       activeMetadataTagEditorIndex={activeMetadataTagEditorIndex}
       activeTagAutocomplete={activeTagAutocomplete}
       activeTagSuggestions={activeTagSuggestions}
@@ -233,6 +256,7 @@ export function ModalHost({
       onSetActiveTagAutocomplete={setActiveTagAutocomplete}
       onHandleTagAutocompleteKeyDown={handleTagAutocompleteKeyDown}
       onApplyTagSuggestion={applyTagSuggestion}
+      onOpenAllTagsSelector={openAllTagsSelector}
       extraMetadataSections={moduleMetadataContent}
     />
   ) : null;
@@ -315,6 +339,7 @@ export function ModalHost({
   return (
     <SharedModalHost<GameSummary>
       games={games}
+      allTagsSelectorModal={allTagsSelectorModal}
       metadataModal={metadataModal}
       mediaModal={mediaModal}
       logViewerModal={logViewerModal}

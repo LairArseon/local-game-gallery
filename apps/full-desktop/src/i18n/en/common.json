@@ -166,9 +166,11 @@
   "filters": {
     "tagRules": "Tag rules",
     "tagRulesHint": "Click a bubble to edit. Right-click a bubble to remove. Prefix with - to exclude.",
+    "topUsedTitle": "Most used tags",
     "emptyTag": "Empty tag",
     "rulePlaceholder": "example: roguelike or -horror",
     "addTagRule": "Add tag rule",
+    "browseAllTags": "Browse all",
     "topUsedHint": "Top used tags right now. Click to add as a filter.",
     "usedInGames_one": "Used in {{count}} game",
     "usedInGames_other": "Used in {{count}} games",
@@ -263,6 +265,7 @@
     "notes": "Notes",
     "addNote": "Add note",
     "tags": "Tags",
+    "browseTags": "Browse tags",
     "tagsHint": "Click a bubble to edit. Right-click a bubble to remove.",
     "tagPlaceholder": "example: roguelike",
     "saveMetadata": "Save metadata"
