@@ -11,7 +11,10 @@ import {
   F95_THREAD_ID_TAG,
   F95_THREAD_TAGS_TAG,
   F95_THREAD_URL_TAG,
+  F95_THREAD_UPDATED_AT_TAG,
+  F95_UPDATE_TITLE_TAG,
   F95_UP_TO_DATE_TAG,
+  F95_VERSION_HISTORY_TAG,
   F95_VERSION_TAG,
   F95_VOTE_COUNT_TAG,
   getF95BooleanTagValue,
@@ -27,6 +30,8 @@ import {
 } from '../core/f95ThreadPageV1';
 import { formatF95Rating, parseStoredF95Rating, roundF95RatingForDisplay } from '../core/f95Rating';
 import { F95RatingStars } from './F95RatingStars';
+import { readStoredF95VersionHistory } from '../core/f95VersionHistory';
+import { F95VersionHistoryStrip } from './F95VersionHistoryStrip';
 
 type F95DetailPanelProps = {
   context: BuiltInModuleRenderContext;
@@ -80,11 +85,12 @@ export function F95DetailPanel({ context }: F95DetailPanelProps) {
   const threadId = getF95TagValue(moduleTags, F95_THREAD_ID_TAG);
   const threadUrl = getF95TagValue(moduleTags, F95_THREAD_URL_TAG);
   const creator = getF95TagValue(moduleTags, F95_CREATOR_TAG);
-  const lastUpdateAt = getF95TagValue(moduleTags, F95_LAST_UPDATED_TAG);
-  const lastUpdateTitle = getF95TagValue(moduleTags, F95_LAST_UPDATE_TITLE_TAG);
+  const lastUpdateAt = getF95TagValue(moduleTags, F95_THREAD_UPDATED_AT_TAG) || getF95TagValue(moduleTags, F95_LAST_UPDATED_TAG);
+  const lastUpdateTitle = getF95TagValue(moduleTags, F95_UPDATE_TITLE_TAG) || getF95TagValue(moduleTags, F95_LAST_UPDATE_TITLE_TAG);
   const lastFeedItemId = getF95TagValue(moduleTags, F95_LAST_FEED_ITEM_ID_TAG);
   const overview = getF95TagValue(moduleTags, F95_OVERVIEW_TAG);
   const version = getF95TagValue(moduleTags, F95_VERSION_TAG);
+  const versionHistory = readStoredF95VersionHistory(getF95TagValue(moduleTags, F95_VERSION_HISTORY_TAG));
   const starsRating = getF95TagValue(moduleTags, F95_STARS_RATING_TAG);
   const voteCount = getF95TagValue(moduleTags, F95_VOTE_COUNT_TAG);
   const threadTags = parseF95TagList(getF95TagValue(moduleTags, F95_THREAD_TAGS_TAG));
@@ -152,6 +158,8 @@ export function F95DetailPanel({ context }: F95DetailPanelProps) {
             </div>
           </section>
 
+          {versionHistory ? <F95VersionHistoryStrip history={versionHistory} /> : null}
+
           <div className="f95-module-panel-grid">
             <section className="f95-module-panel f95-module-panel--rating">
               <div className="f95-module-panel__heading">
@@ -184,7 +192,7 @@ export function F95DetailPanel({ context }: F95DetailPanelProps) {
                 <strong>Thread details</strong>
               </div>
               <dl className="f95-module-fact-list">
-                {renderFact('Version', version || 'No version stored yet.')}
+                {!versionHistory ? renderFact('Version', version || 'No version stored yet.') : null}
                 {renderFact('Developer', creator || 'No developer stored yet.')}
                 {renderFact('Thread URL', threadUrl || 'No thread URL stored yet.')}
                 {renderFact('Thread updated', formattedThreadUpdatedAt || 'No update timestamp stored yet.')}

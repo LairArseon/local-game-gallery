@@ -8,7 +8,11 @@ import {
   F95_LAST_UPDATE_TITLE_TAG,
   F95_THREAD_ID_TAG,
   F95_THREAD_URL_TAG,
+  F95_UPDATE_AT_TAG,
+  F95_UPDATE_MARKER_TAG,
+  F95_UPDATE_TITLE_TAG,
   F95_UP_TO_DATE_TAG,
+  getF95BooleanTagValue,
   getF95TagValue,
   setF95TagValue,
 } from './f95Tags';
@@ -101,7 +105,7 @@ export async function runF95RefreshSync(context: BuiltInModuleRefreshContext): P
         nextTags = withUpdatedTags(nextTags, [
           [F95_THREAD_URL_TAG, storedThreadUrl || matchingItem.threadUrl],
           [F95_LAST_UPDATED_TAG, nextPublishedAt],
-          [F95_UP_TO_DATE_TAG, 'true'],
+          [F95_UP_TO_DATE_TAG, getF95BooleanTagValue(nextTags, F95_UP_TO_DATE_TAG, true) ? 'true' : 'false'],
           [F95_LAST_UPDATE_TITLE_TAG, matchingItem.rawTitle],
           [F95_LAST_FEED_ITEM_ID_TAG, nextFeedItemId],
           [F95_CREATOR_TAG, nextCreator],
@@ -115,6 +119,9 @@ export async function runF95RefreshSync(context: BuiltInModuleRefreshContext): P
           [F95_LAST_UPDATE_TITLE_TAG, matchingItem.rawTitle],
           [F95_LAST_FEED_ITEM_ID_TAG, nextFeedItemId],
           [F95_CREATOR_TAG, nextCreator],
+          [F95_UPDATE_AT_TAG, nextPublishedAt],
+          [F95_UPDATE_TITLE_TAG, matchingItem.rawTitle],
+          [F95_UPDATE_MARKER_TAG, `rss:${threadId}:${nextPublishedAt}:${nextFeedItemId}`],
         ]);
         shouldPersist = true;
       }

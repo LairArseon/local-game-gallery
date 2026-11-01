@@ -10,6 +10,9 @@ import {
   F95_LAST_UPDATE_TITLE_TAG,
   F95_THREAD_ID_TAG,
   F95_THREAD_URL_TAG,
+  F95_UPDATE_AT_TAG,
+  F95_UPDATE_MARKER_TAG,
+  F95_UPDATE_TITLE_TAG,
   F95_UP_TO_DATE_TAG,
   getF95BooleanTagValue,
   getF95TagValue,
@@ -34,10 +37,10 @@ function getF95NotificationFeedItems(context: BuiltInModuleNotificationContext):
       const moduleTags = game.metadata.customTags;
       const threadId = getF95TagValue(moduleTags, F95_THREAD_ID_TAG);
       const threadUrl = getF95TagValue(moduleTags, F95_THREAD_URL_TAG);
-      const lastUpdated = getF95TagValue(moduleTags, F95_LAST_UPDATED_TAG);
-      const lastUpdateTitle = getF95TagValue(moduleTags, F95_LAST_UPDATE_TITLE_TAG);
+      const lastUpdated = getF95TagValue(moduleTags, F95_UPDATE_AT_TAG) || getF95TagValue(moduleTags, F95_LAST_UPDATED_TAG);
+      const lastUpdateTitle = getF95TagValue(moduleTags, F95_UPDATE_TITLE_TAG) || getF95TagValue(moduleTags, F95_LAST_UPDATE_TITLE_TAG);
       const lastFeedItemId = getF95TagValue(moduleTags, F95_LAST_FEED_ITEM_ID_TAG);
-      const notificationMarker = [lastUpdated, lastFeedItemId || threadId || game.path]
+      const notificationMarker = getF95TagValue(moduleTags, F95_UPDATE_MARKER_TAG) || [lastUpdated, lastFeedItemId || threadId || game.path]
         .map((value) => String(value ?? '').trim())
         .filter(Boolean)
         .join(':');

@@ -1921,6 +1921,86 @@ button {
   color: rgba(247, 246, 242, 0.96);
 }
 
+.f95-version-history {
+  min-width: 0;
+}
+
+.f95-version-history .f95-module-panel__heading {
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+
+.f95-version-history__entries {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 12px 20px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.f95-version-history__entries li { min-width: 0; max-width: 100%; }
+
+.f95-version-history__entry {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 52px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-left: 2px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: rgba(247, 246, 242, 0.92);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 650;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.f95-version-history__entry:hover { background: rgba(255, 255, 255, 0.035); }
+.f95-version-history__entry--latest {
+  border-left-color: rgba(255, 192, 120, 0.85);
+  background: rgba(255, 140, 92, 0.055);
+  color: rgba(255, 225, 209, 0.95);
+}
+.f95-version-history__entry:focus-visible { outline: 2px solid rgba(255, 192, 120, 0.85); outline-offset: 3px; }
+.f95-version-history__entry time,
+.f95-version-history__cadence { color: rgba(229, 232, 238, 0.68); font-size: 0.82rem; font-weight: 400; overflow-wrap: anywhere; }
+
+.f95-version-history__tooltip {
+  position: fixed;
+  z-index: 10000;
+  display: grid;
+  gap: 6px;
+  width: min(420px, calc(100vw - 16px));
+  max-height: min(340px, calc(100dvh - 16px));
+  box-sizing: border-box;
+  padding: 14px 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: #181e28;
+  color: rgba(247, 246, 242, 0.96);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.f95-version-history__tooltip strong { font-size: 0.92rem; font-weight: 650; }
+.f95-version-history__tooltip p { margin: 6px 0 0; color: rgba(229, 232, 238, 0.76); white-space: pre-wrap; }
+.f95-version-history__tooltip time,
+.f95-version-history__timestamp { color: rgba(229, 232, 238, 0.68); font-size: 0.8rem; }
+
 .f95-module-hero__copy p,
 .f95-module-panel__heading p,
 .f95-module-panel__empty,

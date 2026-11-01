@@ -4,6 +4,7 @@ import {
   F95_LAST_UPDATED_TAG,
   F95_STARS_RATING_TAG,
   F95_THREAD_ID_TAG,
+  F95_THREAD_UPDATED_AT_TAG,
   F95_UP_TO_DATE_TAG,
   getF95BooleanTagValue,
   getF95TagValue,
@@ -39,7 +40,7 @@ export function F95FocusPanel({ context }: F95FocusPanelProps) {
   const moduleTags = context.moduleTags ?? [];
   const threadId = getF95TagValue(moduleTags, F95_THREAD_ID_TAG);
   const creator = getF95TagValue(moduleTags, F95_CREATOR_TAG);
-  const lastUpdateAt = getF95TagValue(moduleTags, F95_LAST_UPDATED_TAG);
+  const lastUpdateAt = getF95TagValue(moduleTags, F95_THREAD_UPDATED_AT_TAG) || getF95TagValue(moduleTags, F95_LAST_UPDATED_TAG);
   const starsRating = getF95TagValue(moduleTags, F95_STARS_RATING_TAG);
   const isUpToDate = getF95BooleanTagValue(moduleTags, F95_UP_TO_DATE_TAG, true);
   const parsedRating = parseStoredF95Rating(starsRating);

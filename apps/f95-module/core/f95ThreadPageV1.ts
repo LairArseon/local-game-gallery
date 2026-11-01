@@ -2,17 +2,27 @@ import type { ModuleHostGameTag } from '../../shared/app-shell/types/moduleHostT
 import {
   buildF95ThreadUrl,
   F95_CREATOR_TAG,
-  F95_LAST_UPDATED_TAG,
+  F95_RELEASE_AT_TAG,
+  F95_RELEASE_VERSION_TAG,
   F95_OVERVIEW_TAG,
   F95_STARS_RATING_TAG,
   F95_THREAD_TAGS_TAG,
   F95_THREAD_URL_TAG,
+  F95_THREAD_UPDATED_AT_TAG,
+  F95_UPDATE_AT_TAG,
+  F95_UPDATE_MARKER_TAG,
+  F95_UPDATE_TITLE_TAG,
+  F95_UP_TO_DATE_TAG,
+  F95_VERSION_HISTORY_TAG,
   F95_VERSION_TAG,
   F95_VOTE_COUNT_TAG,
+  getF95TagValue,
   serializeF95TagList,
   setF95TagValue,
 } from './f95Tags';
 import { normalizeF95RatingString } from './f95Rating';
+import { getLatestF95Release, normalizeF95VersionLabel, parseF95VersionHistory, serializeF95VersionHistory } from './f95VersionHistory';
+import type { F95VersionHistory } from './f95VersionHistory';
 
 export type F95ThreadPageMetadata = {
   parserId: 'f95-thread-page-v1';
@@ -22,6 +32,7 @@ export type F95ThreadPageMetadata = {
   overview: string;
   developer: string;
   version: string;
+  versionHistory: F95VersionHistory | null;
   threadUpdatedAt: string;
   starsRating: string;
   voteCount: string;
@@ -322,6 +333,7 @@ export const F95_THREAD_PAGE_V1_PARSER = {
     }
 
     const articleMetadata = readArticleBodyMetadata(source);
+    const versionHistory = parseF95VersionHistory(source);
     const ratingFallbacks = readRatingFallbacks(source);
     const canonicalUrl = readCanonicalUrl(source);
     const visibleThreadTitle = readVisibleThreadTitle(source);
@@ -335,7 +347,8 @@ export const F95_THREAD_PAGE_V1_PARSER = {
       title: articleMetadata.title || visibleThreadTitle || fallbackTitle,
       overview: articleMetadata.overview,
       developer: developerFromTitle,
-      version: articleMetadata.version,
+      version: getLatestF95Release(versionHistory)?.version || articleMetadata.version,
+      versionHistory,
       threadUpdatedAt: articleMetadata.threadUpdatedAt,
       starsRating: normalizeF95RatingString(
         articleMetadata.starsRating || ratingFallbacks.starsRating,
@@ -490,16 +503,47 @@ export async function fetchF95ThreadPageMetadata(
  */
 export function applyF95ThreadPageMetadata(tags: ModuleHostGameTag[], metadata: F95ThreadPageMetadata) {
   let nextTags = tags;
+  const latestRelease = getLatestF95Release(metadata.versionHistory);
+  const storedReleaseVersion = getF95TagValue(tags, F95_RELEASE_VERSION_TAG);
+  const storedReleaseAt = getF95TagValue(tags, F95_RELEASE_AT_TAG);
+  const storedVersion = storedReleaseVersion || getF95TagValue(tags, F95_VERSION_TAG);
+  const previousRelease = metadata.versionHistory?.entries.find((entry) => (
+    normalizeF95VersionLabel(entry.version) === normalizeF95VersionLabel(storedVersion)
+  ));
+  const previousReleaseAt = storedReleaseAt || previousRelease?.releasedAt || '';
+  const previousReleaseMs = Date.parse(previousReleaseAt);
+  const latestReleaseMs = Date.parse(latestRelease?.releasedAt ?? '');
   const nextEntries: Array<[string, string]> = [
     [F95_THREAD_URL_TAG, metadata.threadUrl],
     [F95_CREATOR_TAG, metadata.developer],
-    [F95_LAST_UPDATED_TAG, metadata.threadUpdatedAt],
+    [F95_THREAD_UPDATED_AT_TAG, metadata.threadUpdatedAt],
     [F95_OVERVIEW_TAG, metadata.overview],
     [F95_VERSION_TAG, metadata.version],
     [F95_STARS_RATING_TAG, metadata.starsRating],
     [F95_VOTE_COUNT_TAG, metadata.voteCount],
     [F95_THREAD_TAGS_TAG, serializeF95TagList(metadata.tags)],
   ];
+
+  if (metadata.versionHistory) {
+    nextEntries.push([F95_VERSION_HISTORY_TAG, serializeF95VersionHistory(metadata.versionHistory)]);
+  }
+
+  if (latestRelease && Number.isFinite(latestReleaseMs)
+    && (!Number.isFinite(previousReleaseMs) || latestReleaseMs >= previousReleaseMs)) {
+    nextEntries.push(
+      [F95_RELEASE_VERSION_TAG, latestRelease.version],
+      [F95_RELEASE_AT_TAG, latestRelease.releasedAt],
+    );
+    if (Number.isFinite(previousReleaseMs) && latestReleaseMs > previousReleaseMs
+      && normalizeF95VersionLabel(storedVersion) !== normalizeF95VersionLabel(latestRelease.version)) {
+      nextEntries.push(
+        [F95_UP_TO_DATE_TAG, 'false'],
+        [F95_UPDATE_AT_TAG, latestRelease.releasedAt],
+        [F95_UPDATE_TITLE_TAG, `${metadata.title || `Thread #${metadata.threadId}`} [${latestRelease.version}]`],
+        [F95_UPDATE_MARKER_TAG, `release:${metadata.threadId}:${normalizeF95VersionLabel(latestRelease.version)}:${latestRelease.releasedAt}`],
+      );
+    }
+  }
 
   for (const [key, value] of nextEntries) {
     if (!String(value ?? '').trim()) {
