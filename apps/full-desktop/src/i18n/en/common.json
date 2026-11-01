@@ -51,6 +51,8 @@
     "expanded": "Expanded"
   },
   "orderBy": {
+    "f95-score-asc": "F95 Score Up",
+    "f95-score-desc": "F95 Score Down",
     "alpha-asc": "Alphabetically up",
     "alpha-desc": "Alphabetically down",
     "score-asc": "Score up",
@@ -164,6 +166,11 @@
     "noGameFoldersBody": "Point the app at your main Games folder, save the settings, and the gallery will list each child folder as a game."
   },
   "filters": {
+    "normalTags": "Normal tags",
+    "moduleTags": "{{module}} tags",
+    "searchTags": "Search tags",
+    "editModuleTag": "Edit {{module}} tag: {{tag}}",
+    "moduleFiltersSuspended": "Module filters are inactive while their module is unavailable. Saved tag rules are retained; module score sorting temporarily uses alphabetical order.",
     "tagRules": "Tag rules",
     "tagRulesHint": "Click a bubble to edit. Right-click a bubble to remove. Prefix with - to exclude.",
     "topUsedTitle": "Most used tags",

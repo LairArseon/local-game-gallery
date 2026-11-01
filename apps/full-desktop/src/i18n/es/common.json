@@ -51,6 +51,8 @@
     "expanded": "Expandido"
   },
   "orderBy": {
+    "f95-score-asc": "Puntuación F95 ascendente",
+    "f95-score-desc": "Puntuación F95 descendente",
     "alpha-asc": "Alfabético ascendente",
     "alpha-desc": "Alfabético descendente",
     "score-asc": "Puntuación ascendente",
@@ -164,6 +166,11 @@
     "noGameFoldersBody": "Apunta la app a tu carpeta principal de Juegos, guarda la configuración y la galería listará cada subcarpeta como un juego."
   },
   "filters": {
+    "normalTags": "Etiquetas normales",
+    "moduleTags": "Etiquetas de {{module}}",
+    "searchTags": "Buscar etiquetas",
+    "editModuleTag": "Editar etiqueta de {{module}}: {{tag}}",
+    "moduleFiltersSuspended": "Los filtros del módulo están inactivos mientras no esté disponible. Se conservan las reglas de etiquetas; la ordenación por puntuación del módulo usa temporalmente el orden alfabético.",
     "tagRules": "Reglas de etiquetas",
     "tagRulesHint": "Haz clic en una burbuja para editarla. Clic derecho para eliminarla. Usa - al inicio para excluir.",
     "topUsedTitle": "Etiquetas mas usadas",

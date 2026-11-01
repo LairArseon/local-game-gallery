@@ -16,6 +16,8 @@ import { MetadataModal } from './MetadataModal';
 import { VaultPinModal } from './VaultPinModal';
 import { VaultUnlockModal } from './VaultUnlockModal';
 import { AllTagsSelectorModal } from '../../../shared/app-shell/components/AllTagsSelectorModal';
+import type { ModuleTagOption } from '../../../shared/app-shell/core/moduleFilters';
+import type { ModuleTagRule } from '../../../shared/app-shell/types';
 import { ExecutableChoiceModal } from '../../../shared/app-shell/components/ExecutableChoiceModal';
 import type { GameMetadata, GameSummary } from '../types';
 import type { BrowserMediaUploadProgress } from '../client/adapters/webClient';
@@ -34,6 +36,9 @@ type ModalHostProps = {
   isAllTagsSelectorOpen: boolean;
   allTagsSelectorTags: Array<{ tag: string; count: number }>;
   allTagsSelectorSelectedTags: string[];
+  allTagsSelectorModuleTags: ModuleTagOption[];
+  allTagsSelectorModuleRules: ModuleTagRule[];
+  acceptAllTagsSelectorModuleTags: (tags: ModuleTagOption[]) => void;
   openAllTagsSelector: () => void;
   closeAllTagsSelector: () => void;
   acceptAllTagsSelector: (selectedTags: string[]) => void;
@@ -133,6 +138,9 @@ export function ModalHost({
   isAllTagsSelectorOpen,
   allTagsSelectorTags,
   allTagsSelectorSelectedTags,
+  allTagsSelectorModuleTags,
+  allTagsSelectorModuleRules,
+  acceptAllTagsSelectorModuleTags,
   openAllTagsSelector,
   closeAllTagsSelector,
   acceptAllTagsSelector,
@@ -226,6 +234,9 @@ export function ModalHost({
     <AllTagsSelectorModal
       availableTags={allTagsSelectorTags}
       selectedTags={allTagsSelectorSelectedTags}
+      availableModuleTags={allTagsSelectorModuleTags}
+      selectedModuleRules={allTagsSelectorModuleRules}
+      onAcceptModuleTags={acceptAllTagsSelectorModuleTags}
       onClose={closeAllTagsSelector}
       onAccept={acceptAllTagsSelector}
     />
@@ -373,7 +384,6 @@ export function ModalHost({
     />
   );
 }
-
 
 
 

@@ -2,6 +2,8 @@
  * Shared type contracts for filter manager core.
  */
 import type { Dispatch, SetStateAction } from 'react';
+import type { ModuleTagRule } from '../types';
+import type { ResolvedModuleFilter } from '../core/moduleFilters';
 
 export type TagAutocompleteState = {
   scope: 'pool' | 'filter' | 'metadata';
@@ -9,11 +11,12 @@ export type TagAutocompleteState = {
   highlighted: number;
 } | null;
 
-export type FilterOrderByModeLike = 'alpha-asc' | 'alpha-desc' | 'score-asc' | 'score-desc' | 'size-asc' | 'size-desc' | 'playtime-asc' | 'playtime-desc';
+export type FilterOrderByModeLike = 'alpha-asc' | 'alpha-desc' | 'score-asc' | 'score-desc' | 'f95-score-asc' | 'f95-score-desc' | 'size-asc' | 'size-desc' | 'playtime-asc' | 'playtime-desc';
 
 export type FilterPresetLike<TOrderBy extends FilterOrderByModeLike> = {
   name: string;
   tagRules: string[];
+  moduleTagRules?: ModuleTagRule[];
   minScore: string;
   status: string[];
   orderBy: TOrderBy;
@@ -30,6 +33,7 @@ export type GalleryConfigLike<
 };
 
 export type GameSummaryLike = {
+  path: string;
   name: string;
   sizeBytes?: number | null;
   accumulatedPlaytimeSeconds?: number | null;
@@ -56,6 +60,7 @@ export type UseFilterManagerCoreArgs<
   config: TConfig | null;
   setConfig: Dispatch<SetStateAction<TConfig | null>>;
   games: TGame[];
+  moduleFilters?: ResolvedModuleFilter[];
   tagPoolUsageOverride?: Record<string, number> | null;
   searchQuery: string;
   setStatus: Dispatch<SetStateAction<string>>;

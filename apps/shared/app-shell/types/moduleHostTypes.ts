@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { GalleryApi, GalleryConfig, NotificationFeedItem, GameSummary, ServiceCapabilities } from '../types';
+import type { GalleryApi, GalleryConfig, NotificationFeedItem, GameSummary, ServiceCapabilities, FilterOrderByMode } from '../types';
 
 export type ModuleHostStateValue =
   | string
@@ -23,7 +23,8 @@ export type KnownBuiltInModuleContributionSlot =
   | 'metadata.editor.section'
   | 'game.card.badge'
   | 'game.focus.panel'
-  | 'game.detail.panel';
+  | 'game.detail.panel'
+  | 'gallery.filters';
 
 export type BuiltInModuleContributionSlot = KnownBuiltInModuleContributionSlot | (string & {});
 
@@ -84,6 +85,17 @@ export type BuiltInModuleContributionDescriptor = {
   renderHeaderActions?: (context: BuiltInModuleRenderContext) => ReactNode;
   render?: (context: BuiltInModuleRenderContext) => ReactNode;
   getItems?: (context: BuiltInModuleNotificationContext) => NotificationFeedItem[];
+  filterData?: {
+    sourceLabel: string;
+    accentClassName: string;
+    scoreOrderModes: { asc: FilterOrderByMode; desc: FilterOrderByMode };
+    getGameData: (game: ModuleHostGameLike) => ModuleGameFilterData;
+  };
+};
+
+export type ModuleGameFilterData = {
+  tags: string[];
+  score: number | null;
 };
 
 export type BuiltInModuleManifestContribution = {

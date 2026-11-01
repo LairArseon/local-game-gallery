@@ -4,8 +4,10 @@ import { useTranslation } from 'react-i18next';
 import { CustomSelect } from './CustomSelect';
 import type { FilterOrderByModeLike, FilterPresetLike } from '../types/filterManagerTypes';
 import type { FilterPanelProps } from '../types/filterPanelTypes';
+import { addModuleTagRules, getModuleScoreFilter, isModuleScoreOrder, moduleTagKey, type ModuleTagOption } from '../core/moduleFilters';
+import { ModuleTagFilters } from './ModuleTagFilters';
 
-const filterOrderByModes: FilterOrderByModeLike[] = ['alpha-asc', 'alpha-desc', 'score-asc', 'score-desc', 'size-asc', 'size-desc', 'playtime-asc', 'playtime-desc'];
+const filterOrderByModes: FilterOrderByModeLike[] = ['alpha-asc', 'alpha-desc', 'score-asc', 'score-desc', 'f95-score-asc', 'f95-score-desc', 'size-asc', 'size-desc', 'playtime-asc', 'playtime-desc'];
 
 type PresetContextMenuState = {
   x: number;
@@ -18,6 +20,11 @@ export function FilterPanel<
   TPreset extends FilterPresetLike<TOrderBy>,
 >({
   draftTagRules,
+  moduleFilters,
+  moduleTagOptions,
+  draftModuleTagRules,
+  onChangeModuleTagRules,
+  hasSuspendedModuleFilters,
   activeFilterRuleEditorIndex,
   activeTagAutocomplete,
   activeTagSuggestions,
@@ -63,6 +70,53 @@ export function FilterPanel<
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
   const presetContextMenuRef = useRef<HTMLDivElement | null>(null);
   const statusMenuRef = useRef<HTMLDivElement | null>(null);
+  const availableOrderModes = filterOrderByModes.filter((mode) => !isModuleScoreOrder(mode) || getModuleScoreFilter(moduleFilters, mode));
+  const effectiveDraftOrder = availableOrderModes.includes(draftOrderBy) ? draftOrderBy : 'alpha-asc';
+  const selectedModuleKeys = new Set(draftModuleTagRules.map(moduleTagKey));
+  const moduleSuggestions = moduleTagOptions.filter((entry) => !selectedModuleKeys.has(moduleTagKey(entry)));
+  const filterQuery = (draftTagRules[activeFilterRuleEditorIndex ?? -1] ?? '').trim().replace(/^-/, '').trim().toLowerCase();
+  const filterSuggestions: Array<{ tag: string; moduleTag?: ModuleTagOption }> = [
+    ...activeTagSuggestions.map((tag) => ({ tag })),
+    ...moduleSuggestions.filter((entry) => entry.tag.toLowerCase().includes(filterQuery)).slice(0, 8)
+      .map((entry) => ({ tag: entry.tag, moduleTag: entry })),
+  ];
+
+  function addModuleTag(entry: ModuleTagOption, exclude = false) {
+    onChangeModuleTagRules((current) => addModuleTagRules(current,
+      [{ moduleId: entry.moduleId, tag: entry.tag, exclude }]));
+  }
+
+  function applyFilterSuggestion(index: number, suggestion: { tag: string; moduleTag?: ModuleTagOption }) {
+    if (suggestion.moduleTag) {
+      addModuleTag(suggestion.moduleTag, draftTagRules[index]?.trim().startsWith('-'));
+      onRemoveRule(index);
+    } else {
+      onApplyRuleSuggestion(index, suggestion.tag);
+    }
+  }
+
+  function handleFilterKeyDown(event: KeyboardEvent<HTMLInputElement>, index: number) {
+    if (activeTagAutocomplete?.scope === 'filter' && activeTagAutocomplete.index === index && filterSuggestions.length) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        onSetActiveTagAutocomplete({
+          scope: 'filter', index,
+          highlighted: (activeTagAutocomplete.highlighted + (event.key === 'ArrowDown' ? 1 : -1) + filterSuggestions.length) % filterSuggestions.length,
+        });
+        return;
+      }
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault();
+        const suggestion = filterSuggestions[activeTagAutocomplete.highlighted] ?? filterSuggestions[0];
+        applyFilterSuggestion(index, suggestion);
+        if (!suggestion.moduleTag) {
+          onFinalizeRuleBlur(index);
+        }
+        return;
+      }
+    }
+    onHandleRuleKeyDown(event, index);
+  }
 
   const normalizedSelectedStatuses = statusChoices.filter((statusOption) => draftStatus.includes(statusOption));
   const isEveryStatusSelected = statusChoices.length > 0 && normalizedSelectedStatuses.length === statusChoices.length;
@@ -171,6 +225,9 @@ export function FilterPanel<
 
   return (
     <section className="topbar-filters">
+      {hasSuspendedModuleFilters ? (
+        <p className="topbar-filters__hint" role="status">{t('filters.moduleFiltersSuspended')}</p>
+      ) : null}
       <div className="topbar-filters__grid">
         <div className="topbar-filters__group">
           <div className="topbar-filters__heading">
@@ -199,25 +256,26 @@ export function FilterPanel<
                             onFinalizeRuleBlur(index);
                           }, 100);
                         }}
-                        onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => onHandleRuleKeyDown(event, index)}
+                        onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => handleFilterKeyDown(event, index)}
                         onChange={(event) => {
                           onUpdateRule(index, event.target.value);
                           onSetActiveTagAutocomplete({ scope: 'filter', index, highlighted: 0 });
                         }}
                       />
-                      {activeTagAutocomplete?.scope === 'filter' && activeTagAutocomplete.index === index && activeTagSuggestions.length ? (
+                      {activeTagAutocomplete?.scope === 'filter' && activeTagAutocomplete.index === index && filterSuggestions.length ? (
                         <div className="tag-autocomplete__menu">
-                          {activeTagSuggestions.map((suggestion, suggestionIndex) => (
+                          {filterSuggestions.map((suggestion, suggestionIndex) => (
                             <button
-                              key={`${suggestion}-${suggestionIndex}`}
-                              className={`tag-autocomplete__item ${activeTagAutocomplete.highlighted === suggestionIndex ? 'tag-autocomplete__item--active' : ''}`}
+                              key={`${suggestion.moduleTag?.moduleId ?? 'normal'}-${suggestion.tag}`}
+                              className={`tag-autocomplete__item ${suggestion.moduleTag?.accentClassName ?? ''} ${activeTagAutocomplete.highlighted === suggestionIndex ? 'tag-autocomplete__item--active' : ''}`}
                               type="button"
                               onMouseDown={(event) => {
                                 event.preventDefault();
-                                onApplyRuleSuggestion(index, suggestion);
+                                applyFilterSuggestion(index, suggestion);
                               }}
                             >
-                              {suggestion}
+                              {suggestion.moduleTag ? <span className="tag-bubble__source">{suggestion.moduleTag.sourceLabel} </span> : null}
+                              {suggestion.tag}
                             </button>
                           ))}
                         </div>
@@ -243,6 +301,7 @@ export function FilterPanel<
                 </button>
               );
             })}
+            <ModuleTagFilters rules={draftModuleTagRules} filters={moduleFilters} options={moduleTagOptions} onChange={onChangeModuleTagRules} />
             <button className="tag-bubble tag-bubble--add" type="button" onClick={onAddRule} title={t('filters.addTagRule')}>
               +
             </button>
@@ -268,11 +327,24 @@ export function FilterPanel<
                   <span className="tag-bubble__metric">{entry.count}</span>
                 </button>
               ))}
-              {!topUsedFilterSuggestions.length ? (
+              {moduleSuggestions.slice(0, 10).map((entry) => (
+                <button
+                  key={moduleTagKey(entry)}
+                  className={`tag-bubble tag-bubble--suggested ${entry.accentClassName}`}
+                  type="button"
+                  onClick={() => addModuleTag(entry)}
+                  title={t('filters.usedInGames', { count: entry.count })}
+                >
+                  <span className="tag-bubble__source">{entry.sourceLabel}</span>
+                  <span>{entry.tag}</span>
+                  <span className="tag-bubble__metric">{entry.count}</span>
+                </button>
+              ))}
+              {!topUsedFilterSuggestions.length && !moduleSuggestions.length ? (
                 <p className="topbar-filters__hint topbar-filters__hint--inline">{t('filters.noSuggestions')}</p>
               ) : null}
             </div>
-            {!allTagSuggestions.length ? (
+            {!allTagSuggestions.length && !moduleTagOptions.length ? (
               <p className="topbar-filters__hint topbar-filters__hint--inline">{t('filters.noSuggestions')}</p>
             ) : null}
           </div>
@@ -297,8 +369,8 @@ export function FilterPanel<
               <CustomSelect
                 className="custom-select--order"
                 ariaLabel={t('filters.orderBy')}
-                value={draftOrderBy}
-                options={filterOrderByModes.map((mode) => ({
+                value={effectiveDraftOrder}
+                options={availableOrderModes.map((mode) => ({
                   value: mode,
                   label: orderByModeLabels[mode as TOrderBy],
                   disabled: (mode === 'size-asc' || mode === 'size-desc') && !isSizeOrderingEnabled,
@@ -499,4 +571,3 @@ export function FilterPanel<
     </section>
   );
 }
-

@@ -52,6 +52,7 @@ import { BuiltInModuleMetadataSections } from '../../shared/app-shell/components
 import { useBuiltInModuleRefreshSync } from '../../shared/app-shell/hooks/useBuiltInModuleRefreshSync';
 import { useBuiltInModuleRegistry } from '../../shared/app-shell/hooks/useBuiltInModuleRegistry';
 import { resolveConfiguredModules } from '../../shared/app-shell/core/moduleRegistry';
+import { addModuleTagRules, buildModuleTagPool, resolveModuleFilters } from '../../shared/app-shell/core/moduleFilters';
 import { formatByteSize, normalizeMetadataTags, normalizeTagPool } from '../../shared/app-shell/utils/app-helpers';
 
 const emptyScan: ScanResult = createEmptyScan();
@@ -449,9 +450,21 @@ function App() {
     refreshScan,
   });
 
+  const resolvedBuiltInModules = useMemo(
+    () => resolveConfiguredModules(builtInModuleRegistry.getAll(), config?.modules ?? {}),
+    [builtInModuleRegistry, config?.modules],
+  );
+  const moduleFilters = useMemo(
+    () => resolveModuleFilters(resolvedBuiltInModules, scanResult.games),
+    [resolvedBuiltInModules, scanResult.games],
+  );
+
   // Domain manager: staged filters/presets and final applied game list projection.
   const {
     draftTagRules,
+    draftModuleTagRules,
+    setDraftModuleTagRules,
+    hasSuspendedModuleFilters,
     activeFilterRuleEditorIndex,
     draftMinScore,
     draftStatus,
@@ -477,6 +490,7 @@ function App() {
     config,
     setConfig,
     games: scanResult.games,
+    moduleFilters,
     searchQuery,
     setStatus,
     isSizeOrderingEnabled: !isSizeScanning && scanResult.games.every((game) => game.sizeBytes !== null),
@@ -817,6 +831,10 @@ function App() {
       .map((tag) => ({ tag, count: effectiveTagPoolUsage[tag] ?? 0 }))
       .sort((left, right) => right.count - left.count || left.tag.localeCompare(right.tag, undefined, { sensitivity: 'base' }))
   ), [config?.tagPool, effectiveTagPoolUsage]);
+  const moduleTagOptions = useMemo(
+    () => buildModuleTagPool(moduleFilters, scanResult.games, isVaultOpen),
+    [moduleFilters, scanResult.games, isVaultOpen],
+  );
 
   const {
     vaultAwareVersionMismatchGames,
@@ -884,11 +902,6 @@ function App() {
     onRemoveVersionContent: onRemoveVersionContentByPath,
     setStatus,
   });
-
-  const resolvedBuiltInModules = useMemo(
-    () => resolveConfiguredModules(builtInModuleRegistry.getAll(), config?.modules ?? {}),
-    [builtInModuleRegistry, config?.modules],
-  );
 
   const renderModuleFocusContent = useCallback((game: ScanResult['games'][number]) => (
     <BuiltInModuleFocusPanels
@@ -1216,6 +1229,11 @@ function App() {
           }}
           filterPanelProps={{
             draftTagRules,
+            moduleFilters,
+            moduleTagOptions,
+            draftModuleTagRules,
+            onChangeModuleTagRules: setDraftModuleTagRules,
+            hasSuspendedModuleFilters,
             activeFilterRuleEditorIndex,
             activeTagAutocomplete,
             activeTagSuggestions,
@@ -1348,6 +1366,12 @@ function App() {
         games={scanResult.games}
         isAllTagsSelectorOpen={allTagsSelectorContext !== null}
         allTagsSelectorTags={allTagsSelectorTags}
+        allTagsSelectorModuleTags={allTagsSelectorContext === 'filter' ? moduleTagOptions : []}
+        allTagsSelectorModuleRules={allTagsSelectorContext === 'filter' ? draftModuleTagRules : []}
+        acceptAllTagsSelectorModuleTags={(tags) => {
+          setDraftModuleTagRules((current) => addModuleTagRules(current,
+            tags.map((tag) => ({ moduleId: tag.moduleId, tag: tag.tag, exclude: false }))));
+        }}
         allTagsSelectorSelectedTags={allTagsSelectorSelectedTags}
         openAllTagsSelector={openMetadataAllTagsSelector}
         closeAllTagsSelector={closeAllTagsSelector}
@@ -1444,8 +1468,6 @@ function App() {
 }
 
 export default App;
-
-
 
 
 

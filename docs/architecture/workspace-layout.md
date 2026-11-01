@@ -73,6 +73,14 @@ npm run pack:standalone-client:win
 npm run dist:standalone-client:win
 ```
 
+## Optional Module Filters
+
+The shared shell consumes optional `gallery.filters` contributions through the runtime module registry. A contribution's `filterData` supplies a source label, accent class, ascending/descending score modes, and `getGameData(game)` returning stored tags and a nullable score.
+
+Only loaded, installed, enabled modules contribute to search, ordering, and tag pools. Keep module-specific metadata parsing inside the module; do not statically import optional module implementations into the host shell.
+
+Filter presets retain normal `tagRules` unchanged and optionally persist source-qualified `moduleTagRules` (`moduleId`, `tag`, `exclude`). Missing modules suspend their rules without erasing preset data. Tag pools are derived from metadata, with suggestions and counts respecting the vault boundary.
+
 ## Next Migration Steps
 
 1. Continue extracting reusable client adapter utilities when a second consumer appears.

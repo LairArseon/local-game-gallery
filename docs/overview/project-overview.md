@@ -163,6 +163,10 @@ Notes:
 - Library setup and rescanning (full or single-game refresh)
 - Incremental game size calculation with visible scan progress
 - Multi-view browsing with filters and presets
+- When the optional F95 module is installed and enabled, filters also offer **F95 Score Up** and **F95 Score Down**. These use the stored F95 rating (not the local score), with unrated games last in either direction.
+- F95 thread tags already stored on games form a read-only tag pool and participate in game search. Normal and F95 tags match only their own source, even when names are identical. F95 filter bubbles use the module accent color and source label; **Browse all** separates the pools and searches both.
+- F95 tag rules support the same include/exclude behavior as normal tags and are saved with presets. If F95 is disabled or removed, its controls disappear and its rules are suspended with a notice; F95 score ordering temporarily becomes alphabetical. Retained settings resume when the module is active again.
+- F95 filter suggestions and counts exclude locked vaulted games. Browsing tags does not fetch F95 data or copy thread tags into the editable normal pool.
 - Detail view editing for metadata, tags, status, notes, and media
 - Version storage compression/decompression with progress and byte counters
 - Game launch and native folder actions from context menus

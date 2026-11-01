@@ -15,6 +15,7 @@ const fixture = `<div class="f95wg-thread"><div class="f95wg-strip">
 </div></div>`;
 
 const checks = `
+import { runF95FilterChecks } from './scripts/f95-filter-checks';
 import { F95_THREAD_PAGE_V1_PARSER, applyF95ThreadPageMetadata } from './apps/f95-module/core/f95ThreadPageV1';
 import * as tags from './apps/f95-module/core/f95Tags';
 import { f95ModuleDefinition } from './apps/f95-module/module';
@@ -109,6 +110,7 @@ window.__f95AsyncChecks = async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+  window.__f95TestResult.filters = await runF95FilterChecks();
 };
 let root;
 window.__f95Render = (longContent = false) => {
@@ -137,11 +139,14 @@ if (!process.versions.electron) {
       const bundle = await build({ stdin: { contents: checks, resolveDir: path.resolve(__dirname, '..'), loader: 'ts' }, bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic' });
       await window.loadURL('about:blank');
       await window.webContents.executeJavaScript(bundle.outputFiles[0].text);
+      const filterStyleKey = await window.webContents.insertCSS(await fs.readFile(path.join(__dirname, '../apps/full-desktop/src/styles/base.css'), 'utf8'));
       await window.webContents.executeJavaScript('window.__f95AsyncChecks()');
+      await window.webContents.removeInsertedCSS(filterStyleKey);
       const result = await window.webContents.executeJavaScript('window.__f95TestResult');
       assert.equal(result.parser, 'passed');
       assert.equal(result.notifications, 'passed');
       assert.equal(result.rss, 'passed');
+      assert.ok(result.filters.checks >= 40);
       const rootPath = path.resolve(__dirname, '..');
       const libraryBundle = await build({ entryPoints: [path.join(rootPath, 'apps/full-desktop/electron/game-library.ts')], bundle: true, write: false, platform: 'node', format: 'cjs' });
       const libraryModule = new Module(path.join(rootPath, 'f95-library-test.cjs'), module);
@@ -154,6 +159,30 @@ if (!process.versions.electron) {
         await library.saveGameMetadata({ gamePath: testFolder, title: 'Example', metadata: { ...library.createDefaultMetadata(), customTags: [{ key: 'module_f95_version_history', value: storedHistory }] } });
         const reread = await library.readGameMetadata(testFolder, 'Example', []);
         assert.equal(reread.customTags.find(tag => tag.key === 'module_f95_version_history').value, storedHistory);
+        const configBundle = await build({ entryPoints: [path.join(rootPath, 'apps/full-desktop/electron/config.ts')], bundle: true, write: false, platform: 'node', format: 'cjs', external: ['electron'] });
+        const configModule = new Module(path.join(rootPath, 'f95-config-test.cjs'), module);
+        configModule.paths = module.paths;
+        configModule._compile(configBundle.outputFiles[0].text, path.join(rootPath, 'f95-config-test.cjs'));
+        const originalDataDir = process.env.LGG_DATA_DIR;
+        process.env.LGG_DATA_DIR = path.join(testFolder, 'config-test');
+        try {
+          const defaults = await configModule.exports.loadConfig();
+          const legacy = { name: 'Legacy', tagRules: ['same'], minScore: '', status: [], orderBy: 'alpha-asc' };
+          const moduleRules = [{ moduleId: 'f95', tag: 'same', exclude: false }, { moduleId: 'f95', tag: 'other', exclude: true }];
+          for (const orderBy of ['f95-score-asc', 'f95-score-desc']) {
+            const saved = await configModule.exports.saveConfig({
+              ...defaults, modules: {}, filterPresets: [legacy, { ...legacy, name: 'F95', orderBy, moduleTagRules: moduleRules }],
+            });
+            const loaded = await configModule.exports.loadConfig();
+            assert.deepEqual(loaded.filterPresets, saved.filterPresets, 'service preset round trip with F95 absent');
+            assert.deepEqual(loaded.filterPresets[0].moduleTagRules, [], 'legacy rules remain normal-only');
+            assert.deepEqual(loaded.filterPresets[1].moduleTagRules, moduleRules, 'source and exclusion persisted');
+            assert.equal(loaded.filterPresets[1].orderBy, orderBy);
+          }
+        } finally {
+          if (originalDataDir === undefined) delete process.env.LGG_DATA_DIR;
+          else process.env.LGG_DATA_DIR = originalDataDir;
+        }
       } finally {
         await fs.rm(testFolder, { recursive: true, force: true });
       }
@@ -201,7 +230,7 @@ if (!process.versions.electron) {
         assert.equal(longLayout.scrollable, true, 'long changelog scrolls');
         await window.webContents.removeInsertedCSS(styleKey);
       }
-      console.log('F95 parser, .nfo persistence, release detection, RSS compatibility, notifications and responsive tooltip checks passed.');
+      console.log('F95 parser, .nfo persistence, release detection, RSS compatibility, notifications, filters and responsive tooltip checks passed.');
       if (screenshotFolder) console.log(`Screenshots: ${screenshotFolder}`);
       app.exit(0);
     } catch (error) {

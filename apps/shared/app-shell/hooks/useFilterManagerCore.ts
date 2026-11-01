@@ -2,6 +2,8 @@
  * Shared filtering domain core: staged/applied filters, preset persistence, and projection.
  */
 import { useEffect, useMemo, useState } from 'react';
+import type { ModuleTagRule } from '../types';
+import { compareModuleScores, getModuleScoreFilter, isModuleScoreOrder, type ResolvedModuleFilter } from '../core/moduleFilters';
 import type {
   FilterOrderByModeLike,
   FilterPresetLike,
@@ -9,6 +11,8 @@ import type {
   GameSummaryLike,
   UseFilterManagerCoreArgs,
 } from '../types/filterManagerTypes';
+
+const emptyModuleFilters: ResolvedModuleFilter[] = [];
 
 function normalizeStatusSelection(status: unknown, statusChoices: string[]): string[] {
   const rawValues = Array.isArray(status)
@@ -47,6 +51,7 @@ export function useFilterManagerCore<
   config,
   setConfig,
   games,
+  moduleFilters = emptyModuleFilters,
   tagPoolUsageOverride,
   searchQuery,
   setStatus,
@@ -60,6 +65,7 @@ export function useFilterManagerCore<
   saveConfig,
 }: UseFilterManagerCoreArgs<TOrderBy, TPreset, TConfig, TGame>) {
   const [draftTagRules, setDraftTagRules] = useState<string[]>([]);
+  const [draftModuleTagRules, setDraftModuleTagRules] = useState<ModuleTagRule[]>([]);
   const [activeFilterRuleEditorIndex, setActiveFilterRuleEditorIndex] = useState<number | null>(null);
   const [draftMinScore, setDraftMinScore] = useState('');
   const [draftStatus, setDraftStatus] = useState<string[]>([]);
@@ -72,6 +78,8 @@ export function useFilterManagerCore<
   const [appliedMinScore, setAppliedMinScore] = useState<number | null>(null);
   const [appliedStatus, setAppliedStatus] = useState<string[]>([]);
   const [appliedOrderBy, setAppliedOrderBy] = useState<TOrderBy>('alpha-asc' as TOrderBy);
+  const hasSuspendedModuleFilters = draftModuleTagRules.some((rule) => !moduleFilters.some((filter) => filter.moduleId === rule.moduleId))
+    || (isModuleScoreOrder(draftOrderBy) && !getModuleScoreFilter(moduleFilters, draftOrderBy));
 
   const topUsedFilterSuggestions = useMemo(() => {
     if (!config) {
@@ -105,6 +113,7 @@ export function useFilterManagerCore<
 
   function resetStagedFilters() {
     setDraftTagRules([]);
+    setDraftModuleTagRules([]);
     setActiveFilterRuleEditorIndex(null);
     setActiveTagAutocomplete(null);
     setDraftMinScore('');
@@ -131,6 +140,7 @@ export function useFilterManagerCore<
     const preset = {
       name,
       tagRules: normalizeTagRules(draftTagRules),
+      moduleTagRules: draftModuleTagRules.map((rule) => ({ ...rule, tag: rule.tag.trim() })).filter((rule) => rule.tag),
       minScore: draftMinScore.trim(),
       status: normalizeStatusSelection(draftStatus, config.statusChoices),
       orderBy: draftOrderBy,
@@ -162,6 +172,7 @@ export function useFilterManagerCore<
 
   function loadFilterPresetToDraft(preset: TPreset) {
     setDraftTagRules([...preset.tagRules]);
+    setDraftModuleTagRules((preset.moduleTagRules ?? []).map((rule) => ({ ...rule })));
     setDraftMinScore(preset.minScore);
     setDraftStatus(normalizeStatusSelection((preset as { status?: unknown }).status, config?.statusChoices ?? []));
     setDraftOrderBy(preset.orderBy);
@@ -234,13 +245,14 @@ export function useFilterManagerCore<
 
     setAppliedStatus(normalizeStatusSelection(draftStatus, config?.statusChoices ?? []));
     const isSizeSort = draftOrderBy === 'size-asc' || draftOrderBy === 'size-desc';
-    if (isSizeSort && !isSizeOrderingEnabled) {
+    if ((isSizeSort && !isSizeOrderingEnabled)
+      || (isModuleScoreOrder(draftOrderBy) && !getModuleScoreFilter(moduleFilters, draftOrderBy))) {
       setAppliedOrderBy('alpha-asc' as TOrderBy);
       return;
     }
 
     setAppliedOrderBy(draftOrderBy);
-  }, [draftTagRules, draftMinScore, draftStatus, draftOrderBy, normalizeTagRules, isSizeOrderingEnabled, config]);
+  }, [draftTagRules, draftMinScore, draftStatus, draftOrderBy, normalizeTagRules, isSizeOrderingEnabled, config, moduleFilters]);
 
   const filteredGames = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -257,7 +269,8 @@ export function useFilterManagerCore<
       if (query) {
         const matchesQuery = game.name.toLowerCase().includes(query)
           || game.versions.some((version) => version.name.toLowerCase().includes(query))
-          || game.metadata.tags.some((tag) => tag.toLowerCase().includes(query));
+          || game.metadata.tags.some((tag) => tag.toLowerCase().includes(query))
+          || moduleFilters.some((filter) => filter.gameData.get(game.path)?.tags.some((tag) => tag.toLowerCase().includes(query)));
         if (!matchesQuery) {
           return false;
         }
@@ -273,6 +286,17 @@ export function useFilterManagerCore<
         return false;
       }
 
+      for (const rule of draftModuleTagRules) {
+        const filter = moduleFilters.find((entry) => entry.moduleId === rule.moduleId);
+        if (!filter || !rule.tag.trim()) {
+          continue;
+        }
+        const hasTag = filter.gameData.get(game.path)?.tags.some((tag) => tag.trim().toLowerCase() === rule.tag.trim().toLowerCase()) ?? false;
+        if (rule.exclude ? hasTag : !hasTag) {
+          return false;
+        }
+      }
+
       if (appliedMinScore !== null && normalizedScore(game.metadata.score) < appliedMinScore) {
         return false;
       }
@@ -285,7 +309,16 @@ export function useFilterManagerCore<
     });
 
     const sorted = [...filtered];
+    const scoreFilter = getModuleScoreFilter(moduleFilters, appliedOrderBy);
     sorted.sort((left, right) => {
+      if (scoreFilter) {
+        const difference = compareModuleScores(
+          scoreFilter.gameData.get(left.path)?.score,
+          scoreFilter.gameData.get(right.path)?.score,
+          appliedOrderBy === scoreFilter.scoreOrderModes.asc,
+        );
+        return difference || left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
+      }
       if (appliedOrderBy === 'alpha-asc') {
         return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
       }
@@ -340,10 +373,13 @@ export function useFilterManagerCore<
     });
 
     return sorted;
-  }, [games, searchQuery, appliedTagRules, appliedMinScore, appliedStatus, appliedOrderBy, normalizedScore]);
+  }, [games, searchQuery, appliedTagRules, appliedMinScore, appliedStatus, appliedOrderBy, normalizedScore, draftModuleTagRules, moduleFilters]);
 
   return {
     draftTagRules,
+    draftModuleTagRules,
+    setDraftModuleTagRules,
+    hasSuspendedModuleFilters,
     activeFilterRuleEditorIndex,
     draftMinScore,
     draftStatus,
@@ -368,4 +404,3 @@ export function useFilterManagerCore<
     deleteFilterPreset,
   };
 }
-

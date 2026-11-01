@@ -15,11 +15,13 @@ import type { FilterOrderByMode, FilterPreset, GalleryConfig, GameSummary } from
 import { normalizeTagRules, normalizedScore } from '../utils/app-helpers';
 import { useFilterManagerCore } from '../../../shared/app-shell/hooks/useFilterManagerCore';
 import type { TagAutocompleteState } from '../../../shared/app-shell/types/filterManagerTypes';
+import type { ResolvedModuleFilter } from '../../../shared/app-shell/core/moduleFilters';
 
 type UseFilterManagerArgs = {
   config: GalleryConfig | null;
   setConfig: Dispatch<SetStateAction<GalleryConfig | null>>;
   games: GameSummary[];
+  moduleFilters?: ResolvedModuleFilter[];
   tagPoolUsageOverride?: Record<string, number> | null;
   searchQuery: string;
   setStatus: Dispatch<SetStateAction<string>>;
@@ -33,6 +35,7 @@ export function useFilterManager({
   config,
   setConfig,
   games,
+  moduleFilters,
   tagPoolUsageOverride,
   searchQuery,
   setStatus,
@@ -47,6 +50,7 @@ export function useFilterManager({
     config,
     setConfig,
     games,
+    moduleFilters,
     tagPoolUsageOverride,
     searchQuery,
     setStatus,
@@ -60,7 +64,6 @@ export function useFilterManager({
     saveConfig: (nextConfig) => galleryClient.saveConfig(nextConfig),
   });
 }
-
 
 
 

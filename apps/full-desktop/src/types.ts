@@ -37,15 +37,22 @@ export type ServiceApiVersionInfo = {
 export const GALLERY_VIEW_MODES = ['poster', 'card', 'compact', 'expanded'] as const;
 export type GalleryViewMode = (typeof GALLERY_VIEW_MODES)[number];
 
-export const FILTER_ORDER_BY_MODES = ['alpha-asc', 'alpha-desc', 'score-asc', 'score-desc', 'size-asc', 'size-desc', 'playtime-asc', 'playtime-desc'] as const;
+export const FILTER_ORDER_BY_MODES = ['alpha-asc', 'alpha-desc', 'score-asc', 'score-desc', 'f95-score-asc', 'f95-score-desc', 'size-asc', 'size-desc', 'playtime-asc', 'playtime-desc'] as const;
 export type FilterOrderByMode = (typeof FILTER_ORDER_BY_MODES)[number];
 
 export const APP_LANGUAGES = ['en', 'es'] as const;
 export type AppLanguage = (typeof APP_LANGUAGES)[number];
 
+export type ModuleTagRule = {
+  moduleId: string;
+  tag: string;
+  exclude: boolean;
+};
+
 export type FilterPreset = {
   name: string;
   tagRules: string[];
+  moduleTagRules?: ModuleTagRule[];
   minScore: string;
   status: string[];
   orderBy: FilterOrderByMode;
@@ -561,4 +568,3 @@ declare global {
     gallery: GalleryApi;
   }
 }
-

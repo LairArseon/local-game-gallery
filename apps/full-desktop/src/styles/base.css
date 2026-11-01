@@ -739,6 +739,38 @@ button {
   padding: 0.22rem 0.34rem;
 }
 
+.tag-bubble--f95 {
+  border-color: rgba(255, 170, 129, 0.42);
+  background: rgba(255, 140, 92, 0.12);
+  color: rgba(255, 225, 209, 0.9);
+}
+
+.tag-bubble--f95:hover {
+  background: rgba(255, 140, 92, 0.24);
+}
+
+.tag-bubble--f95.tag-bubble--active {
+  border-color: rgba(255, 170, 129, 0.88);
+  background: rgba(255, 140, 92, 0.3);
+}
+
+.tag-bubble--f95.tag-bubble--exclude {
+  border-style: dashed;
+  text-decoration: line-through;
+}
+
+.tag-bubble--f95:focus-visible,
+.tag-bubble--f95.tag-bubble--editing:focus-within {
+  outline: 2px solid rgba(255, 170, 129, 0.85);
+  outline-offset: 2px;
+}
+
+.tag-bubble__source {
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-inline: 0.25rem;
+}
+
 .topbar-filters__quick {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));

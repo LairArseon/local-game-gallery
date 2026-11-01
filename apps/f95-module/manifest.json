@@ -8,6 +8,11 @@
   "installerComponentId": "f95",
   "contributes": [
     {
+      "id": "f95.gallery.filters",
+      "slot": "gallery.filters",
+      "title": "F95 Score and Tags"
+    },
+    {
       "id": "f95.setup.section",
       "slot": "setup.section",
       "title": "F95 Module Settings",

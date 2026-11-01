@@ -236,11 +236,23 @@ function normalizeFilterPresets(value: unknown, statusChoices: string[]): Galler
       tagRules: Array.isArray(preset.tagRules)
         ? preset.tagRules.map((rule) => String(rule).trim()).filter(Boolean)
         : [],
+      moduleTagRules: Array.isArray(preset.moduleTagRules)
+        ? preset.moduleTagRules.filter(isPlainObject)
+          .filter((rule) => typeof rule.moduleId === 'string' && rule.moduleId.trim()
+            && typeof rule.tag === 'string' && rule.tag.trim() && typeof rule.exclude === 'boolean')
+          .map((rule) => ({
+            moduleId: String(rule.moduleId).trim(),
+            tag: String(rule.tag).trim(),
+            exclude: rule.exclude === true,
+          }))
+        : [],
       minScore: String(preset.minScore ?? '').trim(),
       status: normalizeFilterPresetStatuses(preset.status, statusChoices),
       orderBy: preset.orderBy === 'alpha-desc'
         || preset.orderBy === 'score-asc'
         || preset.orderBy === 'score-desc'
+        || preset.orderBy === 'f95-score-asc'
+        || preset.orderBy === 'f95-score-desc'
         || preset.orderBy === 'size-asc'
         || preset.orderBy === 'size-desc'
         || preset.orderBy === 'playtime-asc'
@@ -360,7 +372,6 @@ export async function saveConfig(config: GalleryConfig) {
 
   return normalizedConfig;
 }
-
 
 
 

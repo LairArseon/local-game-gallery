@@ -80,7 +80,7 @@
     "C:\\Users\\esteb\\.nuget\\packages\\": {}
   },
   "project": {
-    "version": "3.6.2",
+    "version": "3.6.3",
     "restore": {
       "projectUniqueName": "C:\\Users\\esteb\\OneDrive\\Escritorio\\Tebbie\\Repos\\local-game-gallery\\apps\\isolation-module\\helper\\LocalGameGallery.IsolationHelper.csproj",
       "projectName": "LocalGameGallery.IsolationHelper",

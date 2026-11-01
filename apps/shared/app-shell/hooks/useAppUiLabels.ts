@@ -45,6 +45,8 @@ export function useAppUiLabels(t: Translate) {
     'alpha-desc': t('orderBy.alpha-desc'),
     'score-asc': t('orderBy.score-asc'),
     'score-desc': t('orderBy.score-desc'),
+    'f95-score-asc': t('orderBy.f95-score-asc'),
+    'f95-score-desc': t('orderBy.f95-score-desc'),
     'size-asc': t('orderBy.size-asc'),
     'size-desc': t('orderBy.size-desc'),
     'playtime-asc': t('orderBy.playtime-asc'),

@@ -14,9 +14,13 @@ import {
   F95_UPDATE_MARKER_TAG,
   F95_UPDATE_TITLE_TAG,
   F95_UP_TO_DATE_TAG,
+  F95_STARS_RATING_TAG,
+  F95_THREAD_TAGS_TAG,
   getF95BooleanTagValue,
   getF95TagValue,
+  parseF95TagList,
 } from './core/f95Tags';
+import { parseStoredF95Rating } from './core/f95Rating';
 import { F95SetupSection } from './ui/F95SetupSection';
 import { F95DetailPanel, F95DetailPanelHeaderActions } from './ui/F95DetailPanel';
 import { F95MetadataEditorSection } from './ui/F95MetadataEditorSection';
@@ -92,6 +96,20 @@ export const f95ModuleDefinition: BuiltInModuleDefinition = {
   installerComponentId: moduleManifest.installerComponentId,
   enabledByDefault: false,
   contributes: [
+    {
+      id: 'f95.gallery.filters',
+      slot: 'gallery.filters',
+      title: 'F95 Score and Tags',
+      filterData: {
+        sourceLabel: 'F95',
+        accentClassName: 'tag-bubble--f95',
+        scoreOrderModes: { asc: 'f95-score-asc', desc: 'f95-score-desc' },
+        getGameData: (game) => ({
+          tags: parseF95TagList(getF95TagValue(game.metadata.customTags, F95_THREAD_TAGS_TAG)),
+          score: parseStoredF95Rating(getF95TagValue(game.metadata.customTags, F95_STARS_RATING_TAG)),
+        }),
+      },
+    },
     {
       id: 'f95.setup.section',
       slot: 'setup.section',

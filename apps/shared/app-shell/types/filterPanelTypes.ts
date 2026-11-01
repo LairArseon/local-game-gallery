@@ -1,4 +1,7 @@
 import type { KeyboardEvent } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
+import type { ModuleTagRule } from '../types';
+import type { ModuleTagOption, ResolvedModuleFilter } from '../core/moduleFilters';
 import type { FilterOrderByModeLike, FilterPresetLike } from '../types/filterManagerTypes';
 
 export type TopUsedSuggestion = {
@@ -16,6 +19,11 @@ export type FilterPanelProps<
   TPreset extends FilterPresetLike<TOrderBy>,
 > = {
   draftTagRules: string[];
+  moduleFilters: ResolvedModuleFilter[];
+  moduleTagOptions: ModuleTagOption[];
+  draftModuleTagRules: ModuleTagRule[];
+  onChangeModuleTagRules: Dispatch<SetStateAction<ModuleTagRule[]>>;
+  hasSuspendedModuleFilters: boolean;
   activeFilterRuleEditorIndex: number | null;
   activeTagAutocomplete: {
     scope: 'pool' | 'filter' | 'metadata';
@@ -61,4 +69,3 @@ export type FilterPanelProps<
   onDeleteFilterPreset: (name: string) => void;
   onResetStagedFilters: () => void;
 };
-
